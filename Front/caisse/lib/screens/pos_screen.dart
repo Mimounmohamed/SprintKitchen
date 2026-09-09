@@ -260,11 +260,11 @@ class _PosScreenState extends State<PosScreen> {
       padding: const EdgeInsets.all(20),
       child: GridView.builder(
         itemCount: items.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 260,
+          mainAxisExtent: 96,
           mainAxisSpacing: 14,
           crossAxisSpacing: 14,
-          childAspectRatio: 1.7,
         ),
         itemBuilder: (context, index) {
           final item = items[index];
@@ -389,12 +389,12 @@ class _PosScreenState extends State<PosScreen> {
               children: [
                 _lineActionButton(
                   icon: Icons.add,
-                  color: AppColors.success,
+                  color: AppColors.takeaway,
                   onTap: () => _adjustSelectedQuantity(1),
                 ),
                 _lineActionButton(
                   icon: Icons.remove,
-                  color: AppColors.textSecondary,
+                  color: AppColors.takeaway,
                   onTap: () => _adjustSelectedQuantity(-1),
                 ),
                 _lineActionButton(
@@ -417,26 +417,34 @@ class _PosScreenState extends State<PosScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'TOTAL :',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: AppColors.textPrimary,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'TOTAL :',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
-                ),
-                Text(
-                  '${_total.toStringAsFixed(2).replaceAll('.', ',')} €',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    color: AppColors.textPrimary,
+                  Text(
+                    '${_total.toStringAsFixed(2).replaceAll('.', ',')} €',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -444,11 +452,14 @@ class _PosScreenState extends State<PosScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                _orderTypeButton(OrderType.dineIn, AppColors.dineIn),
+                _orderTypeButton(
+                    OrderType.dineIn, AppColors.dineIn, Icons.storefront),
                 const SizedBox(width: 8),
-                _orderTypeButton(OrderType.takeaway, AppColors.takeaway),
+                _orderTypeButton(
+                    OrderType.takeaway, AppColors.takeaway, Icons.shopping_bag),
                 const SizedBox(width: 8),
-                _orderTypeButton(OrderType.delivery, AppColors.delivery),
+                _orderTypeButton(
+                    OrderType.delivery, AppColors.delivery, Icons.moped),
               ],
             ),
           ),
@@ -464,7 +475,7 @@ class _PosScreenState extends State<PosScreen> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(30),
                   ),
                   elevation: 0,
                 ),
@@ -494,7 +505,7 @@ class _PosScreenState extends State<PosScreen> {
                 Expanded(
                   child: _smallActionButton(
                     label: 'Actions',
-                    icon: Icons.bolt,
+                    icon: Icons.tune,
                     bg: AppColors.actionOrange,
                     fg: AppColors.brandDark,
                     onTap: () {},
@@ -504,10 +515,9 @@ class _PosScreenState extends State<PosScreen> {
                 Expanded(
                   child: _smallActionButton(
                     label: 'Reprise',
-                    icon: Icons.replay,
-                    bg: Colors.transparent,
-                    fg: AppColors.textPrimary,
-                    outlined: true,
+                    icon: Icons.autorenew,
+                    bg: AppColors.brandDark,
+                    fg: AppColors.gold,
                     onTap: () {},
                   ),
                 ),
@@ -547,40 +557,58 @@ class _PosScreenState extends State<PosScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        width: 34,
-        height: 34,
+        width: 44,
+        height: 38,
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 16, color: color),
+        child: Icon(icon, size: 17, color: color),
       ),
     );
   }
 
-  Widget _orderTypeButton(OrderType type, Color color) {
+  Widget _orderTypeButton(OrderType type, Color color, IconData icon) {
     final bool selected = _orderType == type;
     return Expanded(
       child: InkWell(
         onTap: () => setState(() => _orderType = type),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? color : color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            color: color,
+            borderRadius: BorderRadius.circular(20),
+            border: selected
+                ? Border.all(color: Colors.white, width: 2)
+                : Border.all(color: Colors.transparent, width: 2),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
-          alignment: Alignment.center,
-          child: Text(
-            type.label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: selected ? Colors.white : color,
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 13, color: Colors.white),
+              const SizedBox(width: 5),
+              Text(
+                type.label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -597,25 +625,29 @@ class _PosScreenState extends State<PosScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           border: outlined ? Border.all(color: AppColors.border) : null,
         ),
-        child: Column(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 14, color: fg),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: fg,
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
+                ),
               ),
             ),
           ],
