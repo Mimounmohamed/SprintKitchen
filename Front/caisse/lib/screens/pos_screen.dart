@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/pos_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/pos/category_sidebar_item.dart';
@@ -279,7 +280,7 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildTicketPanel() {
     return Container(
-      width: 300,
+      width: 383,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(left: BorderSide(color: AppColors.border)),
@@ -427,20 +428,24 @@ class _PosScreenState extends State<PosScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'TOTAL :',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: AppColors.textPrimary,
+                    style: GoogleFonts.bebasNeue(
+                      color: const Color(0xFF292524),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w400,
+                      height: 32 / 24,
+                      letterSpacing: 0.6,
                     ),
                   ),
                   Text(
                     '${_total.toStringAsFixed(2).replaceAll('.', ',')} €',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      color: AppColors.textPrimary,
+                    style: GoogleFonts.bebasNeue(
+                      color: const Color(0xFF292524),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w400,
+                      height: 32 / 24,
+                      letterSpacing: 0.6,
                     ),
                   ),
                 ],
