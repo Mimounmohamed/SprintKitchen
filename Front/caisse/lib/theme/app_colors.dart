@@ -22,4 +22,20 @@ class AppColors {
   static const Color success = Color(0xFF3FB56D);
   static const Color danger = Color(0xFFD9534F);
   static const Color dangerSoft = Color(0xFFFBEAEA);
+
+  // --- POS / Caisse screen ---
+  static const Color menuTile = Color(0xFF3F2A1D); // brown product card
+  static const Color menuTileDisabled = Color(0xFFE9E6E1);
+  static const Color menuTilePrice = Color(0xFFEFAF1D); // gold price text
+
+  static const Color sidebarActiveBg = Color(0xFFFCEFC9);
+  static const Color sidebarActiveText = Color(0xFF231A12);
+
+  static const Color ticketHighlight = Color(0xFFFCF3D9); // active line item
+
+  static const Color dineIn = Color(0xFFE24C4C); // "Sur Place"
+  static const Color takeaway = Color(0xFF3E7BFA); // "Emporter"
+  static const Color delivery = Color(0xFF17A2A2); // "Livraison"
+
+  static const Color actionOrange = Color(0xFFEFAF1D); // "Actions" button
 }

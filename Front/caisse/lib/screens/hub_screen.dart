@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/hub_module_card.dart';
+import 'pos_screen.dart';
 
 /// SprintKitchen "Hub" landing screen — Windows/desktop layout.
 ///
@@ -320,12 +321,21 @@ class HubScreen extends StatelessWidget {
   }
 
   void _navigateTo(BuildContext context, String moduleKey) {
-    // TODO: wire these up to your existing routes/screens, e.g.:
-    // Navigator.pushNamed(context, '/pos');
-    // Navigator.pushNamed(context, '/orders/history');
-    // Navigator.pushNamed(context, '/stock');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Navigate to: $moduleKey')),
-    );
+    switch (moduleKey) {
+      case 'pos':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const PosScreen()),
+        );
+        return;
+      case 'history':
+      case 'stock':
+        // TODO: wire these up once those screens exist, e.g.:
+        // Navigator.pushNamed(context, '/orders/history');
+        // Navigator.pushNamed(context, '/stock');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Navigate to: $moduleKey')),
+        );
+        return;
+    }
   }
 }
