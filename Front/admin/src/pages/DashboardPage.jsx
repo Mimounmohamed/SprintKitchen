@@ -237,10 +237,10 @@ export default function SprintKitchenAdminHub() {
         {/* Divider */}
         <div style={{ height: 1, background: C.border, marginBottom: 28 }} />
 
-        {/* ── 4-column card grid — fills full width ── */}
+        {/* ── 3-column card grid — fills full width ── */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(3, 1fr)",
           gap: 18,
         }}>
 
@@ -276,6 +276,7 @@ export default function SprintKitchenAdminHub() {
             cta="CONSULTER L'HISTORIQUE"
             ctaIcon={<ChevronRight size={16} />}
             ctaStyle="secondary"
+            onClick={() => navigate("/historique")}
           />
 
           <ModuleCard
@@ -294,21 +295,6 @@ export default function SprintKitchenAdminHub() {
             ctaStyle="secondary"
           />
 
-          <ModuleCard
-            icon={<Users size={24} />}
-            iconBg="#FBF3DF" iconColor="#C98A1A"
-            pill={<Pill small dot dotColor={C.red} bg={C.redBg} color="#B23A26">3 ALERTES ACTIVES</Pill>}
-            eyebrow="Équipe & Stocks"
-            title="Équipe & Inventaire"
-            description="Gérez les accès de votre personnel, suivez les heures et contrôlez la disponibilité des ingrédients."
-            checklist={<>
-              <ChecklistItem warn>3 Alertes de stock critique</ChecklistItem>
-              <ChecklistItem>4 Employés actuellement actifs</ChecklistItem>
-            </>}
-            cta="GÉRER LE RESTAURANT"
-            ctaIcon={<ChevronRight size={16} />}
-            ctaStyle="outline"
-          />
         </div>
       </main>
 

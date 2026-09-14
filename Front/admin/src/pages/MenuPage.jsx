@@ -304,18 +304,8 @@ function ArticleDrawer({ product, categories, onClose, onSave }) {
                 }}>DA</span>
               </div>
             </Field>
-
-            <Field label="Options & Modificateurs" hint="Ex: Cuisson viande, choix de sauce, taille XL, suppléments…">
-              <div style={{
-                minHeight: 72, border: `1px dashed ${C.border}`, borderRadius: 8,
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                gap: 4, cursor: "pointer", background: C.cardBg,
-              }}>
-                <Plus size={20} color={C.muted} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>+ Ajouter un groupe d'options</span>
-              </div>
-            </Field>
           </div>
+
         </div>
 
         {/* ── Footer ── */}

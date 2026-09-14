@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom'
 import { silentLogin } from './lib/api'
 import DashboardPage from './pages/DashboardPage'
 import MenuPage from './pages/MenuPage'
+import HistoriquePage from './pages/HistoriquePage'
 
 export default function App() {
   const [ready, setReady] = useState(!!localStorage.getItem('sk_token'));
@@ -24,8 +25,9 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/"     element={<DashboardPage />} />
-      <Route path="/menu" element={<MenuPage />} />
+      <Route path="/"           element={<DashboardPage />} />
+      <Route path="/menu"       element={<MenuPage />} />
+      <Route path="/historique" element={<HistoriquePage />} />
     </Routes>
   )
 }
