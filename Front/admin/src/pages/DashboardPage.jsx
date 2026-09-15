@@ -1,9 +1,10 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Book, Clock, BarChart2,
+  Book, Clock, BarChart2, Package,
   ArrowRight, ChevronRight, Check, AlertTriangle, Circle, User, TrendingUp, Menu as MenuIcon,
 } from "lucide-react";
+import { dashboardService } from "../services";
 
 const C = {
   bg:"#F5F4F0", cardBg:"#FFFFFF", ink:"#1C1917", brown:"#2E2117",
@@ -106,6 +107,26 @@ export default function SprintKitchenAdminHub() {
     return () => window.removeEventListener("resize", h);
   }, []);
 
+  // ── Live KPIs ──────────────────────────────────────────────────────────────
+  const [kpi, setKpi] = React.useState(null);
+  React.useEffect(() => {
+    dashboardService.getKpis()
+      .then(res => setKpi(res.data.data))
+      .catch(() => {}); // silently fail — shows dashes
+  }, []);
+
+  // Formatted values (show — while loading)
+  const caFmt = kpi
+    ? kpi.revenue.today.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " DA"
+    : "—";
+  const vsPct = kpi?.revenue.vsLastYear != null
+    ? (kpi.revenue.vsLastYear >= 0 ? "+" : "") + kpi.revenue.vsLastYear + "% vs N-1"
+    : "vs N-1";
+  const vsPctPositive = (kpi?.revenue.vsLastYear ?? 0) >= 0;
+  const ticketsFmt  = kpi ? String(kpi.tickets.today)   : "—";
+  const ruptureFmt  = kpi ? String(kpi.rupture.count)   : "—";
+  const ruptureWarn = (kpi?.rupture.count ?? 0) > 0;
+
   const shell = {
     minHeight:"100vh", background:C.bg,
     fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
@@ -156,29 +177,32 @@ export default function SprintKitchenAdminHub() {
 
         {/* KPI strip — 3 columns */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+          {/* C.A. */}
           <div style={{ background:C.cardBg, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 10px" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
               <span style={{ fontSize:8, fontWeight:700, letterSpacing:"0.05em", color:C.muted, textTransform:"uppercase" }}>C.A. JOUR</span>
-              <TrendingUp size={10} color={C.green}/>
+              <TrendingUp size={10} color={vsPctPositive ? C.green : C.red}/>
             </div>
-            <div style={{ fontSize:19, fontWeight:800, color:C.green, lineHeight:1, fontFamily:"'Bebas Neue',sans-serif" }}>1 450€</div>
-            <div style={{ fontSize:9.5, color:C.green, fontWeight:700, marginTop:3 }}>+14% vs N-1</div>
+            <div style={{ fontSize:19, fontWeight:800, color:C.green, lineHeight:1, fontFamily:"'Bebas Neue',sans-serif" }}>{caFmt}</div>
+            <div style={{ fontSize:9.5, color:vsPctPositive ? C.green : C.red, fontWeight:700, marginTop:3 }}>{vsPct}</div>
           </div>
+          {/* TICKETS */}
           <div style={{ background:C.cardBg, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 10px" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
               <span style={{ fontSize:8, fontWeight:700, letterSpacing:"0.05em", color:C.muted, textTransform:"uppercase" }}>TICKETS</span>
               <span style={{ fontSize:9 }}>🧾</span>
             </div>
-            <div style={{ fontSize:19, fontWeight:800, color:C.ink, lineHeight:1, fontFamily:"'Bebas Neue',sans-serif" }}>142</div>
+            <div style={{ fontSize:19, fontWeight:800, color:C.ink, lineHeight:1, fontFamily:"'Bebas Neue',sans-serif" }}>{ticketsFmt}</div>
             <div style={{ fontSize:9.5, color:C.muted, marginTop:3 }}>Clôturés</div>
           </div>
-          <div style={{ background:C.cardBg, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 10px" }}>
+          {/* ALERTES / RUPTURE */}
+          <div style={{ background:C.cardBg, border:`1px solid ${ruptureWarn ? "#F5C6C2" : C.border}`, borderRadius:10, padding:"10px 10px" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
               <span style={{ fontSize:8, fontWeight:700, letterSpacing:"0.05em", color:C.muted, textTransform:"uppercase" }}>ALERTES</span>
-              <Circle size={6} fill={C.yellow} color={C.yellow}/>
+              <Circle size={6} fill={ruptureWarn ? C.red : C.yellow} color={ruptureWarn ? C.red : C.yellow}/>
             </div>
-            <div style={{ fontSize:19, fontWeight:800, color:"#D9720C", lineHeight:1, fontFamily:"'Bebas Neue',sans-serif" }}>3</div>
-            <div style={{ fontSize:9.5, color:"#D9720C", fontWeight:700, marginTop:3 }}>86 List</div>
+            <div style={{ fontSize:19, fontWeight:800, color: ruptureWarn ? "#D9720C" : C.ink, lineHeight:1, fontFamily:"'Bebas Neue',sans-serif" }}>{ruptureFmt}</div>
+            <div style={{ fontSize:9.5, color: ruptureWarn ? "#D9720C" : C.muted, fontWeight:700, marginTop:3 }}>86 List</div>
           </div>
         </div>
 
@@ -209,6 +233,15 @@ export default function SprintKitchenAdminHub() {
           checklist={<><ChecklistItem>Marges &amp; TVA</ChecklistItem><ChecklistItem>Export .CSV</ChecklistItem></>}
           cta="VOIR LES STATISTIQUES" ctaIcon={<ChevronRight size={15}/>} ctaStyle="secondary"
           onClick={() => navigate("/statistiques")}
+        />
+        <ModuleCard mobile
+          icon={<Package size={20}/>} iconBg="#FEF3E2" iconColor="#D9720C"
+          pill={<Pill small bg="#FEF3E2" color="#D9720C"><Circle size={5} fill="#D9720C" color="#D9720C" style={{marginRight:3}}/> 3 ALERTES ACTIVES</Pill>}
+          eyebrow="Stocks &amp; Ingrédients" title="Inventaire"
+          description="Suivez les niveaux de stock et contrôlez la disponibilité des ingrédients."
+          checklist={<><ChecklistItem warn={ruptureWarn}>{ruptureFmt} Alerte{(kpi?.rupture.count ?? 0) > 1 ? "s" : ""} de stock critique</ChecklistItem><ChecklistItem>Niveaux en temps réel</ChecklistItem></>}
+          cta="GÉRER L'INVENTAIRE" ctaIcon={<ChevronRight size={15}/>} ctaStyle="secondary"
+          onClick={() => navigate("/inventaire")}
         />
       </main>
 
@@ -254,15 +287,15 @@ export default function SprintKitchenAdminHub() {
             </p>
           </div>
           <div style={{ display:"flex", gap:12, flexShrink:0, flexWrap:"wrap" }}>
-            <Kpi label="Chiffre d'affaires" value="1 450 €" valueColor={C.green} sub="+14% vs N-1" subColor={C.green}/>
-            <Kpi label="Tickets Clôturés" value="142" sub="Aujourd'hui"/>
-            <Kpi label="Articles en Rupture" value="3" valueColor="#D9720C" sub="Ingrédients (86 list)"/>
+            <Kpi label="Chiffre d'affaires" value={caFmt} valueColor={C.green} sub={vsPct} subColor={vsPctPositive ? C.green : C.red}/>
+            <Kpi label="Tickets Clôturés"   value={ticketsFmt} sub="Aujourd'hui"/>
+            <Kpi label="Articles en Rupture" value={ruptureFmt} valueColor={ruptureWarn ? "#D9720C" : C.ink} sub="Ingrédients (86 list)" subColor={ruptureWarn ? "#D9720C" : undefined}/>
           </div>
         </div>
 
         <div style={{ height:1, background:C.border, marginBottom:28 }}/>
 
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:18 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:18 }}>
           <ModuleCard
             icon={<Book size={24}/>} iconBg={C.brown} iconColor={C.yellow}
             pill={<Pill small dot dotColor="#C98A1A" bg={C.yellowBg} color="#946200">CATALOGUE &amp; PRIX</Pill>}
@@ -276,7 +309,7 @@ export default function SprintKitchenAdminHub() {
             icon={<Clock size={24}/>} iconBg="#F1F0EC" iconColor={C.ink}
             pill={<Pill small bg="#F1F0EC" color={C.muted}>ARCHIVES &amp; TICKETS</Pill>}
             eyebrow="Commandes &amp; Reçus" title="Historique des Commandes"
-            description="View past tickets, search receipts, track daily sales totals, reprint kitchen vouchers, and handle refunds securely."
+            description="Consultez les tickets, recherchez les reçus, gérez les remboursements et exportez vos données."
             checklist={<><ChecklistItem>Recherche de tickets &amp; réimpression</ChecklistItem><ChecklistItem>Remboursements &amp; exports</ChecklistItem></>}
             cta="CONSULTER L'HISTORIQUE" ctaIcon={<ChevronRight size={16}/>} ctaStyle="secondary"
             onClick={() => navigate("/historique")}
@@ -289,6 +322,15 @@ export default function SprintKitchenAdminHub() {
             checklist={<><ChecklistItem>Chiffre d'affaires et marges</ChecklistItem><ChecklistItem>Export TVA et rapports Z</ChecklistItem></>}
             cta="VOIR LES STATISTIQUES" ctaIcon={<ChevronRight size={16}/>} ctaStyle="secondary"
             onClick={() => navigate("/statistiques")}
+          />
+          <ModuleCard
+            icon={<Package size={24}/>} iconBg="#FEF3E2" iconColor="#D9720C"
+            pill={<Pill small dot dotColor="#D9720C" bg="#FEF3E2" color="#D9720C">3 ALERTES ACTIVES</Pill>}
+            eyebrow="Stocks &amp; Ingrédients" title="Inventaire"
+            description="Gérez les niveaux de stock, suivez les mouvements et contrôlez la disponibilité des ingrédients en temps réel."
+            checklist={<><ChecklistItem warn={ruptureWarn}>{ruptureFmt} Alerte{(kpi?.rupture.count ?? 0) > 1 ? "s" : ""} de stock critique</ChecklistItem><ChecklistItem>Niveaux de stock en temps réel</ChecklistItem></>}
+            cta="GÉRER L'INVENTAIRE" ctaIcon={<ChevronRight size={16}/>} ctaStyle="secondary"
+            onClick={() => navigate("/inventaire")}
           />
         </div>
       </main>

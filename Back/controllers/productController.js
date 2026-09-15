@@ -63,23 +63,35 @@ exports.updateProduct = async (req, res) => {
 exports.updateAvailability = async (req, res) => {
   try {
     const { availability, notes } = req.body;
+
+    if (!['available', 'epuise', 'bloque_caisse_borne'].includes(availability)) {
+      return res.status(400).json({ success: false, message: 'Invalid availability value' });
+    }
+
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
     const previousStatus = product.availability;
-    product.availability = availability;
-    product.isOnList86 = availability !== 'available';
+    product.availability    = availability;
+    product.isOnList86      = availability !== 'available';
+    product.blockedOnCaisse = availability === 'bloque_caisse_borne';
+    product.blockedOnBorne  = availability === 'bloque_caisse_borne';
     await product.save();
 
-    // Log the stock change
-    await StockLog.create({
-      productId: product._id,
-      storeId: product.storeId,
-      action: availability,
-      previousStatus,
-      operatorId: req.user?.id,
-      notes,
-    });
+    // Map availability value to StockLog action enum (best-effort — don't block save on log failure)
+    const actionMap = { available: 'disponible', epuise: 'epuise', bloque_caisse_borne: 'bloque_caisse_borne' };
+    try {
+      await StockLog.create({
+        productId:      product._id,
+        storeId:        product.storeId,
+        action:         actionMap[availability],
+        previousStatus,
+        operatorId:     req.user?._id,
+        notes,
+      });
+    } catch (logErr) {
+      console.warn('StockLog write failed (non-blocking):', logErr.message);
+    }
 
     res.json({ success: true, data: product });
   } catch (err) {

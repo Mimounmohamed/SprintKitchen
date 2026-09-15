@@ -5,6 +5,7 @@ import DashboardPage from './pages/DashboardPage'
 import MenuPage from './pages/MenuPage'
 import HistoriquePage from './pages/HistoriquePage'
 import StatistiquesPage from './pages/StatistiquesPage'
+import InventairePage from './pages/InventairePage'
 
 export default function App() {
   const [ready, setReady] = useState(!!localStorage.getItem('sk_token'));
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/menu"           element={<MenuPage />} />
       <Route path="/historique"     element={<HistoriquePage />} />
       <Route path="/statistiques"   element={<StatistiquesPage />} />
+      <Route path="/inventaire"     element={<InventairePage />} />
     </Routes>
   )
 }

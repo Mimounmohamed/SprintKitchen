@@ -91,3 +91,29 @@ export const statsService = {
   /** Payment method breakdown */
   getPaymentMethods: (params) => api.get('/stats/payment-methods', { params }),
 };
+
+// ── Ingredients (Inventaire / Liste 86) ───────────────────────────────────────
+export const ingredientService = {
+  getAll:          (params)            => api.get('/ingredients',                  { params }),
+  getFamilies:     (params)            => api.get('/ingredients/families',         { params }),
+  getById:         (id)                => api.get(`/ingredients/${id}`),
+  create:          (data)              => api.post('/ingredients',                 data),
+  update:          (id, data)          => api.put(`/ingredients/${id}`,            data),
+  setAvailability: (id, avail, notes)  => api.patch(`/ingredients/${id}/availability`, { availability: avail, notes }),
+  bulkAvailability:(family, avail)     => api.post('/ingredients/bulk-availability',   { family, availability: avail }),
+  delete:          (id)                => api.delete(`/ingredients/${id}`),
+};
+
+// ── Ingredient Families ───────────────────────────────────────────────────────
+export const ingredientFamilyService = {
+  getAll:  ()         => api.get('/ingredient-families'),
+  create:  (data)     => api.post('/ingredient-families',      data),
+  update:  (id, data) => api.put(`/ingredient-families/${id}`, data),
+  delete:  (id)       => api.delete(`/ingredient-families/${id}`),
+};
+
+// ── Dashboard KPIs ────────────────────────────────────────────────────────────
+export const dashboardService = {
+  /** Returns { revenue, tickets, rupture } — all live from DB */
+  getKpis: () => api.get('/dashboard'),
+};
