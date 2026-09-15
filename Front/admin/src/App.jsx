@@ -4,6 +4,7 @@ import { silentLogin } from './lib/api'
 import DashboardPage from './pages/DashboardPage'
 import MenuPage from './pages/MenuPage'
 import HistoriquePage from './pages/HistoriquePage'
+import StatistiquesPage from './pages/StatistiquesPage'
 
 export default function App() {
   const [ready, setReady] = useState(!!localStorage.getItem('sk_token'));
@@ -25,9 +26,10 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/"           element={<DashboardPage />} />
-      <Route path="/menu"       element={<MenuPage />} />
-      <Route path="/historique" element={<HistoriquePage />} />
+      <Route path="/"               element={<DashboardPage />} />
+      <Route path="/menu"           element={<MenuPage />} />
+      <Route path="/historique"     element={<HistoriquePage />} />
+      <Route path="/statistiques"   element={<StatistiquesPage />} />
     </Routes>
   )
 }
