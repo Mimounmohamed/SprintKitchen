@@ -1,0 +1,36 @@
+﻿const Order   = require('../models/Order');
+const Payment = require('../models/Payment');
+
+function parseDateRange(query) {
+  const now = new Date();
+  const from = query.from ? new Date(query.from) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const to   = query.to   ? new Date(query.to)   : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  return { from, to };
+}
+function registerFilter(query) {
+  return query.registerId ? { registerId: query.registerId } : {};
+}
+
+/* GET /api/stats/rapport-z */
+exports.getRapportZ = async (req, res, next) => {
+  try {
+    const { from, to } = parseDateRange(req.query);
+    const regFilter    = registerFilter(req.query);
+    const match = { ...regFilter, status: 'terminee', createdAt: { $gte: from, $lte: to } };
+    const [totals] = await Order.aggregate([
+      { $match: match },
+      { $group: { _id: null, totalTTC: { $sum: '$	otalTTC' }, totalHT: { $sum: '$subtotalHT' }, totalTVA: { $sum: '$	vaAmount' }, ticketCount: { $sum: 1 }, avgBasket: { $vg: '$	otalTTC' } } },
+    ]);
+    const paymentBreakdown = await Payment.aggregate([
+      { $match: { ...regFilter, createdAt: { $gte: from, $lte: to }, isRefunded: { $
+e: true } } },
+      { $group: { _id: '$method', total: { $sum: '$mountDue' }, count: { $sum: 1 } } },
+      { $sort: { total: -1 } },
+    ]);
+    const [annulees] = await Order.aggregate([
+      { $match: { ...regFilter, status: 'annulee', createdAt: { $gte: from, $lte: to } } },
+      { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$	otalTTC' } } },
+    ]);
+    res.json({ success: true, data: { period: { from, to }, totalTTC: totals?.totalTTC ?? 0, totalHT: totals?.totalHT ?? 0, totalTVA: totals?.totalTVA ?? 0, ticketCount: totals?.ticketCount ?? 0, avgBasket: totals?.avgBasket ?? 0, annulees: { count: annulees?.count ?? 0, amount: annulees?.amount ?? 0 }, paymentBreakdown } });
+  } catch (err) { next(err); }
+};

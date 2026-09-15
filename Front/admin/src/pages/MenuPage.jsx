@@ -772,7 +772,7 @@ export default function MenuPage() {
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"6px 13px", borderRadius:999, background:"#F1F0EC", color:C.ink }}>
-              <Circle size={6} fill={C.green} color={C.green}/> Super Admin — Back-Office
+              <Circle size={6} fill={C.green} color={C.green}/> Admin
             </span>
             <div style={{ width:34, height:34, borderRadius:"50%", background:C.brown, color:C.yellow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800 }}>AD</div>
           </div>
@@ -860,10 +860,6 @@ export default function MenuPage() {
               {cat.name}
             </button>
           ))}
-          {!mobile && <>
-            <button onClick={() => setCatModal("new")} style={{ padding:"7px 14px", borderRadius:20, fontSize:13, fontWeight:600, cursor:"pointer", background:C.cardBg, color:C.muted, border:`1px dashed ${C.border}`, fontFamily:"inherit" }}>+ Nouvelle</button>
-            <button onClick={() => setGererOpen(true)} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:20, fontSize:13, fontWeight:600, cursor:"pointer", background:"none", color:C.muted, border:`1px solid ${C.border}`, fontFamily:"inherit" }}><Settings size={13}/> Gérer</button>
-          </>}
         </div>
 
         {/* Mobile: Gérer + Nouvelle cat buttons */}

@@ -71,3 +71,23 @@ export const storeService = {
   getAll: () => api.get('/stores'),
   getById: (id) => api.get(`/stores/${id}`),
 };
+
+// ── Stats / Rapports ──────────────────────────────────────────────────────────
+export const statsService = {
+  /** One-shot: all data for the Rapports & Statistiques page */
+  getSummary:        (params) => api.get('/stats/summary',         { params }),
+  /** Rapport Z / Clôture de caisse */
+  getRapportZ:       (params) => api.get('/stats/rapport-z',       { params }),
+  /** Bar chart: revenue by hour */
+  getSalesByHour:    (params) => api.get('/stats/sales-by-hour',   { params }),
+  /** Top articles most sold */
+  getTopProducts:    (params) => api.get('/stats/top-products',    { params }),
+  /** Revenue by channel (sur_place / a_emporter / livraison) */
+  getByChannel:      (params) => api.get('/stats/by-channel',      { params }),
+  /** Day-by-day revenue trend */
+  getSalesTrend:     (params) => api.get('/stats/sales-trend',     { params }),
+  /** KPI cards with % vs previous period */
+  getKpis:           (params) => api.get('/stats/kpis',            { params }),
+  /** Payment method breakdown */
+  getPaymentMethods: (params) => api.get('/stats/payment-methods', { params }),
+};
