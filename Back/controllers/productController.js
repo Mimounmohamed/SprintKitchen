@@ -1,20 +1,38 @@
 const Product = require('../models/Product');
 const StockLog = require('../models/StockLog');
 
-// @desc  Get all products (with optional filters)
+// @desc  Get all products (with optional filters + search + pagination)
 // @route GET /api/products
 exports.getProducts = async (req, res) => {
   try {
-    const filter = {};
-    if (req.query.categoryId) filter.categoryId = req.query.categoryId;
-    if (req.query.storeId) filter.storeId = req.query.storeId;
+    const filter = { isActive: { $ne: false } };
+    if (req.query.categoryId)  filter.categoryId  = req.query.categoryId;
+    if (req.query.storeId)     filter.storeId     = req.query.storeId;
     if (req.query.availability) filter.availability = req.query.availability;
     if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
+    if (req.query.search) filter.name = { $regex: req.query.search, $options: 'i' };
 
-    const products = await Product.find(filter)
-      .populate('categoryId', 'name slug')
-      .sort('displayOrder');
-    res.json({ success: true, count: products.length, data: products });
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const skip  = (page - 1) * limit;
+
+    const [products, total] = await Promise.all([
+      Product.find(filter)
+        .populate('categoryId', 'name slug color')
+        .sort('displayOrder name')
+        .skip(skip)
+        .limit(limit),
+      Product.countDocuments(filter),
+    ]);
+
+    res.json({
+      success: true,
+      count:      products.length,
+      total,
+      totalPages: Math.ceil(total / limit),
+      page,
+      data: products,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -104,6 +122,9 @@ exports.updateAvailability = async (req, res) => {
 exports.bulkAvailability = async (req, res) => {
   try {
     const { categoryId, availability } = req.body;
+    const VALID = ['available', 'epuise', 'bloque_caisse_borne'];
+    if (!VALID.includes(availability))
+      return res.status(400).json({ success: false, message: 'Invalid availability value' });
     await Product.updateMany({ categoryId }, { availability, isOnList86: availability !== 'available' });
     res.json({ success: true, message: `All products in category set to ${availability}` });
   } catch (err) {

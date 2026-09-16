@@ -14,7 +14,7 @@ const COLORS = {
 };
 
 const PAYMENT_LABELS = {
-  especes: "Esp\u00e8ces",
+  especes: "Espèces",
   carte_bancaire: "Carte Bancaire",
   sans_contact: "Sans Contact",
   ticket_restaurant: "Ticket Restaurant",
@@ -22,7 +22,7 @@ const PAYMENT_LABELS = {
 };
 
 const TAB_STATUS = {
-  "termin\u00e9es": "terminee",
+  "terminées": "terminee",
   attente: "en_attente",
   encaisser: "a_encaisser",
   repas: "repas_employe",
@@ -43,11 +43,11 @@ function isSameDay(a, b) {
   return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-const FR_MONTHS = ["JANVIER", "F\u00c9VRIER", "MARS", "AVRIL", "MAI", "JUIN", "JUILLET", "AO\u00dbT", "SEPTEMBRE", "OCTOBRE", "NOVEMBRE", "D\u00c9CEMBRE"];
+const FR_MONTHS = ["JANVIER", "FÉVRIER", "MARS", "AVRIL", "MAI", "JUIN", "JUILLET", "AOÛT", "SEPTEMBRE", "OCTOBRE", "NOVEMBRE", "DÉCEMBRE"];
 const FR_DAYS_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
 const RANGE_BG = "#FDE9A0";
 
-/* \u2500\u2500 Order Detail Drawer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+/* ── Order Detail Drawer ───────────────────────────────────────────────────────────────────── */
 function OrderDetailDrawer({ order, onClose, onRefund }) {
   const [detail, setDetail] = React.useState(null);
   const [payment, setPayment] = React.useState(null);
@@ -75,12 +75,12 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
   const paymentLabel = payment ? (PAYMENT_LABELS[payment.method] || payment.method) : null;
   const paymentRef = payment ? (payment.cardReference || (payment._id?.slice(-6).toUpperCase())) : null;
   const paymentSub = payment
-    ? (payment.method === "especes" ? "Rendu : " + fmtPrice(payment.change || 0) : "Paiement \u00e9lectronique")
+    ? (payment.method === "especes" ? "Rendu : " + fmtPrice(payment.change || 0) : "Paiement électronique")
     : null;
 
   const handleRefundClick = async () => {
     try {
-      await orderService.cancel(order._id, "Remboursement demand\u00e9");
+      await orderService.cancel(order._id, "Remboursement demandé");
       onRefund(order._id);
     } catch (e) {
       console.error(e);
@@ -108,12 +108,16 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
                   <span style={{ fontSize:18,fontWeight:800,color:COLORS.ink,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"0.03em" }}>
                     COMMANDE {order.num}
                   </span>
-                  <span style={{ fontSize:11,fontWeight:700,background:"#E6F9EE",color:COLORS.green,padding:"3px 10px",borderRadius:999 }}>
-                    \u25cf Termin\u00e9e
+                  <span style={{
+                    fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999,
+                    background: order.status === "annulee" ? "#FDEAE8" : order.status === "en_attente" ? "#FEF3CD" : "#E6F9EE",
+                    color:      order.status === "annulee" ? COLORS.red  : order.status === "en_attente" ? "#946200" : COLORS.green,
+                  }}>
+                    {order.status === "annulee" ? "✕ Annulée" : order.status === "en_attente" ? "⏳ En attente" : "● Terminée"}
                   </span>
                 </div>
                 <div style={{ fontSize:12,color:COLORS.muted,marginTop:2 }}>
-                  Historique de vente \u2022 Transaction confirm\u00e9e
+                  Historique de vente • Transaction confirmée
                 </div>
               </div>
             </div>
@@ -137,11 +141,11 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
                     <div style={{ fontSize:10,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted,textTransform:"uppercase",marginBottom:5 }}>Date &amp; Heure</div>
                     <div style={{ fontSize:13.5,fontWeight:500,color:COLORS.ink,display:"flex",alignItems:"center",gap:6 }}>
                       <Calendar size={13} color={COLORS.muted} />
-                      {order.date} \u00e0 {order.time}
+                      {order.date} à {order.time}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize:10,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted,textTransform:"uppercase",marginBottom:5 }}>Caisse &amp; Op\u00e9rateur</div>
+                    <div style={{ fontSize:10,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted,textTransform:"uppercase",marginBottom:5 }}>Caisse &amp; Opérateur</div>
                     <div style={{ fontSize:13.5,fontWeight:500,color:COLORS.ink,display:"flex",alignItems:"center",gap:6 }}>
                       <Circle size={7} fill={COLORS.green} color={COLORS.green} />
                       {order.caisse} (Admin)
@@ -154,7 +158,7 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
                   <div>
                     <div style={{ fontSize:10,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted,textTransform:"uppercase",marginBottom:5 }}>Mode de consommation</div>
                     <span style={{ display:"inline-flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:999,background:isSurPlace?COLORS.redBg:COLORS.blueBg,color:isSurPlace?COLORS.red:COLORS.blue }}>
-                      \u25cf {isSurPlace?"Sur place":"\u00c0 emporter"}
+                      ● {isSurPlace?"Sur place":"À emporter"}
                     </span>
                   </div>
                 </div>
@@ -169,25 +173,25 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
               {/* Items card */}
               <div style={{ background:COLORS.cardBg,border:`1px solid ${COLORS.border}`,borderRadius:12,overflow:"hidden" }}>
                 <div style={{ display:"grid",gridTemplateColumns:"40px 1fr auto",padding:"10px 16px",borderBottom:`1px solid ${COLORS.border}`,background:"#FBFAF8" }}>
-                  <span style={{ fontSize:10,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted }}>QT\u00c9</span>
-                  <span style={{ fontSize:10,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted }}>ARTICLE &amp; SUPPL\u00c9MENTS</span>
+                  <span style={{ fontSize:10,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted }}>QTÉ</span>
+                  <span style={{ fontSize:10,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted }}>ARTICLE &amp; SUPPLÉMENTS</span>
                   <span style={{ fontSize:10,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted,textAlign:"right" }}>PRIX</span>
                 </div>
                 {(detail?.items || []).map((item, i) => (
                   <div key={i} style={{ display:"grid",gridTemplateColumns:"40px 1fr auto",padding:"14px 16px",borderBottom:i<(detail.items.length-1)?`1px solid ${COLORS.border}`:"none",gap:"0 8px" }}>
-                    <div style={{ fontSize:13,fontWeight:700,color:COLORS.muted,paddingTop:2 }}>{item.quantity}\u00d7</div>
+                    <div style={{ fontSize:13,fontWeight:700,color:COLORS.muted,paddingTop:2 }}>{item.quantity}×</div>
                     <div>
                       <div style={{ fontWeight:700,fontSize:14,color:COLORS.ink }}>{item.productName}</div>
                       {(item.customizations || []).map((cust, ci) => (
                         <div key={ci} style={{ fontSize:12,color:COLORS.muted,marginTop:2 }}>
-                          \u2022 {cust.groupName}: {(cust.selectedOptions || []).map(o => o.label).join(", ")}
+                          • {cust.groupName}: {(cust.selectedOptions || []).map(o => o.label).join(", ")}
                         </div>
                       ))}
                       {(item.removedIngredients || []).map((ing, ri) => (
-                        <div key={ri} style={{ fontSize:12,color:"#B07A00",fontWeight:600,marginTop:2 }}>\u2022 Sans {ing}</div>
+                        <div key={ri} style={{ fontSize:12,color:"#B07A00",fontWeight:600,marginTop:2 }}>• Sans {ing}</div>
                       ))}
                       {item.notes && (
-                        <div style={{ fontSize:12,color:COLORS.muted,fontStyle:"italic",marginTop:3 }}>\ud83d\udcdd {item.notes}</div>
+                        <div style={{ fontSize:12,color:COLORS.muted,fontStyle:"italic",marginTop:3 }}> {item.notes}</div>
                       )}
                     </div>
                     <div style={{ fontSize:13.5,fontWeight:700,color:COLORS.ink,textAlign:"right",paddingTop:2 }}>
@@ -212,7 +216,7 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
                 </div>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:10,borderTop:`1px solid ${COLORS.border}` }}>
                   <div>
-                    <div style={{ fontSize:11,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted,textTransform:"uppercase" }}>Total Pay\u00e9</div>
+                    <div style={{ fontSize:11,fontWeight:700,letterSpacing:"0.07em",color:COLORS.muted,textTransform:"uppercase" }}>Total Payé</div>
                     <div style={{ fontSize:10,color:COLORS.muted,marginTop:1 }}>Toutes taxes comprises</div>
                   </div>
                   <span style={{ fontSize:26,fontWeight:800,color:COLORS.ink }}>{fmtPrice(detail?.totalTTC)}</span>
@@ -224,9 +228,9 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
                 <div style={{ background:"#F0FAF4",border:"1px solid #C3EDD4",borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"center",gap:12 }}>
                   <CheckCircle2 size={20} color={COLORS.green} fill="#D4F5E2" strokeWidth={2} style={{ flexShrink:0 }} />
                   <div>
-                    <div style={{ fontSize:13,fontWeight:700,color:"#1A7A42" }}>Pay\u00e9 par {paymentLabel}</div>
+                    <div style={{ fontSize:13,fontWeight:700,color:"#1A7A42" }}>Payé par {paymentLabel}</div>
                     <div style={{ fontSize:12,color:COLORS.muted,marginTop:1 }}>
-                      {paymentSub} \u2022 R\u00e9f #{paymentRef}
+                      {paymentSub} • Réf #{paymentRef}
                     </div>
                   </div>
                 </div>
@@ -234,7 +238,7 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
                 <div style={{ background:"#F0FAF4",border:"1px solid #C3EDD4",borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"center",gap:12 }}>
                   <CheckCircle2 size={20} color={COLORS.green} fill="#D4F5E2" strokeWidth={2} style={{ flexShrink:0 }} />
                   <div>
-                    <div style={{ fontSize:13,fontWeight:700,color:"#1A7A42" }}>Paiement enregistr\u00e9</div>
+                    <div style={{ fontSize:13,fontWeight:700,color:"#1A7A42" }}>Paiement enregistré</div>
                   </div>
                 </div>
               )}
@@ -249,7 +253,7 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
           </button>
           <div style={{ display:"flex",gap:10 }}>
             <button style={{ flex:1,padding:"11px",borderRadius:10,border:`1px solid ${COLORS.border}`,background:COLORS.cardBg,color:COLORS.ink,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7 }}>
-              <RotateCcw size={14} /> R\u00e9imprimer Bon Cuisine
+              <RotateCcw size={14} /> Réimprimer Bon Cuisine
             </button>
             <button onClick={handleRefundClick} style={{ flex:1,padding:"11px",borderRadius:10,border:`1px solid ${COLORS.redBg}`,background:COLORS.redBg,color:COLORS.red,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7 }}>
               <Ban size={14} /> Remboursement / Annulation
@@ -261,13 +265,13 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
   );
 }
 
-/* \u2500\u2500 Shared helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+/* ── Shared helpers ─────────────────────────────────────────────────────────────────────────────── */
 function ModePill({ mode }) {
   const isSurPlace = mode === "sur-place";
   return (
     <span style={{ display:"inline-flex",alignItems:"center",gap:6,fontSize:12,fontWeight:600,padding:"4px 10px",borderRadius:999,background:isSurPlace?COLORS.redBg:COLORS.blueBg,color:isSurPlace?COLORS.red:COLORS.blue }}>
       <Circle size={6} fill={isSurPlace?COLORS.red:COLORS.blue} color={isSurPlace?COLORS.red:COLORS.blue} />
-      {isSurPlace ? "Sur place" : "\u00c0 emporter"}
+      {isSurPlace ? "Sur place" : "À emporter"}
     </span>
   );
 }
@@ -294,7 +298,7 @@ function cellStyle(i, total) {
   return { padding:"14px 20px",fontSize:13.5,borderBottom:i===total-1?"none":`1px solid ${COLORS.border}`,color:COLORS.ink,verticalAlign:"middle" };
 }
 
-/* \u2500\u2500 Date Range Modal \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+/* ── Date Range Modal ────────────────────────────────────────────────────────────────────── */
 function MonthGrid({ year, month, lo, hi, picking, hovered, onDayClick, onDayHover }) {
   const TODAY_REF = new Date();
   let startDow = new Date(year, month, 1).getDay();
@@ -371,12 +375,12 @@ function DateRangeModal({ onClose, onApply }) {
   const apply = (fn, key) => { fn(); setActiveKey(key); setPicking(false); };
 
   const shortcuts = [
-    { key:"today", label:"Aujourd\u2019hui", sub:null, fn:() => { const t=new Date(); setRangeStart(t); setRangeEnd(new Date(t)); } },
+    { key:"today", label:"Aujourd’hui", sub:null, fn:() => { const t=new Date(); setRangeStart(t); setRangeEnd(new Date(t)); } },
     { key:"hier",  label:"Hier",             sub:null, fn:() => { const y=addDays(new Date(),-1); setRangeStart(y); setRangeEnd(new Date(y)); } },
     { key:"7j",    label:"7 derniers jours", sub:null, fn:() => { const t=new Date(); setRangeStart(addDays(t,-6)); setRangeEnd(t); } },
     { key:"mois",  label:"Ce mois-ci",       sub:null, fn:() => { const t=new Date(); setRangeStart(startOfMonth(t)); setRangeEnd(t); } },
     { key:"last",  label:"Mois dernier",     sub:null, fn:() => { const t=new Date(); const lm=new Date(t.getFullYear(),t.getMonth()-1,1); setRangeStart(lm); setRangeEnd(endOfMonth(lm)); } },
-    { key:"custom",label:"Personnalis\u00e9", chevron:true, fn:() => {} },
+    { key:"custom",label:"Personnalisé", chevron:true, fn:() => {} },
   ];
 
   const handleDayClick = (d) => {
@@ -411,10 +415,10 @@ function DateRangeModal({ onClose, onApply }) {
             </div>
             <div>
               <div style={{ fontSize:15.5,fontWeight:800,color:COLORS.ink,lineHeight:1.2 }}>
-                S\u00c9LECTIONNER UNE P\u00c9RIODE DE VENTE
+                SÉLECTIONNER UNE PÉRIODE DE VENTE
               </div>
               <div style={{ fontSize:12,color:COLORS.muted,marginTop:3 }}>
-                Filtrer l\u2019historique des encaissements, tickets et statistiques
+                Filtrer l’historique des encaissements, tickets et statistiques
               </div>
             </div>
           </div>
@@ -460,9 +464,9 @@ function DateRangeModal({ onClose, onApply }) {
         <div style={{ height:1,background:COLORS.border }} />
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 22px",gap:12,flexWrap:"wrap" }}>
           <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-            <span style={{ fontSize:13,color:COLORS.ink,fontWeight:500 }}>P\u00e9riode s\u00e9lectionn\u00e9e :</span>
+            <span style={{ fontSize:13,color:COLORS.ink,fontWeight:500 }}>Période sélectionnée :</span>
             <span style={{ fontSize:12,fontWeight:600,background:"#F5F4F0",border:`1px solid ${COLORS.border}`,borderRadius:7,padding:"4px 10px",fontFamily:"monospace",whiteSpace:"nowrap" }}>
-              {formatDate(lo)} \u2014 {formatDate(hi || lo)}
+              {formatDate(lo)} — {formatDate(hi || lo)}
               {dayCount > 0 && <span style={{ color:COLORS.muted,marginLeft:5 }}>({dayCount} jour{dayCount>1?"s":""})</span>}
             </span>
           </div>
@@ -472,7 +476,7 @@ function DateRangeModal({ onClose, onApply }) {
             </button>
             <button onClick={() => { onApply(lo, hi || lo); onClose(); }}
               style={{ padding:"9px 20px",borderRadius:9,border:"none",background:COLORS.yellow,fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit",color:COLORS.brown,display:"flex",alignItems:"center",gap:6 }}>
-              \u2713 Appliquer la p\u00e9riode
+              ✓ Appliquer la période
             </button>
           </div>
         </div>
@@ -481,10 +485,10 @@ function DateRangeModal({ onClose, onApply }) {
   );
 }
 
-/* \u2500\u2500 Page \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+/* ── Page ────────────────────────────────────────────────────────────────────────────────────────────────────── */
 export default function HistoriquePage() {
   const navigate = useNavigate();
-  const [activeTab,      setActiveTab]      = React.useState("termin\u00e9es");
+  const [activeTab,      setActiveTab]      = React.useState("terminées");
   const [page,           setPage]           = React.useState(1);
   const [search,         setSearch]         = React.useState("");
   const [showDatePicker, setShowDatePicker] = React.useState(false);
@@ -541,7 +545,7 @@ export default function HistoriquePage() {
       <header style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 32px",borderBottom:`1px solid ${COLORS.border}`,background:COLORS.cardBg }}>
         <div style={{ display:"flex",alignItems:"center",gap:18 }}>
           <button onClick={() => navigate("/")} style={{ display:"inline-flex",alignItems:"center",gap:8,fontSize:13,fontWeight:600,color:COLORS.ink,background:COLORS.cardBg,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:"8px 14px",cursor:"pointer",fontFamily:"inherit" }}>
-            <ArrowLeft size={15} /> Retour \u00e0 l\u2019accueil
+            <ArrowLeft size={15} /> Retour à l’accueil
           </button>
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
             <div style={{ width:30,height:30,borderRadius:"50%",background:COLORS.brown,color:COLORS.yellow,display:"flex",alignItems:"center",justifyContent:"center" }}>
@@ -562,7 +566,7 @@ export default function HistoriquePage() {
         <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:24,flexWrap:"wrap" }}>
           <div>
             <span style={{ fontSize:11,fontWeight:600,letterSpacing:"0.05em",color:COLORS.muted }}>
-              HISTORIQUE DES VENTES &nbsp;\u00b7&nbsp; <span style={{ color:COLORS.green }}>SYNCHRONIS\u00c9 KDS &amp; COMPTOIR</span>
+              HISTORIQUE DES VENTES &nbsp;·&nbsp; <span style={{ color:COLORS.green }}>SYNCHRONISÉ KDS &amp; COMPTOIR</span>
             </span>
             <div style={{ display:"flex",alignItems:"center",gap:10,marginTop:6 }}>
               <div style={{ width:30,height:30,borderRadius:8,background:"#F1F0EC",display:"flex",alignItems:"center",justifyContent:"center",color:COLORS.ink,flexShrink:0 }}>
@@ -582,7 +586,7 @@ export default function HistoriquePage() {
                 style={{ border:"none",outline:"none",fontSize:13,fontFamily:"inherit",flex:1,background:"transparent",color:COLORS.ink }} />
             </div>
             <button onClick={() => setShowDatePicker(true)} style={{ display:"inline-flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:COLORS.ink,background:COLORS.cardBg,border:`1px solid ${COLORS.border}`,borderRadius:10,padding:"10px 16px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }}>
-              <Printer size={15} /> Imprimer Cl\u00f4ture
+              <Printer size={15} /> Imprimer Clôture
             </button>
           </div>
         </div>
@@ -591,8 +595,8 @@ export default function HistoriquePage() {
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:20,marginTop:22,flexWrap:"wrap" }}>
           <div style={{ display:"flex",gap:8 }}>
             <Tab waiting onClick={() => handleTabChange("attente")}    active={activeTab === "attente"}>En attente</Tab>
-            <Tab          onClick={() => handleTabChange("encaisser")} active={activeTab === "encaisser"}>\u00c0 encaisser</Tab>
-            <Tab active={activeTab === "termin\u00e9es"} badge={totalOrders} onClick={() => handleTabChange("termin\u00e9es")}>Termin\u00e9es</Tab>
+            <Tab          onClick={() => handleTabChange("encaisser")} active={activeTab === "encaisser"}>À encaisser</Tab>
+            <Tab active={activeTab === "terminées"} badge={totalOrders} onClick={() => handleTabChange("terminées")}>Terminées</Tab>
             <Tab          onClick={() => handleTabChange("repas")}     active={activeTab === "repas"}>Repas Empl.</Tab>
           </div>
           <span style={{ fontSize:12.5,color:COLORS.muted,whiteSpace:"nowrap" }}>
@@ -606,7 +610,7 @@ export default function HistoriquePage() {
             <table style={{ width:"100%",borderCollapse:"collapse",minWidth:800 }}>
               <thead>
                 <tr>
-                  {["DATE","HEURE","NUM\u00c9RO","MONTANT","CAISSE","CLIENT","MODE"].map(h => (
+                  {["DATE","HEURE","NUMÉRO","MONTANT","CAISSE","CLIENT","MODE"].map(h => (
                     <th key={h} style={{ textAlign:"left",fontSize:10.5,fontWeight:700,letterSpacing:"0.06em",color:COLORS.muted,padding:"14px 20px",borderBottom:`1px solid ${COLORS.border}`,background:"#FBFAF8" }}>{h}</th>
                   ))}
                   <th style={{ textAlign:"right",fontSize:10.5,fontWeight:700,letterSpacing:"0.06em",color:COLORS.muted,padding:"14px 20px",borderBottom:`1px solid ${COLORS.border}`,background:"#FBFAF8" }}>ACTIONS</th>
@@ -617,7 +621,7 @@ export default function HistoriquePage() {
                   <tr><td colSpan={8} style={{ padding:40,textAlign:"center",color:COLORS.muted }}>Chargement des commandes...</td></tr>
                 )}
                 {!loading && orders.length === 0 && (
-                  <tr><td colSpan={8} style={{ padding:40,textAlign:"center",color:COLORS.muted,fontSize:14 }}>Aucune commande trouv\u00e9e</td></tr>
+                  <tr><td colSpan={8} style={{ padding:40,textAlign:"center",color:COLORS.muted,fontSize:14 }}>Aucune commande trouvée</td></tr>
                 )}
                 {!loading && orders.map((o, i) => {
                   const date       = new Date(o.createdAt).toLocaleDateString("fr-FR");
@@ -655,7 +659,7 @@ export default function HistoriquePage() {
                           </span>
                           {isRefunded && (
                             <span style={{ fontSize:10,fontWeight:800,background:COLORS.redBg,color:COLORS.red,padding:"2px 8px",borderRadius:999,letterSpacing:"0.04em",textTransform:"uppercase" }}>
-                              Annul\u00e9e
+                              Annulée
                             </span>
                           )}
                         </div>
@@ -669,7 +673,7 @@ export default function HistoriquePage() {
                       <td style={{ ...cellStyle(i, orders.length), textAlign:"right", whiteSpace:"nowrap" }}>
                         <button onClick={() => setSelectedOrder(rowObj)}
                           style={{ fontSize:12.5,fontWeight:700,padding:"8px 16px",borderRadius:8,border:`1px solid ${highlight&&!isRefunded?COLORS.brown:COLORS.border}`,background:highlight&&!isRefunded?COLORS.brown:COLORS.cardBg,color:highlight&&!isRefunded?"#F5F0E6":COLORS.ink,cursor:"pointer",fontFamily:"inherit" }}>
-                          D\u00e9tails
+                          Détails
                         </button>
                         {highlight && !isRefunded && (
                           <button aria-label="Imprimer" style={{ width:32,height:32,borderRadius:8,border:`1px solid ${COLORS.border}`,background:COLORS.cardBg,color:COLORS.muted,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",marginLeft:8 }}>
@@ -687,10 +691,10 @@ export default function HistoriquePage() {
           {/* Pagination */}
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",flexWrap:"wrap",gap:12 }}>
             <span style={{ fontSize:12.5,color:COLORS.muted }}>
-              Affichage de {orders.length > 0 ? (page - 1) * 10 + 1 : 0} \u00e0 {(page - 1) * 10 + orders.length} sur {totalOrders} commande{totalOrders !== 1 ? "s" : ""}
+              Affichage de {orders.length > 0 ? (page - 1) * 10 + 1 : 0} à {(page - 1) * 10 + orders.length} sur {totalOrders} commande{totalOrders !== 1 ? "s" : ""}
             </span>
             <div style={{ display:"flex",alignItems:"center",gap:6 }}>
-              <PageBtn disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Pr\u00e9c\u00e9dent</PageBtn>
+              <PageBtn disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Précédent</PageBtn>
               {Array.from({ length: Math.min(totalPages, 5) }, (_, idx) => idx + 1).map(n => (
                 <PageBtn key={n} active={page === n} onClick={() => setPage(n)}>{n}</PageBtn>
               ))}
@@ -706,7 +710,7 @@ export default function HistoriquePage() {
       {/* Footer */}
       <footer style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 32px",borderTop:`1px solid ${COLORS.border}` }}>
         <span style={{ display:"inline-flex",alignItems:"center",gap:6,fontSize:12,fontWeight:600,color:COLORS.ink }}>
-          <Circle size={6} fill={COLORS.green} color={COLORS.green} /> Connect\u00e9
+          <Circle size={6} fill={COLORS.green} color={COLORS.green} /> Connecté
         </span>
         <span style={{ fontSize:12,color:COLORS.muted }}>SprintKitchen OS v2.4.0-PROD</span>
       </footer>

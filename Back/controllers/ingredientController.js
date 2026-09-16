@@ -1,14 +1,18 @@
-﻿const Ingredient = require('../models/Ingredient');
+const Ingredient = require('../models/Ingredient');
 
-/* GET /api/ingredients?family=viandes&storeId=xxx */
+/* GET /api/ingredients?family=viandes&search=steak&limit=20 */
 exports.getIngredients = async (req, res, next) => {
   try {
     const filter = { isActive: true };
-    if (req.query.family)  filter.family  = req.query.family;
-    if (req.query.storeId) filter.storeId = req.query.storeId;
+    if (req.query.family)       filter.family       = req.query.family;
+    if (req.query.storeId)      filter.storeId      = req.query.storeId;
     if (req.query.availability) filter.availability = req.query.availability;
+    if (req.query.search) {
+      filter.name = { $regex: req.query.search, $options: 'i' };
+    }
 
-    const data = await Ingredient.find(filter).sort('displayOrder name');
+    const limit = parseInt(req.query.limit) || 200;
+    const data  = await Ingredient.find(filter).sort('family displayOrder name').limit(limit);
     res.json({ success: true, count: data.length, data });
   } catch (err) { next(err); }
 };

@@ -59,7 +59,7 @@ exports.getSalesByHour = async (req, res, next) => {
 
     const raw = await Order.aggregate([
       { $match: { ...rf, status: 'terminee', createdAt: { $gte: from, $lte: to } } },
-      { $group: { _id: { $hour: { date: '$createdAt', timezone: 'Europe/Paris' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
+      { $group: { _id: { $hour: { date: '$createdAt', timezone: 'Africa/Algiers' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
       { $sort: { _id: 1 } },
       { $project: { _id: 0, hour: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1, avgBasket: { $round: ['$avgBasket', 2] } } },
     ]);
@@ -118,7 +118,7 @@ exports.getSalesTrend = async (req, res, next) => {
 
     const data = await Order.aggregate([
       { $match: { ...rf, status: 'terminee', createdAt: { $gte: from, $lte: to } } },
-      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Europe/Paris' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Africa/Algiers' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
       { $sort: { _id: 1 } },
       { $project: { _id: 0, date: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1, avgBasket: { $round: ['$avgBasket', 2] } } },
     ]);
@@ -189,7 +189,7 @@ exports.getSummary = async (req, res, next) => {
 
     const [totalsArr, byHourArr, topPArr, byChanArr, payArr, annArr] = await Promise.all([
       Order.aggregate([{ $match: baseMatch }, { $group: { _id: null, totalTTC: { $sum: '$totalTTC' }, totalHT: { $sum: '$subtotalHT' }, totalTVA: { $sum: '$tvaAmount' }, ticketCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } }]),
-      Order.aggregate([{ $match: baseMatch }, { $group: { _id: { $hour: { date: '$createdAt', timezone: 'Europe/Paris' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 } } }, { $sort: { _id: 1 } }, { $project: { _id: 0, hour: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1 } }]),
+      Order.aggregate([{ $match: baseMatch }, { $group: { _id: { $hour: { date: '$createdAt', timezone: 'Africa/Algiers' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 } } }, { $sort: { _id: 1 } }, { $project: { _id: 0, hour: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1 } }]),
       Order.aggregate([{ $match: baseMatch }, { $unwind: '$items' }, { $group: { _id: '$items.productId', productName: { $first: '$items.productName' }, qty: { $sum: '$items.quantity' }, revenue: { $sum: '$items.lineTotal' } } }, { $sort: { qty: -1 } }, { $limit: 10 }, { $project: { _id: 0, productId: '$_id', productName: 1, qty: 1, revenue: { $round: ['$revenue', 2] } } }]),
       Order.aggregate([{ $match: baseMatch }, { $group: { _id: '$orderType', revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } }, { $project: { _id: 0, channel: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1, avgBasket: { $round: ['$avgBasket', 2] } } }, { $sort: { revenue: -1 } }]),
       Payment.aggregate([{ $match: { ...rf, isRefunded: { $ne: true }, createdAt: { $gte: from, $lte: to } } }, { $group: { _id: '$method', total: { $sum: '$amountDue' }, count: { $sum: 1 } } }, { $sort: { total: -1 } }]),

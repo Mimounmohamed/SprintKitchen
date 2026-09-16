@@ -236,7 +236,7 @@ export default function SprintKitchenAdminHub() {
         />
         <ModuleCard mobile
           icon={<Package size={20}/>} iconBg="#FEF3E2" iconColor="#D9720C"
-          pill={<Pill small bg="#FEF3E2" color="#D9720C"><Circle size={5} fill="#D9720C" color="#D9720C" style={{marginRight:3}}/> 3 ALERTES ACTIVES</Pill>}
+          pill={ruptureWarn ? <Pill small dot dotColor="#D9720C" bg="#FEF3E2" color="#D9720C">{ruptureFmt} ALERTE{(kpi?.rupture.count ?? 0) > 1 ? 'S' : ''} ACTIVES</Pill> : <Pill small bg="#F1F0EC" color={C.muted}>Stock</Pill>}
           eyebrow="Stocks &amp; Ingrédients" title="Inventaire"
           description="Suivez les niveaux de stock et contrôlez la disponibilité des ingrédients."
           checklist={<><ChecklistItem warn={ruptureWarn}>{ruptureFmt} Alerte{(kpi?.rupture.count ?? 0) > 1 ? "s" : ""} de stock critique</ChecklistItem><ChecklistItem>Niveaux en temps réel</ChecklistItem></>}
@@ -325,7 +325,7 @@ export default function SprintKitchenAdminHub() {
           />
           <ModuleCard
             icon={<Package size={24}/>} iconBg="#FEF3E2" iconColor="#D9720C"
-            pill={<Pill small dot dotColor="#D9720C" bg="#FEF3E2" color="#D9720C">3 ALERTES ACTIVES</Pill>}
+            pill={ruptureWarn ? <Pill small dot dotColor="#D9720C" bg="#FEF3E2" color="#D9720C">{ruptureFmt} ALERTE{(kpi?.rupture.count ?? 0) > 1 ? 'S' : ''} ACTIVES</Pill> : <Pill small bg="#F1F0EC" color={C.muted}>Stock</Pill>}
             eyebrow="Stocks &amp; Ingrédients" title="Inventaire"
             description="Gérez les niveaux de stock, suivez les mouvements et contrôlez la disponibilité des ingrédients en temps réel."
             checklist={<><ChecklistItem warn={ruptureWarn}>{ruptureFmt} Alerte{(kpi?.rupture.count ?? 0) > 1 ? "s" : ""} de stock critique</ChecklistItem><ChecklistItem>Niveaux de stock en temps réel</ChecklistItem></>}

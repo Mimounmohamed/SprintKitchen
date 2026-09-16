@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, Plus, Pencil, Trash2, Settings, Circle, X, ChevronDown } from "lucide-react";
-import { productService, categoryService } from "../services";
+import { productService, categoryService, ingredientService } from "../services";
 
 const C = {
   bg: "#F5F4F0", cardBg: "#FFFFFF", ink: "#1C1917", brown: "#2E2117",
@@ -62,70 +62,164 @@ const inputStyle = {
   color: C.ink, background: C.cardBg,
 };
 
-/* ── Ingredient tag input ────────────────────────────────────────────────────
-   Type a name then press Enter or comma → adds tag.
-   Click × on a tag to remove it.
-   Stored as an array of strings.
+/* ── IngredientPicker ────────────────────────────────────────────────────────
+   Searches the real Inventaire (ingredientService) as the user types.
+   Selected items shown as removable tags. No free-text — only real ingredients.
 ─────────────────────────────────────────────────────────────────────────────── */
-function IngredientTags({ tags, onChange }) {
-  const [input, setInput] = useState("");
+function IngredientPicker({ tags, onChange }) {
+  const [query,       setQuery]       = useState("");
+  const [results,     setResults]     = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [showDrop,    setShowDrop]    = useState(false);
   const inputRef = useRef();
+  const dropRef  = useRef();
+  const debounce = useRef(null);
 
-  const add = () => {
-    const val = input.trim().replace(/,$/, "").trim();
-    if (val && !tags.includes(val)) onChange([...tags, val]);
-    setInput("");
+  // Load ingredients — on focus (all) or as user types (filtered)
+  const loadIngredients = useCallback(async (q) => {
+    setLoading(true);
+    try {
+      const params = { limit: 30 };
+      if (q.trim()) params.search = q.trim();
+      const res = await ingredientService.getAll(params);
+      const all = res.data?.data || [];
+      setResults(all.filter(i => !tags.includes(i.name)));
+      setShowDrop(true);
+    } catch { setResults([]); }
+    finally  { setLoading(false); }
+  }, [tags]);
+
+  useEffect(() => {
+    clearTimeout(debounce.current);
+    if (!showDrop) return;
+    debounce.current = setTimeout(() => loadIngredients(query), query ? 250 : 0);
+    return () => clearTimeout(debounce.current);
+  }, [query, showDrop, loadIngredients]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (!dropRef.current?.contains(e.target) && !inputRef.current?.contains(e.target))
+        setShowDrop(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const select = (ing) => {
+    onChange([...tags, ing.name]);
+    setQuery("");
+    setResults([]);
+    setShowDrop(false);
+    inputRef.current?.focus();
   };
 
-  const handleKey = (e) => {
-    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); }
-    if (e.key === "Backspace" && input === "" && tags.length) {
-      onChange(tags.slice(0, -1));
-    }
-  };
+  const remove = (name) => onChange(tags.filter(t => t !== name));
 
-  const remove = (t) => onChange(tags.filter(x => x !== t));
+  // Availability color hint
+  const availColor = (ing) =>
+    ing.availability === "available" ? C.green : "#D9720C";
 
   return (
-    <div
-      onClick={() => inputRef.current?.focus()}
-      style={{
-        minHeight: 48, padding: "6px 10px",
-        border: `1px solid ${C.border}`, borderRadius: 8,
-        display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center",
-        cursor: "text", background: C.cardBg,
-      }}
-    >
-      {tags.map(t => (
-        <span key={t} style={{
-          display: "inline-flex", alignItems: "center", gap: 5,
-          background: "#F1EDE7", color: "#583926",
-          fontSize: 12, fontWeight: 600, padding: "4px 9px", borderRadius: 6,
-        }}>
-          {t}
-          <button onClick={e => { e.stopPropagation(); remove(t); }} style={{
-            background: "none", border: "none", cursor: "pointer",
-            padding: 0, color: C.muted, display: "flex", lineHeight: 1,
-          }}>
-            <X size={11} />
-          </button>
-        </span>
-      ))}
-      <input
-        ref={inputRef}
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={handleKey}
-        onBlur={add}
-        placeholder={tags.length === 0 ? "Steak haché, Cheddar, Bacon… (Entrée pour valider)" : ""}
+    <div style={{ position: "relative" }}>
+      {/* Tag list + search input */}
+      <div
+        onClick={() => inputRef.current?.focus()}
         style={{
-          border: "none", outline: "none", fontSize: 13, fontFamily: "inherit",
-          background: "transparent", flex: 1, minWidth: 120, color: C.ink,
+          minHeight: 48, padding: "6px 10px",
+          border: `1px solid ${C.border}`, borderRadius: 8,
+          display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center",
+          cursor: "text", background: C.cardBg,
         }}
-      />
+      >
+        {tags.map(t => (
+          <span key={t} style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            background: "#F1EDE7", color: "#583926",
+            fontSize: 12, fontWeight: 600, padding: "4px 9px", borderRadius: 6,
+          }}>
+            {t}
+            <button onClick={e => { e.stopPropagation(); remove(t); }} style={{
+              background: "none", border: "none", cursor: "pointer",
+              padding: 0, color: C.muted, display: "flex", lineHeight: 1,
+            }}>
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+        <div style={{ position: "relative", flex: 1, minWidth: 140, display: "flex", alignItems: "center", gap: 6 }}>
+          <Search size={12} color={C.muted} style={{ flexShrink: 0 }}/>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onFocus={() => setShowDrop(true)}
+            placeholder={tags.length === 0 ? "Rechercher un ingrédient…" : "Ajouter…"}
+            style={{
+              border: "none", outline: "none", fontSize: 13, fontFamily: "inherit",
+              background: "transparent", flex: 1, color: C.ink,
+            }}
+          />
+          {loading && (
+            <span style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>…</span>
+          )}
+        </div>
+      </div>
+
+      {/* Dropdown results */}
+      {showDrop && results.length > 0 && (
+        <div ref={dropRef} style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: C.cardBg, border: `1px solid ${C.border}`,
+          borderRadius: 8, zIndex: 200,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
+          maxHeight: 220, overflowY: "auto",
+        }}>
+          {results.map(ing => (
+            <div
+              key={ing._id}
+              onMouseDown={e => { e.preventDefault(); select(ing); }}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "9px 14px", cursor: "pointer", gap: 8,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "#F7F5F2"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{ing.name}</div>
+                {ing.family && (
+                  <div style={{ fontSize: 11, color: C.muted }}>{ing.family}{ing.unit ? ` · ${ing.unit}` : ""}</div>
+                )}
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+                padding: "2px 8px", borderRadius: 5,
+                background: ing.availability === "available" ? "#E8F8EF" : "#FEF0E0",
+                color: availColor(ing),
+              }}>
+                {ing.availability === "available" ? "Dispo" : "86"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* No results */}
+      {showDrop && !loading && query.trim() && results.length === 0 && (
+        <div ref={dropRef} style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: C.cardBg, border: `1px solid ${C.border}`,
+          borderRadius: 8, zIndex: 200, padding: "12px 14px",
+          fontSize: 12, color: C.muted,
+        }}>
+          Aucun ingrédient trouvé pour « {query} »
+        </div>
+      )}
     </div>
   );
 }
+
 
 /* ── Side Drawer ─────────────────────────────────────────────────────────────── */
 function ArticleDrawer({ product, categories, onClose, onSave }) {
@@ -290,8 +384,8 @@ function ArticleDrawer({ product, categories, onClose, onSave }) {
               </div>
             </Field>
 
-            <Field label="Ingrédients" hint="Entrée ou virgule pour valider">
-              <IngredientTags tags={form.ingredients} onChange={val => set("ingredients", val)}/>
+            <Field label="Ingrédients" hint="Recherchez et sélectionnez depuis l'Inventaire">
+              <IngredientPicker tags={form.ingredients} onChange={val => set("ingredients", val)}/>
               {form.ingredients.length > 0 && (
                 <p style={{ margin:"6px 0 0", fontSize:11, color:C.muted }}>
                   {form.ingredients.length} ingrédient{form.ingredients.length > 1 ? "s" : ""} ajouté{form.ingredients.length > 1 ? "s" : ""}
@@ -387,7 +481,7 @@ function CategoryModal({ category, onClose, onSave }) {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Supprimer cette catégorie ?")) return;
+    if (!window.confirm("Supprimer cette catégorie ?")) return;
     setDeleting(true);
     try { await categoryService.delete(category._id); onSave(); }
     catch (e) { alert(e.response?.data?.message || "Erreur."); setDeleting(false); }
@@ -574,7 +668,7 @@ function CategoryModal({ category, onClose, onSave }) {
                     <Circle size={7} fill={form.color || C.green} color={form.color || C.green}/>
                     <div>
                       <div style={{ fontSize:13.5, fontWeight:600, color:C.ink }}>{p.name}</div>
-                      <div style={{ fontSize:12, color:C.muted }}>{p.basePrice?.toLocaleString("fr-DZ")} €</div>
+                      <div style={{ fontSize:12, color:C.muted }}>{p.basePrice?.toLocaleString("fr-DZ")} DA</div>
                     </div>
                   </div>
                   <button onClick={() => removeProduct(p)} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, padding:4 }}><X size={15}/></button>
@@ -634,7 +728,7 @@ function GererModal({ categories, onClose, onEdit, onRefresh }) {
   const [deleting, setDeleting] = useState(null);
 
   const handleDelete = async (id) => {
-    if (!confirm("Supprimer cette catégorie ?")) return;
+    if (!window.confirm("Supprimer cette catégorie ?")) return;
     setDeleting(id);
     try { await categoryService.delete(id); onRefresh(); }
     catch (e) { alert(e.response?.data?.message || "Erreur."); }
@@ -701,6 +795,24 @@ export default function MenuPage() {
     return () => window.removeEventListener("resize", h);
   }, []);
 
+  // Set of épuisé ingredient names — for rupture badge on product cards
+  const [epuisedSet, setEpuisedSet] = useState(new Set());
+  useEffect(() => {
+    ingredientService.getAll({ availability: 'epuise', limit: 200 })
+      .then(r => {
+        const names = (r.data?.data || []).map(i => i.name);
+        setEpuisedSet(new Set(names));
+      })
+      .catch(() => {});
+  }, []);
+
+  // Returns comma-joined list of all épuisé ingredients in a product, or null
+  const ruptureIngredient = (product) => {
+    if (!product.ingredients?.length) return null;
+    const epuises = product.ingredients.filter(name => epuisedSet.has(name));
+    return epuises.length ? epuises.join(", ") : null;
+  };
+
   const LIMIT = 7;
 
   const fetchCategories = useCallback(() => {
@@ -733,7 +845,7 @@ export default function MenuPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Désactiver cet article ?")) return;
+    if (!window.confirm("Désactiver cet article ?")) return;
     await productService.delete(id);
     fetchProducts();
   };
@@ -889,25 +1001,67 @@ export default function MenuPage() {
               const isAvail = p.availability === "available";
               const cat = p.categoryId?.name || categories.find(c => c._id === p.categoryId)?.name || "";
               const catColor = p.categoryId?.color || C.yellow;
+              const rupture = ruptureIngredient(p); // name of first épuisé ingredient, or null
+              const hasRupture = !!rupture;
               return (
-                <div key={p._id} style={{ padding:"14px 16px", borderBottom: idx < products.length-1 ? `1px solid ${C.border}` : "none" }}>
+                <div key={p._id} style={{
+                  padding:"14px 16px",
+                  borderBottom: idx < products.length-1 ? `1px solid ${C.border}` : "none",
+                  borderLeft: hasRupture ? `3px solid ${C.red}` : "3px solid transparent",
+                  background: hasRupture ? "#FDF7F6" : "transparent",
+                }}>
                   {/* Row 1: name + price */}
                   <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, marginBottom:3 }}>
-                    <span style={{ fontSize:14.5, fontWeight:700, color:isAvail?C.ink:C.muted }}>{p.name}</span>
-                    <span style={{ fontSize:14, fontWeight:700, color:C.ink, whiteSpace:"nowrap", flexShrink:0 }}>{p.basePrice?.toLocaleString("fr-DZ")} €</span>
+                    <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                      <Circle size={7} fill={hasRupture ? C.red : (isAvail ? C.green : C.muted)} color={hasRupture ? C.red : (isAvail ? C.green : C.muted)} style={{flexShrink:0}}/>
+                      <span style={{
+                        fontSize:14.5, fontWeight:700,
+                        color: hasRupture ? C.muted : (isAvail ? C.ink : C.muted),
+                        textDecoration: hasRupture ? "line-through" : "none",
+                        textDecorationColor:"#B5A9A2",
+                      }}>{p.name}</span>
+                    </div>
+                    <span style={{ fontSize:14, fontWeight:700, color:C.ink, whiteSpace:"nowrap", flexShrink:0 }}>{p.basePrice?.toLocaleString("fr-DZ")} DA</span>
                   </div>
-                  {/* Row 2: category dot */}
-                  {cat && (
+                  {/* Row 2: ingredients */}
+                  {p.ingredients?.length > 0 && (
+                    <div style={{ fontSize:12, color:C.muted, marginBottom:6, paddingLeft:14, lineHeight:1.5 }}>
+                      {p.ingredients.map((name, ni) => (
+                        <span key={name} style={{ color: epuisedSet.has(name) ? C.red : C.muted, fontWeight: epuisedSet.has(name) ? 600 : 400 }}>
+                          {name}{ni < p.ingredients.length - 1 ? ", " : ""}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {/* Row 3: rupture warning OR category dot */}
+                  {hasRupture ? (
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10 }}>
+                      <span style={{ fontSize:11, color:C.muted, fontStyle:"italic" }}>Rupture ingrédient ({rupture})</span>
+                    </div>
+                  ) : cat ? (
                     <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:10 }}>
                       <Circle size={7} fill={catColor} color={catColor}/>
                       <span style={{ fontSize:11.5, color:C.muted }}>{cat}</span>
                     </div>
-                  )}
-                  {/* Row 3: toggle + actions */}
+                  ) : null}
+                  {/* Row 4: toggle + actions */}
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <Toggle checked={isAvail} onChange={() => toggleAvail(p)}/>
-                      <span style={{ fontSize:11.5, fontWeight:700, color:isAvail?C.green:C.muted }}>{isAvail?"Disponible":"Épuisé"}</span>
+                      {hasRupture ? (
+                        <button onClick={() => toggleAvail(p)} style={{
+                          display:"inline-flex", alignItems:"center", gap:6,
+                          padding:"8px 14px", borderRadius:8, border:"none", cursor:"pointer",
+                          background:"#1A1714", color:"#fff",
+                          fontSize:11.5, fontWeight:700, letterSpacing:"0.04em", fontFamily:"inherit",
+                        }}>
+                          <Circle size={6} fill="#E03C31" color="#E03C31"/> × ÉPUISÉ
+                        </button>
+                      ) : (
+                        <>
+                          <Toggle checked={isAvail} onChange={() => toggleAvail(p)}/>
+                          <span style={{ fontSize:11.5, fontWeight:700, color:isAvail?C.green:C.muted }}>{isAvail?"Disponible":"Épuisé"}</span>
+                        </>
+                      )}
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       <button onClick={() => setDrawer(p)} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, padding:6, borderRadius:6 }}><Pencil size={15}/></button>
@@ -957,21 +1111,59 @@ export default function MenuPage() {
                 {!loading && products.map((p, idx) => {
                   const isAvail = p.availability === "available";
                   const catName = p.categoryId?.name || categories.find(c => c._id === p.categoryId)?.name || "—";
+                  const rupture = ruptureIngredient(p);
+                  const hasRupture = !!rupture;
                   return (
-                    <tr key={p._id} style={{ borderBottom: idx < products.length-1 ? `1px solid ${C.border}` : "none", transition:"background .1s" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#FAFAF8"}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    <tr key={p._id} style={{
+                      borderBottom: idx < products.length-1 ? `1px solid ${C.border}` : "none",
+                      transition:"background .1s",
+                      borderLeft: hasRupture ? `3px solid ${C.red}` : "3px solid transparent",
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.background = hasRupture ? "#FDF7F6" : "#FAFAF8"}
+                      onMouseLeave={e => e.currentTarget.style.background = hasRupture ? "#FEF9F8" : "transparent"}
                     >
-                      <td style={{ padding:"14px 20px", fontSize:14, fontWeight:isAvail?600:400, color:isAvail?C.ink:C.muted }}>{p.name}</td>
-                      <td style={{ padding:"14px 20px", fontSize:13.5, color:C.muted }}>{catName}</td>
-                      <td style={{ padding:"14px 20px", fontSize:14, fontWeight:600 }}>{p.basePrice?.toLocaleString("fr-DZ")} DA</td>
-                      <td style={{ padding:"14px 20px" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <Toggle checked={isAvail} onChange={() => toggleAvail(p)}/>
-                          {!isAvail && <span style={{ fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:6, background:"#F1F0EC", color:C.muted }}>Épuisé</span>}
-                        </div>
+                      {/* Name + ingredients */}
+                      <td style={{ padding:"12px 20px" }}>
+                        <div style={{
+                          fontSize:14, fontWeight: hasRupture ? 600 : (isAvail ? 600 : 400),
+                          color: hasRupture ? C.muted : (isAvail ? C.ink : C.muted),
+                          textDecoration: hasRupture ? "line-through" : "none",
+                          textDecorationColor:"#B5A9A2",
+                          marginBottom: p.ingredients?.length ? 4 : 0,
+                        }}>{p.name}</div>
+                        {p.ingredients?.length > 0 && (
+                          <div style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
+                            {p.ingredients.map((name, ni) => (
+                              <span key={name} style={{ color: epuisedSet.has(name) ? C.red : C.muted, fontWeight: epuisedSet.has(name) ? 600 : 400 }}>
+                                {name}{ni < p.ingredients.length - 1 ? ", " : ""}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
-                      <td style={{ padding:"14px 20px" }}>
+                      <td style={{ padding:"12px 20px", fontSize:13.5, color:C.muted }}>{catName}</td>
+                      <td style={{ padding:"12px 20px", fontSize:14, fontWeight:600 }}>{p.basePrice?.toLocaleString("fr-DZ")} DA</td>
+                      <td style={{ padding:"12px 20px" }}>
+                        {hasRupture ? (
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            <span style={{ fontSize:12, color:C.muted, fontStyle:"italic" }}>Rupture ingrédient ({rupture})</span>
+                            <button onClick={() => toggleAvail(p)} style={{
+                              display:"inline-flex", alignItems:"center", gap:6,
+                              padding:"7px 14px", borderRadius:8, border:"none", cursor:"pointer",
+                              background:"#1A1714", color:"#fff",
+                              fontSize:12, fontWeight:700, letterSpacing:"0.03em", fontFamily:"inherit", whiteSpace:"nowrap",
+                            }}>
+                              <Circle size={6} fill="#E03C31" color="#E03C31"/> × ÉPUISÉ
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            <Toggle checked={isAvail} onChange={() => toggleAvail(p)}/>
+                            {!isAvail && <span style={{ fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:6, background:"#F1F0EC", color:C.muted }}>Épuisé</span>}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding:"12px 20px" }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:8 }}>
                           <button onClick={() => setDrawer(p)} title="Modifier" style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, padding:4, borderRadius:6 }}
                             onMouseEnter={e => e.currentTarget.style.color=C.ink}

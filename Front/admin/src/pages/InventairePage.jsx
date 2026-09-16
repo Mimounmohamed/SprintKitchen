@@ -73,7 +73,7 @@ function ToggleBtn({ ingredient, onToggle, toggling }) {
         justifyContent:"center", opacity:loading?0.6:1,
       }}>
       <Circle size={7} fill="#E03C31" color="#E03C31" style={{flexShrink:0}}/>
-      × ÉPUISÉ (86)
+      × ÉPUISÉ
     </button>
   );
   return (
@@ -106,7 +106,7 @@ function MobileToggleBtn({ ingredient, onToggle, toggling }) {
         fontFamily:"inherit", cursor:"pointer", opacity:loading?0.6:1,
       }}>
       <Circle size={7} fill="#E03C31" color="#E03C31" style={{flexShrink:0}}/>
-      ÉPUISÉ (86) — CAISSE &amp; BORNES
+      ÉPUISÉ — CAISSE &amp; BORNES
     </button>
   );
   return (
@@ -623,13 +623,6 @@ export default function InventairePage() {
             }}>
               DISPONIBILITÉ DES ARTICLES
             </h1>
-            <span style={{
-              fontSize:10, fontWeight:800, letterSpacing:"0.06em",
-              background:"#FDEAE8", color:"#C0392B",
-              padding:"4px 10px", borderRadius:5, flexShrink:0,
-            }}>
-              GESTIONNAIRE 86
-            </span>
           </div>
           <p style={{margin:0, fontSize:12.5, color:C.muted}}>
             Activez ou désactivez les ingrédients en stock sur la caisse POS et les bornes en temps réel.
@@ -721,7 +714,7 @@ export default function InventairePage() {
                               background:C.orange, color:"#fff",
                               padding:"2px 7px", borderRadius:4, flexShrink:0,
                             }}>
-                              {stat.epuise} en 86
+                              {stat.total} articles
                             </span>
                           )}
                         </div>
@@ -844,7 +837,7 @@ export default function InventairePage() {
               {!loadingIngs && filtered.length > 0 && (
                 <span style={{fontSize:12, color:C.muted}}>
                   <span style={{color:C.green, fontWeight:600}}>{dispoCnt} disponibles</span>
-                  {epuiseCnt > 0 && <> · <span style={{color:C.red, fontWeight:600}}>{epuiseCnt} épuisés (86)</span></>}
+                  {epuiseCnt > 0 && <> · <span style={{color:C.red, fontWeight:600}}>{epuiseCnt} épuisés</span></>}
                 </span>
               )}
             </div>
