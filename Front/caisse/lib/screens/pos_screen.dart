@@ -131,6 +131,7 @@ class _PosScreenState extends State<PosScreen> {
   Future<void> _openEncaissement() async {
     final result = await showDialog<EncaissementResult>(
       context: context,
+      barrierColor: Colors.transparent,
       builder: (_) => EncaissementModal(
         total: _total,
         ticketNumber: widget.ticketNumber,
