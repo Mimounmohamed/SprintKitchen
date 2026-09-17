@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../widgets/pos/category_sidebar_item.dart';
 import '../widgets/pos/menu_item_tile.dart';
 import '../widgets/pos/ticket_line_tile.dart';
+import '../services/menu_service.dart';
 
 /// The POS / register screen ("SprintKitchen POS - Caisse Principale").
 ///
@@ -29,41 +30,10 @@ class _PosScreenState extends State<PosScreen> {
   OrderType _orderType = OrderType.dineIn;
   int? _selectedLineIndex = 0;
 
-  // --- Sample data. Replace with your products.js / categories.js API. ---
-  final List<MenuCategory> _categories = const [
-    MenuCategory(
-      label: 'Menus B',
-      icon: Icons.grid_view_rounded,
-      items: [
-        MenuItem(name: 'MENU B1', price: 8.00),
-        MenuItem(name: 'MENU B2', price: 9.00),
-        MenuItem(name: 'MENU B3', price: 9.00),
-        MenuItem(name: 'MENU B4', price: 10.00),
-        MenuItem(name: 'MENU B5', price: 9.00),
-        MenuItem(name: 'MENU B6', price: 10.00),
-        MenuItem(name: 'MENU B7', price: 10.00),
-        MenuItem(name: 'MENU B8', price: 11.00),
-        MenuItem(name: 'MENU B9', price: 10.00),
-        MenuItem(name: 'MENU B10', price: 11.00),
-        MenuItem(name: 'MENU B11', price: 11.00),
-        MenuItem(name: 'MENU B12', price: 11.00, available: false),
-        MenuItem(name: 'MENU B13', price: 10.00),
-        MenuItem(name: 'MENU BACON', price: 10.00),
-        MenuItem(name: 'MENU CRISPY', price: 11.50),
-      ],
-    ),
-    MenuCategory(label: 'Menus L', icon: Icons.grid_view_rounded, items: []),
-    MenuCategory(
-        label: 'Menu Simple', icon: Icons.lunch_dining_rounded, items: []),
-    MenuCategory(label: 'Nos Starters', icon: Icons.star_border_rounded, items: []),
-    MenuCategory(label: 'Nos Burgers', icon: Icons.lunch_dining_rounded, items: []),
-    MenuCategory(
-        label: 'Nos Sandwichs', icon: Icons.tapas_rounded, items: []),
-    MenuCategory(label: 'Menu Enfant', icon: Icons.child_care_rounded, items: []),
-    MenuCategory(label: 'Nos Desserts', icon: Icons.icecream_rounded, items: []),
-    MenuCategory(
-        label: 'Boissons & Cafés', icon: Icons.local_cafe_rounded, items: []),
-  ];
+  final MenuService _menuService = MenuService();
+  List<MenuCategory> _categories = [];
+  bool _loading = true;
+  String? _error;
 
   final List<TicketLine> _ticketLines = [
     TicketLine(
@@ -81,6 +51,32 @@ class _PosScreenState extends State<PosScreen> {
       unitPrice: 2.50,
     ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMenu();
+  }
+
+  Future<void> _loadMenu() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final categories = await _menuService.fetchMenu();
+      setState(() {
+        _categories = categories;
+        _selectedCategory = 0;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
 
   double get _total =>
       _ticketLines.fold(0, (sum, line) => sum + line.total);
@@ -129,15 +125,42 @@ class _PosScreenState extends State<PosScreen> {
         children: [
           _buildHeader(context),
           Expanded(
-            child: Row(
-              children: [
-                _buildSidebar(),
-                Expanded(child: _buildMenuGrid()),
-                _buildTicketPanel(),
-              ],
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _buildErrorState()
+                    : Row(
+                        children: [
+                          _buildSidebar(),
+                          Expanded(child: _buildMenuGrid()),
+                          _buildTicketPanel(),
+                        ],
+                      ),
           ),
           _buildFooter(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.wifi_off_rounded,
+              size: 40, color: AppColors.textMuted),
+          const SizedBox(height: 12),
+          Text(
+            'Impossible de charger le menu.\n$_error',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadMenu,
+            child: const Text('Réessayer'),
+          ),
         ],
       ),
     );
@@ -246,6 +269,15 @@ class _PosScreenState extends State<PosScreen> {
   }
 
   Widget _buildMenuGrid() {
+    if (_categories.isEmpty) {
+      return const Center(
+        child: Text(
+          'Aucune catégorie disponible.',
+          style: TextStyle(color: AppColors.textMuted),
+        ),
+      );
+    }
+
     final items = _categories[_selectedCategory].items;
 
     if (items.isEmpty) {
