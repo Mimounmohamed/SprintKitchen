@@ -28,6 +28,73 @@ class Category {
       );
 }
 
+/// Mirrors the embedded OptionSchema inside Product.customizationGroups.
+class CustomizationOption {
+  const CustomizationOption({
+    required this.label,
+    this.priceModifier = 0,
+    this.isDefault = false,
+    this.isAvailable = true,
+    this.displayOrder = 0,
+  });
+
+  final String label;
+  final double priceModifier;
+  final bool isDefault;
+  final bool isAvailable;
+  final int displayOrder;
+
+  factory CustomizationOption.fromJson(Map<String, dynamic> json) {
+    return CustomizationOption(
+      label: json['label'] as String? ?? '',
+      priceModifier: (json['priceModifier'] as num?)?.toDouble() ?? 0,
+      isDefault: json['isDefault'] as bool? ?? false,
+      isAvailable: json['isAvailable'] as bool? ?? true,
+      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// Mirrors Product.customizationGroups (CustomizationGroupSchema).
+class CustomizationGroup {
+  const CustomizationGroup({
+    required this.name,
+    required this.type,
+    this.isRequired = false,
+    this.minChoices = 0,
+    this.maxChoices = 1,
+    this.stepNumber,
+    this.options = const [],
+  });
+
+  final String name;
+  final String type; // 'single' | 'multi'
+  final bool isRequired;
+  final int minChoices;
+  final int maxChoices;
+  final int? stepNumber;
+  final List<CustomizationOption> options;
+
+  bool get isSingle => type == 'single';
+
+  factory CustomizationGroup.fromJson(Map<String, dynamic> json) {
+    final options = (json['options'] as List<dynamic>? ?? [])
+        .map((e) => CustomizationOption.fromJson(e as Map<String, dynamic>))
+        .toList()
+      ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+
+    return CustomizationGroup(
+      name: json['name'] as String? ?? '',
+      type: json['type'] as String? ?? 'single',
+      isRequired: json['isRequired'] as bool? ?? false,
+      minChoices: (json['minChoices'] as num?)?.toInt() ?? 0,
+      maxChoices: (json['maxChoices'] as num?)?.toInt() ?? 1,
+      stepNumber: (json['stepNumber'] as num?)?.toInt(),
+      options: options,
+    );
+  }
+}
+
 /// A single sellable item shown as a tile in the POS grid.
 /// Mirrors Back/models/Product.js
 class MenuItem {
@@ -38,6 +105,8 @@ class MenuItem {
     required this.categoryId,
     this.available = true,
     this.description,
+    this.customizationGroups = const [],
+    this.ingredients = const [],
   });
 
   final String id;
@@ -46,6 +115,13 @@ class MenuItem {
   final String categoryId;
   final bool available;
   final String? description;
+  final List<CustomizationGroup> customizationGroups;
+  final List<String> ingredients;
+
+  /// Whether tapping this tile should open the personnalisation modal
+  /// instead of adding straight to the ticket.
+  bool get needsCustomization =>
+      customizationGroups.isNotEmpty || ingredients.isNotEmpty;
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
     // categoryId comes back populated ({_id, name, slug, color}) from
@@ -63,6 +139,13 @@ class MenuItem {
       available:
           (json['availability'] as String? ?? 'available') == 'available',
       description: json['description'] as String?,
+      customizationGroups: (json['customizationGroups'] as List<dynamic>? ?? [])
+          .map((e) => CustomizationGroup.fromJson(e as Map<String, dynamic>))
+          .toList()
+        ..sort((a, b) => (a.stepNumber ?? 0).compareTo(b.stepNumber ?? 0)),
+      ingredients: (json['ingredients'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList(),
     );
   }
 }
@@ -101,6 +184,25 @@ IconData categoryIcon(String name) {
   return icons[name] ?? Icons.restaurant_menu_rounded;
 }
 
+/// A selected option, kept simple (label + its price) so it can be sent
+/// straight to Back/models/Order.js's AppliedCustomizationSchema.
+class SelectedOption {
+  const SelectedOption({required this.label, this.priceModifier = 0});
+  final String label;
+  final double priceModifier;
+}
+
+/// A finalized customization group choice on a ticket line.
+/// Mirrors Order.items[].customizations (AppliedCustomizationSchema).
+class AppliedCustomization {
+  const AppliedCustomization({
+    required this.groupName,
+    required this.selectedOptions,
+  });
+  final String groupName;
+  final List<SelectedOption> selectedOptions;
+}
+
 /// A line item currently in the active ticket.
 class TicketLine {
   TicketLine({
@@ -108,14 +210,26 @@ class TicketLine {
     required this.unitPrice,
     this.subtitle,
     this.quantity = 1,
+    this.productId,
+    this.extrasTotal = 0,
+    this.customizations = const [],
+    this.removedIngredients = const [],
+    this.notes,
   });
 
   final String name;
   final String? subtitle;
   final double unitPrice;
   int quantity;
+  final String? productId;
+  final double extrasTotal;
+  final List<AppliedCustomization> customizations;
+  final List<String> removedIngredients;
+  final String? notes;
 
-  double get total => unitPrice * quantity;
+  /// (base price + selected extras) * quantity — matches how
+  /// Order.items[].lineTotal is computed server-side.
+  double get total => (unitPrice + extrasTotal) * quantity;
 }
 
 /// Fulfilment type for the current order.

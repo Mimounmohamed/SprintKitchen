@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../widgets/pos/category_sidebar_item.dart';
 import '../widgets/pos/menu_item_tile.dart';
 import '../widgets/pos/ticket_line_tile.dart';
+import '../widgets/pos/customization_modal.dart';
 import '../services/menu_service.dart';
 
 /// The POS / register screen ("SprintKitchen POS - Caisse Principale").
@@ -14,7 +15,7 @@ import '../services/menu_service.dart';
 class PosScreen extends StatefulWidget {
   const PosScreen({
     super.key,
-    this.ticketNumber = '0000123',
+    this.ticketNumber = '00001',
     this.posteLabel = 'Caisse 01',
   });
 
@@ -35,22 +36,7 @@ class _PosScreenState extends State<PosScreen> {
   bool _loading = true;
   String? _error;
 
-  final List<TicketLine> _ticketLines = [
-    TicketLine(
-      name: 'Menu B4 Cheese',
-      subtitle: 'Sauce Algérienne, Cuisson à point',
-      unitPrice: 10.00,
-    ),
-    TicketLine(
-      name: 'Frites Maison XL',
-      subtitle: 'Sans sel ajouté',
-      unitPrice: 3.50,
-    ),
-    TicketLine(
-      name: 'Coca-Cola Sans Sucres 33cl',
-      unitPrice: 2.50,
-    ),
-  ];
+  final List<TicketLine> _ticketLines = [];
 
   @override
   void initState() {
@@ -81,13 +67,37 @@ class _PosScreenState extends State<PosScreen> {
   double get _total =>
       _ticketLines.fold(0, (sum, line) => sum + line.total);
 
+  void _onItemTap(MenuItem item) {
+    if (!item.needsCustomization) {
+      _addItemToTicket(item);
+      return;
+    }
+    _openCustomization(item);
+  }
+
+  Future<void> _openCustomization(MenuItem item) async {
+    final line = await showDialog<TicketLine>(
+      context: context,
+      builder: (_) => CustomizationModal(item: item),
+    );
+    if (line == null) return;
+    setState(() {
+      _ticketLines.add(line);
+      _selectedLineIndex = _ticketLines.length - 1;
+    });
+  }
+
   void _addItemToTicket(MenuItem item) {
     setState(() {
       final existingIndex = _ticketLines.indexWhere((l) => l.name == item.name);
       if (existingIndex != -1) {
         _ticketLines[existingIndex].quantity += 1;
       } else {
-        _ticketLines.add(TicketLine(name: item.name, unitPrice: item.price));
+        _ticketLines.add(TicketLine(
+          name: item.name,
+          unitPrice: item.price,
+          productId: item.id,
+        ));
       }
       _selectedLineIndex = _ticketLines.length - 1;
     });
@@ -303,7 +313,7 @@ class _PosScreenState extends State<PosScreen> {
           final item = items[index];
           return MenuItemTile(
             item: item,
-            onTap: () => _addItemToTicket(item),
+            onTap: () => _onItemTap(item),
           );
         },
       ),
