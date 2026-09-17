@@ -45,7 +45,7 @@ const ProductSchema = new mongoose.Schema(
       required: true,
     },
     storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store' },
-    basePrice: { type: Number, required: true }, // price in euros
+    basePrice: { type: Number, required: true }, // price in DA (Algerian Dinar)
     // Availability status (86 list / stock management)
     availability: {
       type: String,
@@ -69,6 +69,8 @@ const ProductSchema = new mongoose.Schema(
       enum: ['grill', 'frites', 'boissons', 'desserts', 'general'],
       default: 'general',
     },
+    // Ingredients list — names pulled from Inventaire (array of strings)
+    ingredients: [{ type: String, trim: true }],
   },
   { timestamps: true }
 );
