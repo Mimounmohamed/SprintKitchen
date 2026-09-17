@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Routes, Route } from 'react-router-dom'
-import { silentLogin } from './lib/api'
-import DashboardPage from './pages/DashboardPage'
-import MenuPage from './pages/MenuPage'
-import HistoriquePage from './pages/HistoriquePage'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import DashboardPage    from './pages/DashboardPage'
+import MenuPage         from './pages/MenuPage'
+import HistoriquePage   from './pages/HistoriquePage'
 import StatistiquesPage from './pages/StatistiquesPage'
-import InventairePage from './pages/InventairePage'
+import InventairePage   from './pages/InventairePage'
+import LoginPage        from './pages/LoginPage'
+
+function RequireAuth({ children }) {
+  return localStorage.getItem('sk_token') ? children : <Navigate to="/login" replace />;
+}
 
 export default function App() {
-  const [ready, setReady] = useState(!!localStorage.getItem('sk_token'));
-
-  useEffect(() => {
-    if (localStorage.getItem('sk_token')) { setReady(true); return; }
-    silentLogin().finally(() => setReady(true));
-  }, []);
+  const [ready, setReady] = useState(true);
 
   if (!ready) return (
     <div style={{
@@ -21,17 +20,19 @@ export default function App() {
       fontFamily: "Inter, sans-serif", fontSize: 14, color: "#8B8378",
       background: "#F5F4F0",
     }}>
-      Connexion en cours…
+      Chargement…
     </div>
   );
 
   return (
     <Routes>
-      <Route path="/"               element={<DashboardPage />} />
-      <Route path="/menu"           element={<MenuPage />} />
-      <Route path="/historique"     element={<HistoriquePage />} />
-      <Route path="/statistiques"   element={<StatistiquesPage />} />
-      <Route path="/inventaire"     element={<InventairePage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/"             element={<RequireAuth><DashboardPage /></RequireAuth>} />
+      <Route path="/menu"         element={<RequireAuth><MenuPage /></RequireAuth>} />
+      <Route path="/historique"   element={<RequireAuth><HistoriquePage /></RequireAuth>} />
+      <Route path="/statistiques" element={<RequireAuth><StatistiquesPage /></RequireAuth>} />
+      <Route path="/inventaire"   element={<RequireAuth><InventairePage /></RequireAuth>} />
+      <Route path="*"             element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Book, Clock, BarChart2, Package,
-  ArrowRight, ChevronRight, Check, AlertTriangle, Circle, User, TrendingUp, Menu as MenuIcon,
+  ArrowRight, ChevronRight, Check, AlertTriangle, Circle, User, TrendingUp, Menu as MenuIcon, LogOut,
 } from "lucide-react";
 import { dashboardService } from "../services";
 
@@ -101,6 +101,12 @@ function Kpi({ label, value, valueColor, sub, subColor }) {
 export default function SprintKitchenAdminHub() {
   const navigate = useNavigate();
   const [mobile, setMobile] = React.useState(window.innerWidth < 900);
+
+  const handleLogout = () => {
+    localStorage.removeItem("sk_token");
+    navigate("/login", { replace: true });
+  };
+
   React.useEffect(() => {
     const h = () => setMobile(window.innerWidth < 900);
     window.addEventListener("resize", h);
@@ -149,10 +155,11 @@ export default function SprintKitchenAdminHub() {
           <span style={{ background:C.brown, color:"#F5F0E6", fontSize:9, fontWeight:700, padding:"2px 6px", borderRadius:4 }}>HUB</span>
           <Circle size={6} fill={C.yellow} color={C.yellow}/>
         </div>
-        <div style={{ width:34, height:34, borderRadius:"50%", background:"#E8E4DF", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
-          <User size={15} color={C.muted}/>
+        <button onClick={handleLogout} title="Se déconnecter"
+          style={{ width:34, height:34, borderRadius:"50%", background:"#E8E4DF", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
+          <LogOut size={14} color={C.muted}/>
           <span style={{ position:"absolute", top:1, right:1, width:8, height:8, borderRadius:"50%", background:C.green, border:"2px solid #fff" }}/>
-        </div>
+        </button>
       </header>
 
       <main style={{ flex:1, padding:"18px 14px 32px", display:"flex", flexDirection:"column", gap:16 }}>
@@ -171,7 +178,7 @@ export default function SprintKitchenAdminHub() {
               <h1 style={{ margin:"0 0 5px", fontSize:26, fontWeight:800, lineHeight:1.05, color:C.ink, fontFamily:"'Bebas Neue',sans-serif", letterSpacing:"0.02em" }}>PORTAIL ADMINISTRATEUR</h1>
               <p style={{ margin:0, fontSize:11.5, color:C.muted }}>Bienvenue sur le Hub de Gestion mobile</p>
             </div>
-            <span style={{ fontSize:10.5, fontWeight:700, background:"#F1F0EC", color:C.muted, padding:"4px 9px", borderRadius:999, whiteSpace:"nowrap", flexShrink:0, marginTop:3 }}>Poste #01</span>
+            
           </div>
         </div>
 
@@ -181,10 +188,8 @@ export default function SprintKitchenAdminHub() {
           <div style={{ background:C.cardBg, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 10px" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
               <span style={{ fontSize:8, fontWeight:700, letterSpacing:"0.05em", color:C.muted, textTransform:"uppercase" }}>C.A. JOUR</span>
-              <TrendingUp size={10} color={vsPctPositive ? C.green : C.red}/>
             </div>
             <div style={{ fontSize:19, fontWeight:800, color:C.green, lineHeight:1, fontFamily:"'Bebas Neue',sans-serif" }}>{caFmt}</div>
-            <div style={{ fontSize:9.5, color:vsPctPositive ? C.green : C.red, fontWeight:700, marginTop:3 }}>{vsPct}</div>
           </div>
           {/* TICKETS */}
           <div style={{ background:C.cardBg, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 10px" }}>
@@ -202,7 +207,9 @@ export default function SprintKitchenAdminHub() {
               <Circle size={6} fill={ruptureWarn ? C.red : C.yellow} color={ruptureWarn ? C.red : C.yellow}/>
             </div>
             <div style={{ fontSize:19, fontWeight:800, color: ruptureWarn ? "#D9720C" : C.ink, lineHeight:1, fontFamily:"'Bebas Neue',sans-serif" }}>{ruptureFmt}</div>
-            <div style={{ fontSize:9.5, color: ruptureWarn ? "#D9720C" : C.muted, fontWeight:700, marginTop:3 }}>86 List</div>
+            <div style={{ fontSize:9.5, color: ruptureWarn ? "#D9720C" : C.muted, fontWeight:700, marginTop:3 }}>
+              {kpi?.rupture.items?.length ? kpi.rupture.items.map(i => i.name).join(", ") : "Aucun"}
+            </div>
           </div>
         </div>
 
@@ -265,7 +272,16 @@ export default function SprintKitchenAdminHub() {
           <span style={{ background:C.brown, color:"#F5F0E6", fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:5 }}>HUB</span>
           <Circle size={7} fill={C.yellow} color={C.yellow}/>
         </div>
-        <Pill dot dotColor={C.green} bg="#F1F0EC" color={C.ink}>Super Admin — Back-Office</Pill>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <Pill dot dotColor={C.green} bg="#F1F0EC" color={C.ink}>Admin</Pill>
+          <button onClick={handleLogout} title="Se déconnecter"
+            style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 13px", borderRadius:9, border:`1px solid ${C.border}`, background:C.cardBg, color:C.muted, cursor:"pointer", fontSize:12.5, fontWeight:600, fontFamily:"inherit" }}
+            onMouseEnter={e => { e.currentTarget.style.background="#FBEAE7"; e.currentTarget.style.color="#C0392B"; }}
+            onMouseLeave={e => { e.currentTarget.style.background=C.cardBg; e.currentTarget.style.color=C.muted; }}
+          >
+            <LogOut size={13}/> Déconnexion
+          </button>
+        </div>
       </header>
 
       <main style={{ flex:1, padding:"48px 40px 40px" }}>
@@ -280,16 +296,16 @@ export default function SprintKitchenAdminHub() {
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:12, flexWrap:"wrap" }}>
               <h1 style={{ margin:0, fontSize:34, fontWeight:800 }}>Portail Administrateur</h1>
-              <span style={{ fontSize:13, fontWeight:600, color:C.muted, background:"#F1F0EC", padding:"5px 14px", borderRadius:999 }}>Poste Superviseur #01</span>
+              
             </div>
             <p style={{ margin:0, color:C.muted, fontSize:14.5, maxWidth:520, lineHeight:1.6 }}>
               Bienvenue sur le Hub de Gestion • Vue centralisée du restaurant, contrôle des menus et indicateurs financiers.
             </p>
           </div>
           <div style={{ display:"flex", gap:12, flexShrink:0, flexWrap:"wrap" }}>
-            <Kpi label="Chiffre d'affaires" value={caFmt} valueColor={C.green} sub={vsPct} subColor={vsPctPositive ? C.green : C.red}/>
+            <Kpi label="Chiffre d'affaires" value={caFmt} valueColor={C.green} />
             <Kpi label="Tickets Clôturés"   value={ticketsFmt} sub="Aujourd'hui"/>
-            <Kpi label="Articles en Rupture" value={ruptureFmt} valueColor={ruptureWarn ? "#D9720C" : C.ink} sub="Ingrédients (86 list)" subColor={ruptureWarn ? "#D9720C" : undefined}/>
+            <Kpi label="Articles en Rupture" value={ruptureFmt} valueColor={ruptureWarn ? "#D9720C" : C.ink} sub={kpi?.rupture.items?.length ? kpi.rupture.items.map(i => i.name).join(", ") : "Aucun"} subColor={ruptureWarn ? "#D9720C" : undefined}/>
           </div>
         </div>
 

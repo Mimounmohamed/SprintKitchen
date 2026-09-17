@@ -511,17 +511,6 @@ export default function InventairePage() {
     finally { setToggling(null); }
   };
 
-  const handleBulkAvailable = async () => {
-    if (bulkLoading) return;
-    setBulkLoading(true);
-    try {
-      await ingredientService.bulkAvailability(activeFamily, "available");
-      setIngredients(prev => prev.map(i => ({ ...i, availability: "available" })));
-      setFamilyStats(prev => prev.map(f => f._id === activeFamily ? { ...f, epuise: 0 } : f));
-    } catch(e) { console.error(e); }
-    finally { setBulkLoading(false); }
-  };
-
   // ── Modal callbacks ──
   const handleIngSaved = (saved, isNew) => {
     if (isNew) {
