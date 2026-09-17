@@ -168,7 +168,6 @@ OrderSchema.methods.recalculateTotals = function () {
 
 OrderSchema.index({ storeId: 1, createdAt: -1 });
 OrderSchema.index({ status: 1 });
-OrderSchema.index({ ticketNumber: 1 });
 OrderSchema.index({ registerId: 1, status: 1 });
 
 module.exports = mongoose.model('Order', OrderSchema);

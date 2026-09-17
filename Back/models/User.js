@@ -20,11 +20,10 @@ const UserSchema = new mongoose.Schema(
 );
 
 // Hash password before save
-UserSchema.pre('save', async function (next) {
-  if (!this.isModified('passwordHash')) return next();
+UserSchema.pre('save', async function () {
+  if (!this.isModified('passwordHash')) return;
   const salt = await bcrypt.genSalt(10);
   this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
-  next();
 });
 
 // Compare password

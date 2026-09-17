@@ -7,7 +7,7 @@ const {
 const protect = require('../middleware/auth');
 
 router.get('/', getProducts);
-router.post('/bulk-availability', protect, bulkAvailability);
+router.patch('/bulk-availability', protect, bulkAvailability);
 router.get('/:id', getProduct);
 router.post('/', protect, createProduct);
 router.put('/:id', protect, updateProduct);

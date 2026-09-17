@@ -7,9 +7,11 @@ const CategorySchema = new mongoose.Schema(
     // "Menu Enfant", "Nos Desserts", "Boissons & Cafés"
     slug: { type: String, unique: true, lowercase: true },
     icon: String, // icon name or URL
+    description: { type: String, trim: true },
     displayOrder: { type: Number, default: 0 },
     storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store' },
     isActive: { type: Boolean, default: true },
+    showOnPOS:  { type: Boolean, default: true },
     color: String, // hex color for UI
   },
   { timestamps: true }
