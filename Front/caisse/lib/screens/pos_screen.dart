@@ -7,6 +7,7 @@ import '../widgets/pos/menu_item_tile.dart';
 import '../widgets/pos/ticket_line_tile.dart';
 import '../widgets/pos/customization_modal.dart';
 import '../services/menu_service.dart';
+import '../widgets/pos/encaissement_modal.dart';
 
 /// The POS / register screen ("SprintKitchen POS - Caisse Principale").
 ///
@@ -125,6 +126,35 @@ class _PosScreenState extends State<PosScreen> {
       _selectedLineIndex =
           _ticketLines.isEmpty ? null : _ticketLines.length - 1;
     });
+  }
+
+  Future<void> _openEncaissement() async {
+    final result = await showDialog<EncaissementResult>(
+      context: context,
+      builder: (_) => EncaissementModal(
+        total: _total,
+        ticketNumber: widget.ticketNumber,
+        posteLabel: widget.posteLabel,
+      ),
+    );
+    if (result == null) return;
+
+    // TODO: next step — POST /api/orders with items + this payment info,
+    // then POST /api/payments, then reset the ticket / bump ticketNumber.
+    setState(() {
+      _ticketLines.clear();
+      _selectedLineIndex = null;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(
+          result.method == PaymentMethod.especes
+              ? 'Paiement espèces enregistré — rendu ${result.change.toStringAsFixed(2).replaceAll('.', ',')} €'
+              : 'Paiement carte enregistré',
+        )),
+      );
+    }
   }
 
   @override
@@ -516,7 +546,7 @@ class _PosScreenState extends State<PosScreen> {
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _ticketLines.isEmpty ? null : () {},
+                onPressed: _ticketLines.isEmpty ? null : _openEncaissement,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
                   foregroundColor: Colors.white,
