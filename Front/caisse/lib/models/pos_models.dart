@@ -172,14 +172,16 @@ class MenuCategory {
 IconData categoryIcon(String name) {
   const icons = <String, IconData>{
     'Menus B': Icons.grid_view_rounded,
-    'Menus L': Icons.grid_view_rounded,
-    'Menu Simple': Icons.lunch_dining_rounded,
+    'Menus L': Icons.credit_card_outlined,
+    'Menu Simple': Icons.description_outlined,
     'Nos Starters': Icons.star_border_rounded,
-    'Nos Burgers': Icons.lunch_dining_rounded,
-    'Nos Sandwichs': Icons.tapas_rounded,
-    'Menu Enfant': Icons.child_care_rounded,
-    'Nos Desserts': Icons.icecream_rounded,
-    'Boissons & Cafés': Icons.local_cafe_rounded,
+    'Nos Burgers': Icons.lunch_dining_outlined,
+    'Nos Sandwichs': Icons.image_outlined,
+    'Menu Enfant': Icons.sentiment_satisfied_alt_outlined,
+    'Nos Desserts': Icons.gesture_rounded,
+    'Boissons & Cafés': Icons.local_cafe_outlined,
+    'Accompagnements': Icons.restaurant_outlined,
+    'Sauces & Extras': Icons.tune_outlined,
   };
   return icons[name] ?? Icons.restaurant_menu_rounded;
 }

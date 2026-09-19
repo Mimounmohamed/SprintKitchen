@@ -16,7 +16,7 @@ class CustomizationModal extends StatefulWidget {
 
 class _CustomizationModalState extends State<CustomizationModal> {
   static const double _narrowBreakpoint = 640;
-  static const double _maxDialogWidth = 860;
+  static const double _maxDialogWidth = 1040;
   static const double _maxDialogHeight = 720;
 
   final Map<String, List<CustomizationOption>> _selections = {};
@@ -143,8 +143,8 @@ class _CustomizationModalState extends State<CustomizationModal> {
     required List<Widget> children,
     required int itemCount,
     double minItemWidth = 115,
-    double itemHeight = 58,
-    double maxHeight = 135,
+    double itemHeight = 70,
+    double maxHeight = 165,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -232,11 +232,9 @@ class _CustomizationModalState extends State<CustomizationModal> {
           child: GestureDetector(
             onTap: () {},
             behavior: HitTestBehavior.opaque,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: dialogWidth,
-                maxHeight: dialogHeight,
-              ),
+            child: SizedBox(
+              width: dialogWidth,
+              height: dialogHeight,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 clipBehavior: Clip.hardEdge,
@@ -255,12 +253,11 @@ class _CustomizationModalState extends State<CustomizationModal> {
                   child: Material(
                     type: MaterialType.transparency,
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         _buildHeader(isNarrow),
-                        Flexible(
+                        Expanded(
                           child: SingleChildScrollView(
-                            padding: EdgeInsets.all(isNarrow ? 14 : 20),
+                            padding: EdgeInsets.all(isNarrow ? 16 : 24),
                             child: _buildBody(),
                           ),
                         ),
@@ -403,7 +400,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
       children: [
         for (final group in groups) ...[
           _buildGroup(group, ++sectionNumber),
-          const SizedBox(height: 20),
+          const SizedBox(height: 26),
         ],
         _buildIngredientsSection(allIngredients.toList(), ++sectionNumber),
       ],
@@ -428,7 +425,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildGroupHeader(group, number, selected),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         if (isSupplements)
           _buildSupplementsRow(group, selected)
         else if (isCuisson)
@@ -446,7 +443,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
     Widget? badgeOrSubtitle;
     if (group.isRequired && group.isSingle) {
       badgeOrSubtitle = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
         decoration: BoxDecoration(
           color: const Color(0xFFFFF3E0),
           borderRadius: BorderRadius.circular(4),
@@ -454,10 +451,10 @@ class _CustomizationModalState extends State<CustomizationModal> {
         child: const Text(
           'OBLIGATOIRE (1 CHOIX)',
           style: TextStyle(
-            fontSize: 10,
+            fontSize: 10.5,
             fontWeight: FontWeight.w800,
             color: Color(0xFFE65100),
-            letterSpacing: 0.2,
+            letterSpacing: 0.3,
           ),
         ),
       );
@@ -468,7 +465,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
       badgeOrSubtitle = Text(
         text,
         style: const TextStyle(
-          fontSize: 11,
+          fontSize: 12,
           color: AppColors.textMuted,
           fontWeight: FontWeight.w500,
         ),
@@ -480,9 +477,9 @@ class _CustomizationModalState extends State<CustomizationModal> {
       rightWidget = Text(
         'Sélectionné : $selectedLabel',
         style: const TextStyle(
-          fontSize: 11,
+          fontSize: 12.5,
           color: AppColors.textMuted,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
       );
     } else if (!group.isSingle &&
@@ -492,7 +489,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
       rightWidget = Text(
         '${selected.length} sélectionnée${selected.length > 1 ? 's' : ''}',
         style: const TextStyle(
-          fontSize: 11,
+          fontSize: 12.5,
           color: AppColors.success,
           fontWeight: FontWeight.w700,
         ),
@@ -502,19 +499,19 @@ class _CustomizationModalState extends State<CustomizationModal> {
     return Row(
       children: [
         Container(
-          width: 4,
-          height: 14,
-          margin: const EdgeInsets.only(right: 8),
+          width: 5,
+          height: 16,
+          margin: const EdgeInsets.only(right: 10),
           decoration: BoxDecoration(
             color: AppColors.brandDark,
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(2.5),
           ),
         ),
         Text(
           '$number. ${group.name.toUpperCase()}',
           style: const TextStyle(
             fontWeight: FontWeight.w800,
-            fontSize: 13,
+            fontSize: 14.5,
             color: AppColors.textPrimary,
           ),
         ),
@@ -523,7 +520,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
           badgeOrSubtitle,
         ],
         const Spacer(),
-        if (rightWidget != null) rightWidget,
+        ?rightWidget,
       ],
     );
   }
@@ -534,8 +531,8 @@ class _CustomizationModalState extends State<CustomizationModal> {
     return _buildVerticalOptionsGrid(
       itemCount: group.options.length,
       minItemWidth: 140,
-      itemHeight: 48,
-      maxHeight: 110,
+      itemHeight: 58,
+      maxHeight: 130,
       children: group.options.map((option) {
         final isSelected = selected.any((o) => o.label == option.label);
         return _buildCuissonCard(group, option, isSelected);
@@ -551,7 +548,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        height: 48,
+        height: 58,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: disabled
@@ -573,7 +570,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
               option.label,
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                fontSize: 13,
+                fontSize: 14.5,
                 color: disabled
                     ? AppColors.textMuted
                     : isSelected
@@ -582,10 +579,10 @@ class _CustomizationModalState extends State<CustomizationModal> {
               ),
             ),
             if (isSelected) ...[
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               const Icon(
                 Icons.check,
-                size: 16,
+                size: 18,
                 color: AppColors.gold,
               ),
             ],
@@ -601,8 +598,8 @@ class _CustomizationModalState extends State<CustomizationModal> {
     return _buildVerticalOptionsGrid(
       itemCount: group.options.length,
       minItemWidth: 115,
-      itemHeight: 58,
-      maxHeight: 135,
+      itemHeight: 70,
+      maxHeight: 165,
       children: group.options.map((option) {
         final isSelected = selected.any((o) => o.label == option.label);
         return _buildSauceCard(group, option, isSelected);
@@ -641,7 +638,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        height: 58,
+        height: 70,
         decoration: BoxDecoration(
           color: disabled
               ? AppColors.menuTileDisabled
@@ -666,7 +663,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 12,
+                      fontSize: 13.5,
                       color: disabled
                           ? AppColors.textMuted
                           : isSelected
@@ -675,11 +672,11 @@ class _CustomizationModalState extends State<CustomizationModal> {
                     ),
                   ),
                   if (subtitle != null) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color:
                             isSelected ? AppColors.success : AppColors.textMuted,
@@ -691,11 +688,11 @@ class _CustomizationModalState extends State<CustomizationModal> {
             ),
             if (isSelected)
               Positioned(
-                top: 6,
-                right: 6,
+                top: 7,
+                right: 7,
                 child: Container(
-                  width: 6,
-                  height: 6,
+                  width: 7,
+                  height: 7,
                   decoration: const BoxDecoration(
                     color: AppColors.gold,
                     shape: BoxShape.circle,
@@ -714,8 +711,8 @@ class _CustomizationModalState extends State<CustomizationModal> {
     return _buildVerticalOptionsGrid(
       itemCount: group.options.length,
       minItemWidth: 140,
-      itemHeight: 58,
-      maxHeight: 135,
+      itemHeight: 70,
+      maxHeight: 165,
       children: group.options.map((option) {
         final isSelected = selected.any((o) => o.label == option.label);
         return _buildSupplementCard(group, option, isSelected);
@@ -732,7 +729,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        height: 58,
+        height: 70,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: disabled
@@ -762,7 +759,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                        fontSize: 13.5,
                         color: disabled
                             ? AppColors.textMuted
                             : isSelected
@@ -772,21 +769,21 @@ class _CustomizationModalState extends State<CustomizationModal> {
                     ),
                   ),
                   if (isSelected) ...[
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 5),
                     const Icon(
                       Icons.check_circle,
-                      size: 14,
+                      size: 16,
                       color: AppColors.success,
                     ),
                   ],
                 ],
               ),
               if (option.priceModifier != 0) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   '${option.priceModifier > 0 ? '+' : ''}${_money(option.priceModifier)}',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: isSelected ? AppColors.success : AppColors.textMuted,
                   ),
@@ -807,19 +804,19 @@ class _CustomizationModalState extends State<CustomizationModal> {
         Row(
           children: [
             Container(
-              width: 4,
-              height: 14,
-              margin: const EdgeInsets.only(right: 8),
+              width: 5,
+              height: 16,
+              margin: const EdgeInsets.only(right: 10),
               decoration: BoxDecoration(
                 color: AppColors.danger,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(2.5),
               ),
             ),
             Text(
               '$number. INGRÉDIENTS À RETIRER',
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 13,
+                fontSize: 14.5,
                 color: AppColors.textPrimary,
               ),
             ),
@@ -827,7 +824,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
             const Text(
               '(Sélectionner pour exclure)',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: AppColors.textMuted,
               ),
@@ -837,19 +834,19 @@ class _CustomizationModalState extends State<CustomizationModal> {
               Text(
                 '${_removedIngredients.length} retiré${_removedIngredients.length > 1 ? 's' : ''}',
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 12.5,
                   color: AppColors.danger,
                   fontWeight: FontWeight.w700,
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         _buildVerticalOptionsGrid(
           itemCount: ingredients.length,
           minItemWidth: 140,
-          itemHeight: 58,
-          maxHeight: 135,
+          itemHeight: 70,
+          maxHeight: 165,
           children: ingredients.map((ingredient) {
             final removed = _removedIngredients.contains(ingredient);
             return _buildIngredientCard(ingredient, removed);
@@ -865,14 +862,14 @@ class _CustomizationModalState extends State<CustomizationModal> {
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        height: 58,
+        height: 70,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: removed ? const Color(0xFFFFF5F5) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: removed ? AppColors.danger : AppColors.border,
-            width: removed ? 2 : 1,
+            width: 2,
           ),
         ),
         child: Center(
@@ -888,16 +885,16 @@ class _CustomizationModalState extends State<CustomizationModal> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontWeight: removed ? FontWeight.w800 : FontWeight.w700,
-                    fontSize: 12,
+                    fontSize: 13.5,
                     color: removed ? AppColors.danger : AppColors.textPrimary,
                   ),
                 ),
               ),
               if (removed) ...[
-                const SizedBox(width: 5),
+                const SizedBox(width: 6),
                 const Icon(
                   Icons.check_circle,
-                  size: 15,
+                  size: 17,
                   color: AppColors.danger,
                 ),
               ],
@@ -916,15 +913,15 @@ class _CustomizationModalState extends State<CustomizationModal> {
         foregroundColor: Colors.white,
         disabledBackgroundColor: AppColors.success.withValues(alpha: 0.5),
         disabledForegroundColor: Colors.white70,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      icon: const Icon(Icons.check, size: 18),
+      icon: const Icon(Icons.check, size: 20),
       label: const Text(
         'VALIDER & AJOUTER AU TICKET',
         style: TextStyle(
-            fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.3),
+            fontWeight: FontWeight.w800, fontSize: 13.5, letterSpacing: 0.4),
       ),
     );
 
@@ -933,17 +930,17 @@ class _CustomizationModalState extends State<CustomizationModal> {
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.textPrimary,
         side: const BorderSide(color: AppColors.border),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       child: const Text(
         'Annuler',
-        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
       ),
     );
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: AppColors.border)),
@@ -958,11 +955,11 @@ class _CustomizationModalState extends State<CustomizationModal> {
             child: Text(
               '$_quantity',
               style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
           ),
           _qtyButton(Icons.add, () => setState(() => _quantity++)),
-          const SizedBox(width: 20),
+          const SizedBox(width: 24),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -970,10 +967,10 @@ class _CustomizationModalState extends State<CustomizationModal> {
               const Text(
                 'PRIX UNITAIRE CALCULÉ',
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textMuted,
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.6,
                 ),
               ),
               const SizedBox(height: 2),
@@ -982,7 +979,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
                   Text(
                     _money(_lineTotal),
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: AppColors.textPrimary,
                     ),
@@ -992,7 +989,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
                     Text(
                       '(+${_money(_extrasTotal * _quantity)} suppléments)',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: AppColors.success,
                       ),
@@ -1004,7 +1001,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
           ),
           const Spacer(),
           cancelButton,
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           validateButton,
         ],
       ),
@@ -1016,14 +1013,14 @@ class _CustomizationModalState extends State<CustomizationModal> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        width: 36,
-        height: 36,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.border),
         ),
-        child: Icon(icon, size: 16, color: AppColors.textPrimary),
+        child: Icon(icon, size: 18, color: AppColors.textPrimary),
       ),
     );
   }

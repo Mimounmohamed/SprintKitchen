@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_colors.dart';
 
 class CategorySidebarItem extends StatelessWidget {
   const CategorySidebarItem({
@@ -19,13 +18,13 @@ class CategorySidebarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? AppColors.sidebarActiveBg : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          color: selected ? const Color(0xFF583926) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
@@ -33,8 +32,8 @@ class CategorySidebarItem extends StatelessWidget {
               icon,
               size: 18,
               color: selected
-                  ? AppColors.sidebarActiveText
-                  : AppColors.textSecondary,
+                  ? const Color(0xFFFACC15)
+                  : const Color(0xFF6B7280),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -42,10 +41,10 @@ class CategorySidebarItem extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                   color: selected
-                      ? AppColors.sidebarActiveText
-                      : AppColors.textSecondary,
+                      ? const Color(0xFFFACC15)
+                      : const Color(0xFF374151),
                 ),
               ),
             ),

@@ -16,7 +16,7 @@ import '../widgets/pos/encaissement_modal.dart';
 class PosScreen extends StatefulWidget {
   const PosScreen({
     super.key,
-    this.ticketNumber = '00001',
+    this.ticketNumber = '0000123',
     this.posteLabel = 'Caisse 01',
   });
 
@@ -38,11 +38,18 @@ class _PosScreenState extends State<PosScreen> {
   String? _error;
 
   final List<TicketLine> _ticketLines = [];
+  final ScrollController _gridScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadMenu();
+  }
+
+  @override
+  void dispose() {
+    _gridScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadMenu() async {
@@ -179,7 +186,6 @@ class _PosScreenState extends State<PosScreen> {
                         ],
                       ),
           ),
-          _buildFooter(),
         ],
       ),
     );
@@ -210,54 +216,70 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
       ),
       child: Row(
         children: [
-          TextButton.icon(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back, size: 16,
-                color: AppColors.textSecondary),
-            label: const Text(
-              "Retour à l'accueil",
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+          InkWell(
+            onTap: () => Navigator.of(context).maybePop(),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFD1D5DB)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.arrow_back, size: 14, color: Color(0xFF374151)),
+                  SizedBox(width: 8),
+                  Text(
+                    "Retour à l'accueil",
+                    style: TextStyle(
+                      color: Color(0xFF374151),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Container(
-            width: 30,
-            height: 30,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: AppColors.brandDark,
+              color: const Color(0xFF583926),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.menu_book_rounded,
-                color: AppColors.gold, size: 16),
+            child: const Center(
+              child: Icon(Icons.restaurant_rounded,
+                  color: Color(0xFFFACC15), size: 17),
+            ),
           ),
           const SizedBox(width: 10),
-          const Text(
+          Text(
             'SPRINTKITCHEN',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 14,
-              letterSpacing: 0.4,
-              color: AppColors.textPrimary,
+            style: GoogleFonts.bebasNeue(
+              fontWeight: FontWeight.w400,
+              fontSize: 22,
+              letterSpacing: 1.2,
+              color: const Color(0xFF111827),
             ),
           ),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: const Color(0xFFF9FAFB),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -266,7 +288,7 @@ class _PosScreenState extends State<PosScreen> {
                   width: 7,
                   height: 7,
                   decoration: const BoxDecoration(
-                    color: AppColors.success,
+                    color: Color(0xFF10B981),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -276,7 +298,7 @@ class _PosScreenState extends State<PosScreen> {
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: Color(0xFF1F2937),
                   ),
                 ),
               ],
@@ -289,23 +311,35 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildSidebar() {
     return Container(
-      width: 190,
+      width: 210,
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.border)),
+        border: Border(right: BorderSide(color: Color(0xFFE5E7EB))),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: ListView.builder(
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final category = _categories[index];
-          return CategorySidebarItem(
-            icon: category.icon,
-            label: category.label,
-            selected: index == _selectedCategory,
-            onTap: () => setState(() => _selectedCategory = index),
-          );
-        },
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              itemCount: _categories.length,
+              itemBuilder: (context, index) {
+                final category = _categories[index];
+                return CategorySidebarItem(
+                  icon: category.icon,
+                  label: category.label,
+                  selected: index == _selectedCategory,
+                  onTap: () {
+                    setState(() => _selectedCategory = index);
+                    if (_gridScrollController.hasClients) {
+                      _gridScrollController.jumpTo(0);
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+          _buildFooter(),
+        ],
       ),
     );
   }
@@ -331,24 +365,38 @@ class _PosScreenState extends State<PosScreen> {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: GridView.builder(
-        itemCount: items.length,
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 260,
-          mainAxisExtent: 96,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-        ),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return MenuItemTile(
-            item: item,
-            onTap: () => _onItemTap(item),
-          );
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool hasManyItems = items.length > 15;
+        final double maxExtent = hasManyItems ? 175 : 205;
+        final double itemHeight = hasManyItems ? 140 : 155;
+
+        return RawScrollbar(
+          controller: _gridScrollController,
+          thumbColor: const Color(0xFFFACC15),
+          radius: const Radius.circular(4),
+          thickness: 6,
+          thumbVisibility: true,
+          child: GridView.builder(
+            controller: _gridScrollController,
+            padding: const EdgeInsets.all(16),
+            itemCount: items.length,
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: maxExtent,
+              mainAxisExtent: itemHeight,
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 14,
+            ),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return MenuItemTile(
+                item: item,
+                onTap: () => _onItemTap(item),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -362,80 +410,86 @@ class _PosScreenState extends State<PosScreen> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Ticket N° ${widget.ticketNumber}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.goldSoft,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Text(
-                          'En cours',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                    ],
+                Text(
+                  'Ticket N° ${widget.ticketNumber}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    color: Color(0xFF111827),
                   ),
                 ),
-                const Icon(Icons.receipt_long_outlined,
-                    size: 18, color: AppColors.textMuted),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'En cours',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF4B5563),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons.menu,
+                  size: 22,
+                  color: Color(0xFF4B5563),
+                ),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF9FAFB),
+              border: Border(
+                top: BorderSide(color: Color(0xFFE5E7EB)),
+                bottom: BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+            ),
             child: const Row(
               children: [
                 Expanded(
                   flex: 5,
                   child: Text('PRODUIT',
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textMuted)),
+                          color: Color(0xFF6B7280),
+                          letterSpacing: 0.5)),
                 ),
                 Expanded(
                   flex: 1,
                   child: Text('QTÉ',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textMuted)),
+                          color: Color(0xFF6B7280),
+                          letterSpacing: 0.5)),
                 ),
                 Expanded(
                   flex: 2,
                   child: Text('PRIX',
                       textAlign: TextAlign.right,
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textMuted)),
+                          color: Color(0xFF6B7280),
+                          letterSpacing: 0.5)),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: AppColors.border),
           Expanded(
             child: _ticketLines.isEmpty
                 ? const Center(
@@ -456,48 +510,58 @@ class _PosScreenState extends State<PosScreen> {
                     },
                   ),
           ),
-          const Divider(height: 1, color: AppColors.border),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _lineActionButton(
                   icon: Icons.add,
-                  color: AppColors.takeaway,
+                  color: const Color(0xFF2563EB),
+                  bg: const Color(0xFFEFF6FF),
                   onTap: () => _adjustSelectedQuantity(1),
                 ),
+                const SizedBox(width: 8),
                 _lineActionButton(
                   icon: Icons.remove,
-                  color: AppColors.takeaway,
+                  color: const Color(0xFF2563EB),
+                  bg: const Color(0xFFEFF6FF),
                   onTap: () => _adjustSelectedQuantity(-1),
                 ),
+                const SizedBox(width: 8),
                 _lineActionButton(
-                  icon: Icons.tune,
-                  color: AppColors.success,
+                  icon: Icons.settings_outlined,
+                  color: const Color(0xFF059669),
+                  bg: const Color(0xFFECFDF5),
                   onTap: () {},
                 ),
+                const SizedBox(width: 8),
                 _lineActionButton(
-                  icon: Icons.chat_bubble_outline,
-                  color: AppColors.textSecondary,
+                  icon: Icons.chat_bubble,
+                  color: const Color(0xFF4B5563),
+                  bg: const Color(0xFFF3F4F6),
                   onTap: () {},
                 ),
+                const SizedBox(width: 8),
                 _lineActionButton(
                   icon: Icons.close,
-                  color: AppColors.danger,
+                  color: const Color(0xFFDC2626),
+                  bg: const Color(0xFFFEF2F2),
                   onTap: _removeSelectedLine,
                 ),
               ],
             ),
           ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -505,77 +569,93 @@ class _PosScreenState extends State<PosScreen> {
                   Text(
                     'TOTAL :',
                     style: GoogleFonts.bebasNeue(
-                      color: const Color(0xFF292524),
-                      fontSize: 24,
-                      fontWeight: FontWeight.w400,
-                      height: 32 / 24,
-                      letterSpacing: 0.6,
+                      color: const Color(0xFF1F2937),
+                      fontSize: 26,
+                      letterSpacing: 1.0,
                     ),
                   ),
                   Text(
                     '${_total.toStringAsFixed(2).replaceAll('.', ',')} €',
                     style: GoogleFonts.bebasNeue(
-                      color: const Color(0xFF292524),
-                      fontSize: 24,
-                      fontWeight: FontWeight.w400,
-                      height: 32 / 24,
-                      letterSpacing: 0.6,
+                      color: const Color(0xFF1F2937),
+                      fontSize: 28,
+                      letterSpacing: 1.0,
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 12),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: Row(
               children: [
                 _orderTypeButton(
-                    OrderType.dineIn, AppColors.dineIn, Icons.storefront),
+                  OrderType.dineIn,
+                  const Color(0xFFE11D48),
+                  Icons.shopping_cart_outlined,
+                ),
                 const SizedBox(width: 8),
                 _orderTypeButton(
-                    OrderType.takeaway, AppColors.takeaway, Icons.shopping_bag),
+                  OrderType.takeaway,
+                  const Color(0xFF2563EB),
+                  Icons.shopping_bag_outlined,
+                ),
                 const SizedBox(width: 8),
                 _orderTypeButton(
-                    OrderType.delivery, AppColors.delivery, Icons.moped),
+                  OrderType.delivery,
+                  const Color(0xFF0D9488),
+                  Icons.local_shipping_outlined,
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
+              height: 52,
+              child: ElevatedButton(
                 onPressed: _ticketLines.isEmpty ? null : _openEncaissement,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.success,
+                  backgroundColor: const Color(0xFF059669),
+                  disabledBackgroundColor:
+                      const Color(0xFF059669).withValues(alpha: 0.5),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   elevation: 0,
+                  padding: EdgeInsets.zero,
                 ),
-                icon: const Icon(Icons.payment, size: 18),
-                label: const Text(
-                  'ENCAISSEMENT',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.credit_card,
+                        color: Color(0xFFFBBF24), size: 24),
+                    const SizedBox(width: 10),
+                    Text(
+                      'ENCAISSEMENT',
+                      style: GoogleFonts.bebasNeue(
+                        fontSize: 24,
+                        letterSpacing: 2.0,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 10),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
             child: Row(
               children: [
                 Expanded(
                   child: _smallActionButton(
                     label: 'History',
-                    icon: Icons.history,
-                    bg: AppColors.brandDark,
+                    icon: Icons.inventory_2_outlined,
+                    bg: const Color(0xFF27272A),
                     fg: Colors.white,
                     onTap: () {},
                   ),
@@ -585,8 +665,8 @@ class _PosScreenState extends State<PosScreen> {
                   child: _smallActionButton(
                     label: 'Actions',
                     icon: Icons.tune,
-                    bg: AppColors.actionOrange,
-                    fg: AppColors.brandDark,
+                    bg: const Color(0xFFF59E0B),
+                    fg: const Color(0xFF1F2937),
                     onTap: () {},
                   ),
                 ),
@@ -594,16 +674,15 @@ class _PosScreenState extends State<PosScreen> {
                 Expanded(
                   child: _smallActionButton(
                     label: 'Reprise',
-                    icon: Icons.autorenew,
-                    bg: AppColors.brandDark,
-                    fg: AppColors.gold,
+                    icon: Icons.sync,
+                    bg: const Color(0xFF452B1E),
+                    fg: const Color(0xFFFBBF24),
                     onTap: () {},
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );
@@ -611,16 +690,20 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildFooter() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Row(
-        children: const [
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF9FAFB),
+        border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+      ),
+      child: const Row(
+        children: [
           _StatusDot(),
           SizedBox(width: 8),
           Text(
             'Connecté',
             style: TextStyle(
               fontSize: 12,
-              color: AppColors.textSecondary,
+              color: Color(0xFF4B5563),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -632,19 +715,23 @@ class _PosScreenState extends State<PosScreen> {
   Widget _lineActionButton({
     required IconData icon,
     required Color color,
+    required Color bg,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 44,
-        height: 38,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 38,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Icon(icon, size: 18, color: color),
+          ),
         ),
-        child: Icon(icon, size: 17, color: color),
       ),
     );
   }
@@ -656,27 +743,18 @@ class _PosScreenState extends State<PosScreen> {
         onTap: () => setState(() => _orderType = type),
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          height: 38,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(20),
             border: selected
                 ? Border.all(color: Colors.white, width: 2)
                 : Border.all(color: Colors.transparent, width: 2),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.4),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 13, color: Colors.white),
+              Icon(icon, size: 14, color: Colors.white),
               const SizedBox(width: 5),
               Text(
                 type.label,
@@ -704,29 +782,25 @@ class _PosScreenState extends State<PosScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+        height: 42,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(12),
-          border: outlined ? Border.all(color: AppColors.border) : null,
+          borderRadius: BorderRadius.circular(10),
+          border: outlined ? Border.all(color: const Color(0xFFE5E7EB)) : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: fg),
+            Icon(icon, size: 16, color: fg),
             const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: fg,
-                ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: fg,
               ),
             ),
           ],
@@ -745,7 +819,7 @@ class _StatusDot extends StatelessWidget {
       width: 8,
       height: 8,
       decoration: const BoxDecoration(
-        color: AppColors.success,
+        color: Color(0xFF10B981),
         shape: BoxShape.circle,
       ),
     );

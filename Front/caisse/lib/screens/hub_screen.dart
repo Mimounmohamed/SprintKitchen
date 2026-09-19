@@ -38,18 +38,15 @@ class HubScreen extends StatelessWidget {
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(
                 horizontal: 48,
-                vertical: 40,
+                vertical: 36,
               ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1100),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildWelcomeSection(),
-                    const SizedBox(height: 32),
-                    _buildModuleCards(context),
-                  ],
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildWelcomeSection(),
+                  const SizedBox(height: 36),
+                  _buildModuleCards(context),
+                ],
               ),
             ),
           ),
@@ -147,68 +144,91 @@ class HubScreen extends StatelessWidget {
         Row(
           children: [
             Container(
-              width: 6,
-              height: 6,
-              margin: const EdgeInsets.only(right: 8),
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.only(right: 10),
               decoration: const BoxDecoration(
                 color: AppColors.gold,
                 shape: BoxShape.circle,
               ),
             ),
-            Text(
+            const Text(
               'PORTAIL OPÉRATIONNEL EN DIRECT',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
                 color: AppColors.textSecondary,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        const SizedBox(height: 12),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text(
               'Bienvenue sur SprintKitchen',
               style: TextStyle(
-                fontSize: 26,
+                fontSize: 32,
                 fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
                 color: AppColors.textPrimary,
               ),
             ),
-            const SizedBox(width: 12),
             Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppColors.border),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
-              child: Text(
-                posteLabel,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    posteLabel,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         const Text(
           'Sélectionnez le module d\'activité pour lancer l\'encaissement, '
           'auditer les ventes ou vérifier les stocks.',
           style: TextStyle(
-            fontSize: 14,
-            color: AppColors.textSecondary,
-            height: 1.4,
+            fontSize: 16,
+            color: AppColors.textMuted,
+            height: 1.5,
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 28),
         Container(height: 1, color: AppColors.border),
       ],
     );
@@ -253,7 +273,7 @@ class HubScreen extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 820;
+        final isNarrow = constraints.maxWidth < 900;
         if (isNarrow) {
           return Column(
             children: [
@@ -269,7 +289,7 @@ class HubScreen extends StatelessWidget {
           children: [
             for (var i = 0; i < cards.length; i++) ...[
               Expanded(child: cards[i]),
-              if (i != cards.length - 1) const SizedBox(width: 20),
+              if (i != cards.length - 1) const SizedBox(width: 24),
             ],
           ],
         );
