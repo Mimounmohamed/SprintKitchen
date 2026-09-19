@@ -16,6 +16,7 @@ class HubModuleCard extends StatelessWidget {
     this.badgeTextColor,
     this.highlighted = false,
     this.buttonStyleFilled = true,
+    this.height = 400,
   });
 
   /// Icon shown top-left in the dark rounded square.
@@ -43,18 +44,21 @@ class HubModuleCard extends StatelessWidget {
   /// If true, button is solid (dark/gold). If false, button is outlined/light.
   final bool buttonStyleFilled;
 
+  /// Card height to give it tall cube proportions.
+  final double? height;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    Widget card = Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0A000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
+            blurRadius: 16,
+            offset: Offset(0, 5),
           ),
         ],
       ),
@@ -64,134 +68,140 @@ class HubModuleCard extends StatelessWidget {
         children: [
           // Top accent bar for the highlighted / primary module.
           if (highlighted)
-            Container(height: 4, color: AppColors.gold),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.brandDark,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(icon, color: AppColors.gold, size: 22),
-                    ),
-                    if (badgeText != null)
+            Container(height: 5, color: AppColors.gold),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
+                        width: 56,
+                        height: 56,
                         decoration: BoxDecoration(
-                          color: badgeColor ?? AppColors.goldSoft,
-                          borderRadius: BorderRadius.circular(20),
+                          color: AppColors.brandDark,
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Text(
-                          badgeText!,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
-                            color: badgeTextColor ?? AppColors.textPrimary,
-                          ),
-                        ),
+                        child: Icon(icon, color: AppColors.gold, size: 28),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  eyebrow.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: buttonStyleFilled
-                      ? ElevatedButton(
-                          onPressed: onTap,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: highlighted
-                                ? AppColors.gold
-                                : AppColors.brandDark,
-                            foregroundColor: highlighted
-                                ? AppColors.brandDark
-                                : Colors.white,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                      if (badgeText != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: badgeColor ?? AppColors.goldSoft,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            badgeText!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                              color: badgeTextColor ?? AppColors.textPrimary,
                             ),
-                            elevation: 0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                buttonLabel,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  letterSpacing: 0.2,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Icon(Icons.arrow_forward, size: 16),
-                            ],
-                          ),
-                        )
-                      : OutlinedButton(
-                          onPressed: onTap,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.textPrimary,
-                            side: const BorderSide(color: AppColors.border),
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                buttonLabel,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  letterSpacing: 0.2,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Icon(Icons.chevron_right, size: 18),
-                            ],
                           ),
                         ),
-                ),
-              ],
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    eyebrow.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: buttonStyleFilled
+                        ? ElevatedButton(
+                            onPressed: onTap,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: highlighted
+                                  ? AppColors.gold
+                                  : AppColors.brandDark,
+                              foregroundColor: highlighted
+                                  ? AppColors.brandDark
+                                  : Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  buttonLabel,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.arrow_forward, size: 16),
+                              ],
+                            ),
+                          )
+                        : OutlinedButton(
+                            onPressed: onTap,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              side: const BorderSide(
+                                  color: AppColors.border, width: 1.5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  buttonLabel,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.chevron_right, size: 18),
+                              ],
+                            ),
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
       ),
     );
+
+    if (height != null) {
+      return SizedBox(height: height, child: card);
+    }
+    return card;
   }
 }

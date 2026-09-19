@@ -5,6 +5,11 @@ import '../theme/app_colors.dart';
 import '../widgets/pos/category_sidebar_item.dart';
 import '../widgets/pos/menu_item_tile.dart';
 import '../widgets/pos/ticket_line_tile.dart';
+import '../widgets/pos/customization_modal.dart';
+import '../services/api_client.dart' show ApiException;
+import '../services/menu_service.dart';
+import '../services/order_service.dart';
+import '../widgets/pos/encaissement_modal.dart';
 
 /// The POS / register screen ("SprintKitchen POS - Caisse Principale").
 ///
@@ -29,61 +34,82 @@ class _PosScreenState extends State<PosScreen> {
   OrderType _orderType = OrderType.dineIn;
   int? _selectedLineIndex = 0;
 
-  // --- Sample data. Replace with your products.js / categories.js API. ---
-  final List<MenuCategory> _categories = const [
-    MenuCategory(
-      label: 'Menus B',
-      icon: Icons.grid_view_rounded,
-      items: [
-        MenuItem(name: 'MENU B1', price: 8.00),
-        MenuItem(name: 'MENU B2', price: 9.00),
-        MenuItem(name: 'MENU B3', price: 9.00),
-        MenuItem(name: 'MENU B4', price: 10.00),
-        MenuItem(name: 'MENU B5', price: 9.00),
-        MenuItem(name: 'MENU B6', price: 10.00),
-        MenuItem(name: 'MENU B7', price: 10.00),
-        MenuItem(name: 'MENU B8', price: 11.00),
-        MenuItem(name: 'MENU B9', price: 10.00),
-        MenuItem(name: 'MENU B10', price: 11.00),
-        MenuItem(name: 'MENU B11', price: 11.00),
-        MenuItem(name: 'MENU B12', price: 11.00, available: false),
-        MenuItem(name: 'MENU B13', price: 10.00),
-        MenuItem(name: 'MENU BACON', price: 10.00),
-        MenuItem(name: 'MENU CRISPY', price: 11.50),
-      ],
-    ),
-    MenuCategory(label: 'Menus L', icon: Icons.grid_view_rounded, items: []),
-    MenuCategory(
-        label: 'Menu Simple', icon: Icons.lunch_dining_rounded, items: []),
-    MenuCategory(label: 'Nos Starters', icon: Icons.star_border_rounded, items: []),
-    MenuCategory(label: 'Nos Burgers', icon: Icons.lunch_dining_rounded, items: []),
-    MenuCategory(
-        label: 'Nos Sandwichs', icon: Icons.tapas_rounded, items: []),
-    MenuCategory(label: 'Menu Enfant', icon: Icons.child_care_rounded, items: []),
-    MenuCategory(label: 'Nos Desserts', icon: Icons.icecream_rounded, items: []),
-    MenuCategory(
-        label: 'Boissons & Cafés', icon: Icons.local_cafe_rounded, items: []),
-  ];
+  final MenuService _menuService = MenuService();
+  final OrderService _orderService = OrderService();
+  List<MenuCategory> _categories = [];
+  bool _loading = true;
+  String? _error;
 
-  final List<TicketLine> _ticketLines = [
-    TicketLine(
-      name: 'Menu B4 Cheese',
-      subtitle: 'Sauce Algérienne, Cuisson à point',
-      unitPrice: 10.00,
-    ),
-    TicketLine(
-      name: 'Frites Maison XL',
-      subtitle: 'Sans sel ajouté',
-      unitPrice: 3.50,
-    ),
-    TicketLine(
-      name: 'Coca-Cola Sans Sucres 33cl',
-      unitPrice: 2.50,
-    ),
-  ];
+  final List<TicketLine> _ticketLines = [];
+  final ScrollController _gridScrollController = ScrollController();
+
+  /// Current ticket number (starts from the widget value, then follows the
+  /// number returned by the server after each paid order).
+  late String _ticketNumber;
+
+  /// True while an order/payment request is in flight (blocks double taps).
+  bool _submitting = false;
+
+  /// Order created on the server but not yet paid (kept so a retry after a
+  /// payment failure does not create a duplicate order).
+  CreatedOrder? _pendingOrder;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticketNumber = widget.ticketNumber;
+    _loadMenu();
+  }
+
+  @override
+  void dispose() {
+    _gridScrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMenu() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final categories = await _menuService.fetchMenu();
+      setState(() {
+        _categories = categories;
+        _selectedCategory = 0;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
 
   double get _total =>
       _ticketLines.fold(0, (sum, line) => sum + line.total);
+
+  void _onItemTap(MenuItem item) {
+    if (!item.needsCustomization) {
+      _addItemToTicket(item);
+      return;
+    }
+    _openCustomization(item);
+  }
+
+  Future<void> _openCustomization(MenuItem item) async {
+    final line = await showDialog<TicketLine>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (_) => CustomizationModal(item: item),
+    );
+    if (line == null) return;
+    setState(() {
+      _ticketLines.add(line);
+      _selectedLineIndex = _ticketLines.length - 1;
+    });
+  }
 
   void _addItemToTicket(MenuItem item) {
     setState(() {
@@ -91,7 +117,11 @@ class _PosScreenState extends State<PosScreen> {
       if (existingIndex != -1) {
         _ticketLines[existingIndex].quantity += 1;
       } else {
-        _ticketLines.add(TicketLine(name: item.name, unitPrice: item.price));
+        _ticketLines.add(TicketLine(
+          name: item.name,
+          unitPrice: item.price,
+          productId: item.id,
+        ));
       }
       _selectedLineIndex = _ticketLines.length - 1;
     });
@@ -121,6 +151,134 @@ class _PosScreenState extends State<PosScreen> {
     });
   }
 
+  // ───────────────────────── Encaissement flow ─────────────────────────
+
+  Future<void> _openEncaissement() async {
+    if (_submitting) return;
+    final result = await showDialog<EncaissementResult>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (_) => EncaissementModal(
+        total: _total,
+        ticketNumber: _ticketNumber,
+        posteLabel: widget.posteLabel,
+      ),
+    );
+    if (result == null || !mounted) return;
+    await _submitOrder(result);
+  }
+
+  /// Runs order → payment, retrying on demand. The ticket is only cleared
+  /// after BOTH calls succeed.
+  Future<void> _submitOrder(EncaissementResult result) async {
+    setState(() => _submitting = true);
+    try {
+      while (true) {
+        final failure = await _attempt(result);
+        if (failure == null) return; // success handled in _attempt
+        if (!mounted) return;
+        final retry = await _showPaymentError(failure);
+        if (!retry) {
+          // Cashier backed out: forget the pending order so an edited ticket
+          // gets a fresh order instead of reusing a stale one.
+          _pendingOrder = null;
+          return;
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// One full attempt. Returns null on success, or the failure.
+  Future<ApiException?> _attempt(EncaissementResult result) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    );
+
+    ApiException? failure;
+    CreatedOrder? paid;
+    try {
+      // Reuse the order if a previous attempt created it but payment failed.
+      _pendingOrder ??= await _orderService.createOrder(
+        lines: _ticketLines,
+        orderType: _orderType,
+        expectedTotal: _total,
+      );
+      await _orderService.createPayment(
+        orderId: _pendingOrder!.id,
+        method: result.method,
+        amountReceived: result.amountReceived,
+        printReceipt: result.printReceipt,
+      );
+      paid = _pendingOrder;
+      _pendingOrder = null;
+    } on ApiException catch (e) {
+      failure = e;
+    } catch (e) {
+      failure = ApiException(e.toString());
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop(); // loader
+    }
+
+    if (failure != null || !mounted) return failure;
+
+    setState(() {
+      _ticketLines.clear();
+      _selectedLineIndex = null;
+      _ticketNumber = _nextTicketNumber(paid!.ticketNumber);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.method == PaymentMethod.especes
+              ? 'Paiement espèces enregistré — rendu ${result.change.toStringAsFixed(2).replaceAll('.', ',')} €'
+              : 'Paiement carte enregistré',
+        ),
+      ),
+    );
+    return null;
+  }
+
+  Future<bool> _showPaymentError(ApiException e) async {
+    final orderNote = _pendingOrder != null
+        ? '\n\nLa commande est créée : seul le paiement reste à enregistrer.'
+        : '';
+    final retry = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Encaissement non enregistré'),
+        content: Text('${e.message}\n\nLe ticket est conservé.$orderNote'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Réessayer'),
+          ),
+        ],
+      ),
+    );
+    return retry ?? false;
+  }
+
+  /// "0000123" -> "0000124". The server's counter is global, so with several
+  /// registers this is only a preview; the real number comes from the server.
+  String _nextTicketNumber(String served) {
+    final n = int.tryParse(served);
+    return n == null ? _ticketNumber : (n + 1).toString().padLeft(7, '0');
+  }
+
+  // ───────────────────────────── UI ─────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,15 +287,41 @@ class _PosScreenState extends State<PosScreen> {
         children: [
           _buildHeader(context),
           Expanded(
-            child: Row(
-              children: [
-                _buildSidebar(),
-                Expanded(child: _buildMenuGrid()),
-                _buildTicketPanel(),
-              ],
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _buildErrorState()
+                    : Row(
+                        children: [
+                          _buildSidebar(),
+                          Expanded(child: _buildMenuGrid()),
+                          _buildTicketPanel(),
+                        ],
+                      ),
           ),
-          _buildFooter(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.wifi_off_rounded,
+              size: 40, color: AppColors.textMuted),
+          const SizedBox(height: 12),
+          Text(
+            'Impossible de charger le menu.\n$_error',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadMenu,
+            child: const Text('Réessayer'),
+          ),
         ],
       ),
     );
@@ -145,54 +329,70 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
       ),
       child: Row(
         children: [
-          TextButton.icon(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back, size: 16,
-                color: AppColors.textSecondary),
-            label: const Text(
-              "Retour à l'accueil",
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+          InkWell(
+            onTap: () => Navigator.of(context).maybePop(),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFD1D5DB)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.arrow_back, size: 14, color: Color(0xFF374151)),
+                  SizedBox(width: 8),
+                  Text(
+                    "Retour à l'accueil",
+                    style: TextStyle(
+                      color: Color(0xFF374151),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Container(
-            width: 30,
-            height: 30,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: AppColors.brandDark,
+              color: const Color(0xFF583926),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.menu_book_rounded,
-                color: AppColors.gold, size: 16),
+            child: const Center(
+              child: Icon(Icons.restaurant_rounded,
+                  color: Color(0xFFFACC15), size: 17),
+            ),
           ),
           const SizedBox(width: 10),
-          const Text(
+          Text(
             'SPRINTKITCHEN',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 14,
-              letterSpacing: 0.4,
-              color: AppColors.textPrimary,
+            style: GoogleFonts.bebasNeue(
+              fontWeight: FontWeight.w400,
+              fontSize: 22,
+              letterSpacing: 1.2,
+              color: const Color(0xFF111827),
             ),
           ),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: const Color(0xFFF9FAFB),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -201,7 +401,7 @@ class _PosScreenState extends State<PosScreen> {
                   width: 7,
                   height: 7,
                   decoration: const BoxDecoration(
-                    color: AppColors.success,
+                    color: Color(0xFF10B981),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -211,7 +411,7 @@ class _PosScreenState extends State<PosScreen> {
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: Color(0xFF1F2937),
                   ),
                 ),
               ],
@@ -224,28 +424,49 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildSidebar() {
     return Container(
-      width: 190,
+      width: 210,
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.border)),
+        border: Border(right: BorderSide(color: Color(0xFFE5E7EB))),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: ListView.builder(
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final category = _categories[index];
-          return CategorySidebarItem(
-            icon: category.icon,
-            label: category.label,
-            selected: index == _selectedCategory,
-            onTap: () => setState(() => _selectedCategory = index),
-          );
-        },
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              itemCount: _categories.length,
+              itemBuilder: (context, index) {
+                final category = _categories[index];
+                return CategorySidebarItem(
+                  icon: category.icon,
+                  label: category.label,
+                  selected: index == _selectedCategory,
+                  onTap: () {
+                    setState(() => _selectedCategory = index);
+                    if (_gridScrollController.hasClients) {
+                      _gridScrollController.jumpTo(0);
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+          _buildFooter(),
+        ],
       ),
     );
   }
 
   Widget _buildMenuGrid() {
+    if (_categories.isEmpty) {
+      return const Center(
+        child: Text(
+          'Aucune catégorie disponible.',
+          style: TextStyle(color: AppColors.textMuted),
+        ),
+      );
+    }
+
     final items = _categories[_selectedCategory].items;
 
     if (items.isEmpty) {
@@ -257,24 +478,38 @@ class _PosScreenState extends State<PosScreen> {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: GridView.builder(
-        itemCount: items.length,
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 260,
-          mainAxisExtent: 96,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-        ),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return MenuItemTile(
-            item: item,
-            onTap: () => _addItemToTicket(item),
-          );
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool hasManyItems = items.length > 15;
+        final double maxExtent = hasManyItems ? 175 : 205;
+        final double itemHeight = hasManyItems ? 140 : 155;
+
+        return RawScrollbar(
+          controller: _gridScrollController,
+          thumbColor: const Color(0xFFFACC15),
+          radius: const Radius.circular(4),
+          thickness: 6,
+          thumbVisibility: true,
+          child: GridView.builder(
+            controller: _gridScrollController,
+            padding: const EdgeInsets.all(16),
+            itemCount: items.length,
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: maxExtent,
+              mainAxisExtent: itemHeight,
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 14,
+            ),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return MenuItemTile(
+                item: item,
+                onTap: () => _onItemTap(item),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -288,80 +523,86 @@ class _PosScreenState extends State<PosScreen> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Ticket N° ${widget.ticketNumber}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.goldSoft,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Text(
-                          'En cours',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                    ],
+                Text(
+                  'Ticket N° $_ticketNumber',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    color: Color(0xFF111827),
                   ),
                 ),
-                const Icon(Icons.receipt_long_outlined,
-                    size: 18, color: AppColors.textMuted),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'En cours',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF4B5563),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons.menu,
+                  size: 22,
+                  color: Color(0xFF4B5563),
+                ),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF9FAFB),
+              border: Border(
+                top: BorderSide(color: Color(0xFFE5E7EB)),
+                bottom: BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+            ),
             child: const Row(
               children: [
                 Expanded(
                   flex: 5,
                   child: Text('PRODUIT',
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textMuted)),
+                          color: Color(0xFF6B7280),
+                          letterSpacing: 0.5)),
                 ),
                 Expanded(
                   flex: 1,
                   child: Text('QTÉ',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textMuted)),
+                          color: Color(0xFF6B7280),
+                          letterSpacing: 0.5)),
                 ),
                 Expanded(
                   flex: 2,
                   child: Text('PRIX',
                       textAlign: TextAlign.right,
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textMuted)),
+                          color: Color(0xFF6B7280),
+                          letterSpacing: 0.5)),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: AppColors.border),
           Expanded(
             child: _ticketLines.isEmpty
                 ? const Center(
@@ -382,48 +623,58 @@ class _PosScreenState extends State<PosScreen> {
                     },
                   ),
           ),
-          const Divider(height: 1, color: AppColors.border),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _lineActionButton(
                   icon: Icons.add,
-                  color: AppColors.takeaway,
+                  color: const Color(0xFF2563EB),
+                  bg: const Color(0xFFEFF6FF),
                   onTap: () => _adjustSelectedQuantity(1),
                 ),
+                const SizedBox(width: 8),
                 _lineActionButton(
                   icon: Icons.remove,
-                  color: AppColors.takeaway,
+                  color: const Color(0xFF2563EB),
+                  bg: const Color(0xFFEFF6FF),
                   onTap: () => _adjustSelectedQuantity(-1),
                 ),
+                const SizedBox(width: 8),
                 _lineActionButton(
-                  icon: Icons.tune,
-                  color: AppColors.success,
+                  icon: Icons.settings_outlined,
+                  color: const Color(0xFF059669),
+                  bg: const Color(0xFFECFDF5),
                   onTap: () {},
                 ),
+                const SizedBox(width: 8),
                 _lineActionButton(
-                  icon: Icons.chat_bubble_outline,
-                  color: AppColors.textSecondary,
+                  icon: Icons.chat_bubble,
+                  color: const Color(0xFF4B5563),
+                  bg: const Color(0xFFF3F4F6),
                   onTap: () {},
                 ),
+                const SizedBox(width: 8),
                 _lineActionButton(
                   icon: Icons.close,
-                  color: AppColors.danger,
+                  color: const Color(0xFFDC2626),
+                  bg: const Color(0xFFFEF2F2),
                   onTap: _removeSelectedLine,
                 ),
               ],
             ),
           ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -431,77 +682,95 @@ class _PosScreenState extends State<PosScreen> {
                   Text(
                     'TOTAL :',
                     style: GoogleFonts.bebasNeue(
-                      color: const Color(0xFF292524),
-                      fontSize: 24,
-                      fontWeight: FontWeight.w400,
-                      height: 32 / 24,
-                      letterSpacing: 0.6,
+                      color: const Color(0xFF1F2937),
+                      fontSize: 26,
+                      letterSpacing: 1.0,
                     ),
                   ),
                   Text(
                     '${_total.toStringAsFixed(2).replaceAll('.', ',')} €',
                     style: GoogleFonts.bebasNeue(
-                      color: const Color(0xFF292524),
-                      fontSize: 24,
-                      fontWeight: FontWeight.w400,
-                      height: 32 / 24,
-                      letterSpacing: 0.6,
+                      color: const Color(0xFF1F2937),
+                      fontSize: 28,
+                      letterSpacing: 1.0,
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 12),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: Row(
               children: [
                 _orderTypeButton(
-                    OrderType.dineIn, AppColors.dineIn, Icons.storefront),
+                  OrderType.dineIn,
+                  const Color(0xFFE11D48),
+                  Icons.shopping_cart_outlined,
+                ),
                 const SizedBox(width: 8),
                 _orderTypeButton(
-                    OrderType.takeaway, AppColors.takeaway, Icons.shopping_bag),
+                  OrderType.takeaway,
+                  const Color(0xFF2563EB),
+                  Icons.shopping_bag_outlined,
+                ),
                 const SizedBox(width: 8),
                 _orderTypeButton(
-                    OrderType.delivery, AppColors.delivery, Icons.moped),
+                  OrderType.delivery,
+                  const Color(0xFF0D9488),
+                  Icons.local_shipping_outlined,
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _ticketLines.isEmpty ? null : () {},
+              height: 52,
+              child: ElevatedButton(
+                onPressed: (_ticketLines.isEmpty || _submitting)
+                    ? null
+                    : _openEncaissement,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.success,
+                  backgroundColor: const Color(0xFF059669),
+                  disabledBackgroundColor:
+                      const Color(0xFF059669).withValues(alpha: 0.5),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   elevation: 0,
+                  padding: EdgeInsets.zero,
                 ),
-                icon: const Icon(Icons.payment, size: 18),
-                label: const Text(
-                  'ENCAISSEMENT',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.credit_card,
+                        color: Color(0xFFFBBF24), size: 24),
+                    const SizedBox(width: 10),
+                    Text(
+                      'ENCAISSEMENT',
+                      style: GoogleFonts.bebasNeue(
+                        fontSize: 24,
+                        letterSpacing: 2.0,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 10),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
             child: Row(
               children: [
                 Expanded(
                   child: _smallActionButton(
                     label: 'History',
-                    icon: Icons.history,
-                    bg: AppColors.brandDark,
+                    icon: Icons.inventory_2_outlined,
+                    bg: const Color(0xFF27272A),
                     fg: Colors.white,
                     onTap: () {},
                   ),
@@ -511,8 +780,8 @@ class _PosScreenState extends State<PosScreen> {
                   child: _smallActionButton(
                     label: 'Actions',
                     icon: Icons.tune,
-                    bg: AppColors.actionOrange,
-                    fg: AppColors.brandDark,
+                    bg: const Color(0xFFF59E0B),
+                    fg: const Color(0xFF1F2937),
                     onTap: () {},
                   ),
                 ),
@@ -520,16 +789,15 @@ class _PosScreenState extends State<PosScreen> {
                 Expanded(
                   child: _smallActionButton(
                     label: 'Reprise',
-                    icon: Icons.autorenew,
-                    bg: AppColors.brandDark,
-                    fg: AppColors.gold,
+                    icon: Icons.sync,
+                    bg: const Color(0xFF452B1E),
+                    fg: const Color(0xFFFBBF24),
                     onTap: () {},
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );
@@ -537,16 +805,20 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildFooter() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Row(
-        children: const [
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF9FAFB),
+        border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+      ),
+      child: const Row(
+        children: [
           _StatusDot(),
           SizedBox(width: 8),
           Text(
             'Connecté',
             style: TextStyle(
               fontSize: 12,
-              color: AppColors.textSecondary,
+              color: Color(0xFF4B5563),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -558,19 +830,23 @@ class _PosScreenState extends State<PosScreen> {
   Widget _lineActionButton({
     required IconData icon,
     required Color color,
+    required Color bg,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 44,
-        height: 38,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 38,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Icon(icon, size: 18, color: color),
+          ),
         ),
-        child: Icon(icon, size: 17, color: color),
       ),
     );
   }
@@ -582,27 +858,18 @@ class _PosScreenState extends State<PosScreen> {
         onTap: () => setState(() => _orderType = type),
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          height: 38,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(20),
             border: selected
                 ? Border.all(color: Colors.white, width: 2)
                 : Border.all(color: Colors.transparent, width: 2),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.4),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 13, color: Colors.white),
+              Icon(icon, size: 14, color: Colors.white),
               const SizedBox(width: 5),
               Text(
                 type.label,
@@ -630,29 +897,25 @@ class _PosScreenState extends State<PosScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+        height: 42,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(12),
-          border: outlined ? Border.all(color: AppColors.border) : null,
+          borderRadius: BorderRadius.circular(10),
+          border: outlined ? Border.all(color: const Color(0xFFE5E7EB)) : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: fg),
+            Icon(icon, size: 16, color: fg),
             const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: fg,
-                ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: fg,
               ),
             ),
           ],
@@ -671,7 +934,7 @@ class _StatusDot extends StatelessWidget {
       width: 8,
       height: 8,
       decoration: const BoxDecoration(
-        color: AppColors.success,
+        color: Color(0xFF10B981),
         shape: BoxShape.circle,
       ),
     );

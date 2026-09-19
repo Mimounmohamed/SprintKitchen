@@ -1,5 +1,6 @@
 const Order = require('../models/Order');
 const Payment = require('../models/Payment');
+const Store = require('../models/Store');
 
 // @desc  Get orders (with filters & date range)
 // @route GET /api/orders
@@ -75,9 +76,27 @@ exports.getOrder = async (req, res) => {
 
 // @desc  Create new order (open ticket)
 // @route POST /api/orders
+// No login on this install: if the client doesn't send a storeId, we use
+// the (single) store stored in the database.
 exports.createOrder = async (req, res) => {
   try {
-    const order = new Order(req.body);
+    const data = { ...req.body };
+
+    if (!data.storeId) {
+      const store = await Store.findOne();
+      if (!store) {
+        return res
+          .status(400)
+          .json({ success: false, message: 'Aucun magasin configuré' });
+      }
+      data.storeId = store._id;
+    }
+
+    if (!data.operatorId && req.user?._id) {
+      data.operatorId = req.user._id;
+    }
+
+    const order = new Order(data);
     order.recalculateTotals();
     await order.save();
     res.status(201).json({ success: true, data: order });

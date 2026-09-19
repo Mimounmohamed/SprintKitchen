@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../models/pos_models.dart';
-import '../../theme/app_colors.dart';
 
 class MenuItemTile extends StatelessWidget {
   const MenuItemTile({
@@ -20,72 +19,80 @@ class MenuItemTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: disabled ? null : onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          children: [
-            Container(
-              height: 96,
-              decoration: BoxDecoration(
-                color: disabled ? AppColors.menuTileDisabled : AppColors.menuTile,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.all(14),
-              alignment: Alignment.bottomLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    item.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                      letterSpacing: 0.2,
-                      color: disabled ? AppColors.textMuted : Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${item.price.toStringAsFixed(2).replaceAll('.', ',')} €',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: disabled
-                          ? AppColors.textMuted
-                          : AppColors.menuTilePrice,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (disabled)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: disabled
+                ? const Color(0xFFE5E7EB)
+                : const Color(0xFF583926),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: const Text(
-                    'ÉPUISÉ',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.3,
-                    ),
+                      horizontal: 10, vertical: 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        item.name.toUpperCase(),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          letterSpacing: 0.3,
+                          color: disabled
+                              ? const Color(0xFF9CA3AF)
+                              : Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${item.price.toStringAsFixed(2).replaceAll('.', ',')} €',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                          color: disabled
+                              ? const Color(0xFF9CA3AF)
+                              : const Color(0xFFFACC15),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-          ],
+              if (disabled)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD1D5DB),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'ÉPUISÉ',
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF4B5563),
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

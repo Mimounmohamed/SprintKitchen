@@ -20,8 +20,16 @@ class TicketLineTile extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        color: selected ? AppColors.ticketHighlight : Colors.transparent,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFEF9E7) : Colors.transparent,
+          border: Border(
+            left: BorderSide(
+              color: selected ? const Color(0xFFF59E0B) : Colors.transparent,
+              width: 4,
+            ),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -56,9 +64,10 @@ class TicketLineTile extends StatelessWidget {
               child: Text(
                 '${line.quantity}',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  color: AppColors.textSecondary,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ),

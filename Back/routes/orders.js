@@ -4,14 +4,13 @@ const {
   getOrders, getOrder, createOrder, updateOrder,
   updateStatus, cancelOrder, getDailyStats,
 } = require('../controllers/orderController');
-const protect = require('../middleware/auth');
 
-router.get('/stats/daily', protect, getDailyStats);
-router.get('/', protect, getOrders);
-router.post('/', protect, createOrder);
-router.get('/:id', protect, getOrder);
-router.put('/:id', protect, updateOrder);
-router.patch('/:id/status', protect, updateStatus);
-router.patch('/:id/cancel', protect, cancelOrder);
+router.get('/stats/daily', getDailyStats);
+router.get('/', getOrders);
+router.post('/', createOrder);
+router.get('/:id', getOrder);
+router.put('/:id', updateOrder);
+router.patch('/:id/status', updateStatus);
+router.patch('/:id/cancel', cancelOrder);
 
 module.exports = router;
