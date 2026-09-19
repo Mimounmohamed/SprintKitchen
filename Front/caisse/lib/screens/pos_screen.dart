@@ -79,6 +79,7 @@ class _PosScreenState extends State<PosScreen> {
   Future<void> _openCustomization(MenuItem item) async {
     final line = await showDialog<TicketLine>(
       context: context,
+      barrierColor: Colors.transparent,
       builder: (_) => CustomizationModal(item: item),
     );
     if (line == null) return;

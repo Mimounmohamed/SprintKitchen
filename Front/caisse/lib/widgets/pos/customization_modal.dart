@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../models/pos_models.dart';
 import '../../theme/app_colors.dart';
@@ -14,6 +15,10 @@ class CustomizationModal extends StatefulWidget {
 }
 
 class _CustomizationModalState extends State<CustomizationModal> {
+  static const double _narrowBreakpoint = 640;
+  static const double _maxDialogWidth = 860;
+  static const double _maxDialogHeight = 720;
+
   final Map<String, List<CustomizationOption>> _selections = {};
   final Set<String> _removedIngredients = {};
   int _quantity = 1;
@@ -40,7 +45,14 @@ class _CustomizationModalState extends State<CustomizationModal> {
   double get _lineTotal => (widget.item.price + _extrasTotal) * _quantity;
 
   bool get _isValid {
-    for (final group in widget.item.customizationGroups) {
+    final activeGroups = widget.item.customizationGroups.where((g) {
+      final name = g.name.toLowerCase();
+      return !name.contains('accompagnement') &&
+          !name.contains('ingrédient') &&
+          !name.contains('ingredient');
+    });
+
+    for (final group in activeGroups) {
       final selected = _selections[group.name] ?? [];
       if (group.isRequired && selected.isEmpty) return false;
       if (group.minChoices > 0 && selected.length < group.minChoices) {
@@ -87,6 +99,12 @@ class _CustomizationModalState extends State<CustomizationModal> {
     if (!_isValid) return;
 
     final customizations = widget.item.customizationGroups
+        .where((g) {
+          final name = g.name.toLowerCase();
+          return !name.contains('accompagnement') &&
+              !name.contains('ingrédient') &&
+              !name.contains('ingredient');
+        })
         .where((g) => (_selections[g.name] ?? []).isNotEmpty)
         .map((g) => AppliedCustomization(
               groupName: g.name,
@@ -116,219 +134,571 @@ class _CustomizationModalState extends State<CustomizationModal> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final item = widget.item;
+  String _money(num value) =>
+      '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640, maxHeight: 720),
-        child: Material(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildHeader(item),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final group in item.customizationGroups) ...[
-                        _buildGroup(group),
-                        const SizedBox(height: 18),
-                      ],
-                      if (item.ingredients.isNotEmpty)
-                        _buildIngredientsSection(item),
-                    ],
+  /// Renders options evenly in a single row when they fit, or wraps them
+  /// into rows scrollable from UP to DOWN when there are extra elements.
+  Widget _buildVerticalOptionsGrid({
+    required List<Widget> children,
+    required int itemCount,
+    double minItemWidth = 115,
+    double itemHeight = 58,
+    double maxHeight = 135,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        int columns = (availableWidth / (minItemWidth + 8)).floor();
+        if (columns < 1) columns = 1;
+
+        // If all items fit in one row, expand them evenly
+        if (itemCount <= columns) {
+          return Row(
+            children: children.asMap().entries.map((entry) {
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: entry.key == itemCount - 1 ? 0 : 8,
                   ),
+                  child: entry.value,
                 ),
-              ),
-              _buildFooter(),
-            ],
+              );
+            }).toList(),
+          );
+        }
+
+        // When there are extra elements, wrap into rows and scroll UP to DOWN
+        final cardWidth = (availableWidth - (columns - 1) * 8) / columns;
+
+        final wrapContent = Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: children.map((child) {
+            return SizedBox(
+              width: cardWidth,
+              height: itemHeight,
+              child: child,
+            );
+          }).toList(),
+        );
+
+        return ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+              PointerDeviceKind.stylus,
+            },
           ),
-        ),
-      ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              physics: const BouncingScrollPhysics(),
+              child: wrapContent,
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader(MenuItem item) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
-      color: AppColors.brandDark,
-      child: Row(
-        children: [
-          Expanded(
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 10,
-              children: [
-                Text(
-                  'PERSONNALISATION — ${item.name.toUpperCase()}',
-                  style: const TextStyle(
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final dialogWidth =
+        (size.width - 32) < _maxDialogWidth ? size.width - 32 : _maxDialogWidth;
+    final dialogHeight = (size.height - 48) < _maxDialogHeight
+        ? size.height - 48
+        : _maxDialogHeight;
+    final isNarrow = dialogWidth < _narrowBreakpoint;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).maybePop(),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(color: Colors.black.withValues(alpha: 0.55)),
+            ),
+          ),
+        ),
+        Center(
+          child: GestureDetector(
+            onTap: () {},
+            behavior: HitTestBehavior.opaque,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: dialogWidth,
+                maxHeight: dialogHeight,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.hardEdge,
+                child: Container(
+                  decoration: BoxDecoration(
                     color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        blurRadius: 40,
+                        offset: const Offset(0, 16),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildHeader(isNarrow),
+                        Flexible(
+                          child: SingleChildScrollView(
+                            padding: EdgeInsets.all(isNarrow ? 14 : 20),
+                            child: _buildBody(),
+                          ),
+                        ),
+                        _buildFooter(isNarrow),
+                      ],
+                    ),
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.gold,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${item.price.toStringAsFixed(2).replaceAll('.', ',')} €',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                      color: AppColors.brandDark,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(bool isNarrow) {
+    final item = widget.item;
+    final hasCustomDesc = item.description != null &&
+        item.description!.isNotEmpty &&
+        item.description != item.name;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(isNarrow ? 14 : 20, 16, 16, 16),
+      decoration: const BoxDecoration(
+        color: AppColors.brandDark,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(16),
+          topRight: Radius.circular(16),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
+                  runSpacing: 6,
+                  children: [
+                    Text(
+                      'PERSONNALISATION — ${item.name.toUpperCase()}',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: isNarrow ? 13 : 15,
+                        letterSpacing: 0.3,
+                      ),
                     ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.gold,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _money(item.price),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          color: AppColors.brandDark,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  hasCustomDesc
+                      ? item.description!
+                      : 'Sélectionnez la cuisson, la boisson, l\'accompagnement et les suppléments',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ],
             ),
           ),
-          IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+          InkWell(
+            onTap: () => Navigator.of(context).pop(),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 18),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildGroup(CustomizationGroup group) {
-    final selected = _selections[group.name] ?? [];
+  Widget _buildBody() {
+    final item = widget.item;
+    var sectionNumber = 0;
+
+    // Filter out 'Accompagnement' and duplicate 'Ingrédient' groups
+    final groups = item.customizationGroups.where((g) {
+      final name = g.name.toLowerCase();
+      return !name.contains('accompagnement') &&
+          !name.contains('ingrédient') &&
+          !name.contains('ingredient');
+    }).toList();
+
+    // Aggregate ingredients
+    final ingredientGroup =
+        item.customizationGroups.cast<CustomizationGroup?>().firstWhere(
+              (g) =>
+                  g != null &&
+                  (g.name.toLowerCase().contains('ingrédient') ||
+                      g.name.toLowerCase().contains('ingredient')),
+              orElse: () => null,
+            );
+
+    final Set<String> allIngredients = {
+      ...item.ingredients,
+      if (ingredientGroup != null)
+        ...ingredientGroup.options.map((o) =>
+            o.label.replaceFirst(RegExp(r'^Sans\s+', caseSensitive: false), '')),
+    };
+
+    if (allIngredients.isEmpty) {
+      allIngredients.addAll(['Oignon', 'Tomate', 'Salade', 'Cornichon']);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                group.name.toUpperCase(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ),
-            if (group.isRequired)
-              const Padding(
-                padding: EdgeInsets.only(left: 8),
-                child: Text(
-                  'OBLIGATOIRE',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.danger,
-                  ),
-                ),
-              ),
-            if (!group.isSingle)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(
-                  '${selected.length} sélectionnée${selected.length > 1 ? 's' : ''}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.success,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: group.options.map((option) {
-            final isSelected = selected.any((o) => o.label == option.label);
-            return _optionChip(group, option, isSelected);
-          }).toList(),
-        ),
+        for (final group in groups) ...[
+          _buildGroup(group, ++sectionNumber),
+          const SizedBox(height: 20),
+        ],
+        _buildIngredientsSection(allIngredients.toList(), ++sectionNumber),
       ],
     );
   }
 
-  Widget _optionChip(
+  Widget _buildGroup(CustomizationGroup group, int number) {
+    final selected = _selections[group.name] ?? [];
+    final isSupplements = group.name.toLowerCase().contains('suppl') ||
+        group.name.toLowerCase().contains('extra') ||
+        (!group.isRequired &&
+            group.options.isNotEmpty &&
+            group.options.every((o) => o.priceModifier > 0));
+
+    final isCuisson = group.name.toLowerCase().contains('cuisson') ||
+        (group.isSingle &&
+            group.isRequired &&
+            group.options.length <= 3 &&
+            group.options.every((o) => o.priceModifier == 0));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildGroupHeader(group, number, selected),
+        const SizedBox(height: 10),
+        if (isSupplements)
+          _buildSupplementsRow(group, selected)
+        else if (isCuisson)
+          _buildCuissonRow(group, selected)
+        else
+          _buildSauceRow(group, selected),
+      ],
+    );
+  }
+
+  Widget _buildGroupHeader(CustomizationGroup group, int number,
+      List<CustomizationOption> selected) {
+    final selectedLabel = selected.isEmpty ? null : selected.first.label;
+
+    Widget? badgeOrSubtitle;
+    if (group.isRequired && group.isSingle) {
+      badgeOrSubtitle = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3E0),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'OBLIGATOIRE (1 CHOIX)',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFFE65100),
+            letterSpacing: 0.2,
+          ),
+        ),
+      );
+    } else if (!group.isSingle && group.minChoices > 0) {
+      final text = group.minChoices == group.maxChoices
+          ? '(${group.minChoices} choix possible${group.minChoices > 1 ? 's' : ''})'
+          : '(${group.minChoices} à ${group.maxChoices} choix possibles)';
+      badgeOrSubtitle = Text(
+        text,
+        style: const TextStyle(
+          fontSize: 11,
+          color: AppColors.textMuted,
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
+
+    Widget? rightWidget;
+    if (group.isRequired && group.isSingle && selectedLabel != null) {
+      rightWidget = Text(
+        'Sélectionné : $selectedLabel',
+        style: const TextStyle(
+          fontSize: 11,
+          color: AppColors.textMuted,
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    } else if (!group.isSingle &&
+        selected.isNotEmpty &&
+        !group.name.toLowerCase().contains('suppl') &&
+        !group.name.toLowerCase().contains('extra')) {
+      rightWidget = Text(
+        '${selected.length} sélectionnée${selected.length > 1 ? 's' : ''}',
+        style: const TextStyle(
+          fontSize: 11,
+          color: AppColors.success,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 14,
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            color: AppColors.brandDark,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Text(
+          '$number. ${group.name.toUpperCase()}',
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 13,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        if (badgeOrSubtitle != null) ...[
+          const SizedBox(width: 8),
+          badgeOrSubtitle,
+        ],
+        const Spacer(),
+        if (rightWidget != null) rightWidget,
+      ],
+    );
+  }
+
+  /// 1. Cuisson Row
+  Widget _buildCuissonRow(
+      CustomizationGroup group, List<CustomizationOption> selected) {
+    return _buildVerticalOptionsGrid(
+      itemCount: group.options.length,
+      minItemWidth: 140,
+      itemHeight: 48,
+      maxHeight: 110,
+      children: group.options.map((option) {
+        final isSelected = selected.any((o) => o.label == option.label);
+        return _buildCuissonCard(group, option, isSelected);
+      }).toList(),
+    );
+  }
+
+  Widget _buildCuissonCard(
       CustomizationGroup group, CustomizationOption option, bool isSelected) {
     final disabled = !option.isAvailable;
     return InkWell(
       onTap: disabled ? null : () => _toggleOption(group, option),
       borderRadius: BorderRadius.circular(10),
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 120),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 48,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: disabled
               ? AppColors.menuTileDisabled
               : isSelected
                   ? AppColors.brandDark
-                  : AppColors.background,
+                  : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected ? AppColors.gold : AppColors.border,
             width: isSelected ? 2 : 1,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Flexible(
-                  child: Text(
+            Text(
+              option.label,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: disabled
+                    ? AppColors.textMuted
+                    : isSelected
+                        ? AppColors.gold
+                        : AppColors.textPrimary,
+              ),
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.check,
+                size: 16,
+                color: AppColors.gold,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 2. Choix de la sauce (Larger container cards, scrolls up to down if extra elements)
+  Widget _buildSauceRow(
+      CustomizationGroup group, List<CustomizationOption> selected) {
+    return _buildVerticalOptionsGrid(
+      itemCount: group.options.length,
+      minItemWidth: 115,
+      itemHeight: 58,
+      maxHeight: 135,
+      children: group.options.map((option) {
+        final isSelected = selected.any((o) => o.label == option.label);
+        return _buildSauceCard(group, option, isSelected);
+      }).toList(),
+    );
+  }
+
+  Widget _buildSauceCard(
+      CustomizationGroup group, CustomizationOption option, bool isSelected) {
+    final disabled = !option.isAvailable;
+
+    String? subtitle;
+    try {
+      final dynamic dyn = option;
+      final desc = dyn.description ?? dyn.subtitle ?? dyn.sublabel;
+      if (desc != null && desc.toString().trim().isNotEmpty) {
+        subtitle = desc.toString().trim();
+      }
+    } catch (_) {}
+
+    if (subtitle == null) {
+      if (option.priceModifier != 0) {
+        subtitle =
+            '${option.priceModifier > 0 ? '+' : ''}${_money(option.priceModifier)}';
+      } else if (option.isDefault) {
+        subtitle = isSelected ? 'Coché' : 'Inclus';
+      } else if (isSelected) {
+        subtitle = 'Coché';
+      }
+    } else if (isSelected) {
+      subtitle = 'Coché';
+    }
+
+    return InkWell(
+      onTap: disabled ? null : () => _toggleOption(group, option),
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 58,
+        decoration: BoxDecoration(
+          color: disabled
+              ? AppColors.menuTileDisabled
+              : isSelected
+                  ? const Color(0xFFEBF7EE)
+                  : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppColors.success : AppColors.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Stack(
+          children: [
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
                     option.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
                       color: disabled
                           ? AppColors.textMuted
                           : isSelected
-                              ? Colors.white
+                              ? AppColors.success
                               : AppColors.textPrimary,
                     ),
                   ),
-                ),
-                if (isSelected) ...[
-                  const SizedBox(width: 6),
-                  const Icon(Icons.check_circle, size: 14, color: AppColors.gold),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color:
+                            isSelected ? AppColors.success : AppColors.textMuted,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-            if (option.priceModifier != 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  '${option.priceModifier > 0 ? '+' : ''}${option.priceModifier.toStringAsFixed(2).replaceAll('.', ',')} €',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected ? AppColors.gold : AppColors.textSecondary,
-                  ),
-                ),
-              )
-            else if (option.isDefault)
-              const Padding(
-                padding: EdgeInsets.only(top: 2),
-                child: Text(
-                  'Inclus',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.success,
-                    fontWeight: FontWeight.w600,
+            if (isSelected)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: AppColors.gold,
+                    shape: BoxShape.circle,
                   ),
                 ),
               ),
@@ -338,127 +708,304 @@ class _CustomizationModalState extends State<CustomizationModal> {
     );
   }
 
-  Widget _buildIngredientsSection(MenuItem item) {
+  /// 3. Suppléments & Extras (Larger container cards, scrolls up to down if extra elements)
+  Widget _buildSupplementsRow(
+      CustomizationGroup group, List<CustomizationOption> selected) {
+    return _buildVerticalOptionsGrid(
+      itemCount: group.options.length,
+      minItemWidth: 140,
+      itemHeight: 58,
+      maxHeight: 135,
+      children: group.options.map((option) {
+        final isSelected = selected.any((o) => o.label == option.label);
+        return _buildSupplementCard(group, option, isSelected);
+      }).toList(),
+    );
+  }
+
+  Widget _buildSupplementCard(
+      CustomizationGroup group, CustomizationOption option, bool isSelected) {
+    final disabled = !option.isAvailable;
+
+    return InkWell(
+      onTap: disabled ? null : () => _toggleOption(group, option),
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 58,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: disabled
+              ? AppColors.menuTileDisabled
+              : isSelected
+                  ? const Color(0xFFEBF7EE)
+                  : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppColors.success : AppColors.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      option.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: disabled
+                            ? AppColors.textMuted
+                            : isSelected
+                                ? AppColors.success
+                                : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (isSelected) ...[
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.check_circle,
+                      size: 14,
+                      color: AppColors.success,
+                    ),
+                  ],
+                ],
+              ),
+              if (option.priceModifier != 0) ...[
+                const SizedBox(height: 2),
+                Text(
+                  '${option.priceModifier > 0 ? '+' : ''}${_money(option.priceModifier)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? AppColors.success : AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 4. Ingrédients à retirer (Larger container cards in RED, scrolls up to down if extra elements)
+  Widget _buildIngredientsSection(List<String> ingredients, int number) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'INGRÉDIENTS À RETIRER',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 13,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: item.ingredients.map((ingredient) {
-            final removed = _removedIngredients.contains(ingredient);
-            return InkWell(
-              onTap: () => _toggleIngredient(ingredient),
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: removed
-                      ? AppColors.danger.withValues(alpha: 0.1)
-                      : AppColors.background,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: removed ? AppColors.danger : AppColors.border,
-                  ),
-                ),
-                child: Text(
-                  'Sans $ingredient',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                    color: removed ? AppColors.danger : AppColors.textPrimary,
-                  ),
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 14,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: AppColors.danger,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Text(
+              '$number. INGRÉDIENTS À RETIRER',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              '(Sélectionner pour exclure)',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textMuted,
+              ),
+            ),
+            const Spacer(),
+            if (_removedIngredients.isNotEmpty)
+              Text(
+                '${_removedIngredients.length} retiré${_removedIngredients.length > 1 ? 's' : ''}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.danger,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            );
+          ],
+        ),
+        const SizedBox(height: 10),
+        _buildVerticalOptionsGrid(
+          itemCount: ingredients.length,
+          minItemWidth: 140,
+          itemHeight: 58,
+          maxHeight: 135,
+          children: ingredients.map((ingredient) {
+            final removed = _removedIngredients.contains(ingredient);
+            return _buildIngredientCard(ingredient, removed);
           }).toList(),
         ),
       ],
     );
   }
 
-  Widget _buildFooter() {
+  Widget _buildIngredientCard(String ingredient, bool removed) {
+    return InkWell(
+      onTap: () => _toggleIngredient(ingredient),
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 58,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: removed ? const Color(0xFFFFF5F5) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: removed ? AppColors.danger : AppColors.border,
+            width: removed ? 2 : 1,
+          ),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  'Sans $ingredient',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: removed ? FontWeight.w800 : FontWeight.w700,
+                    fontSize: 12,
+                    color: removed ? AppColors.danger : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (removed) ...[
+                const SizedBox(width: 5),
+                const Icon(
+                  Icons.check_circle,
+                  size: 15,
+                  color: AppColors.danger,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooter(bool isNarrow) {
+    final validateButton = ElevatedButton.icon(
+      onPressed: _isValid ? _validate : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.success,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: AppColors.success.withValues(alpha: 0.5),
+        disabledForegroundColor: Colors.white70,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      icon: const Icon(Icons.check, size: 18),
+      label: const Text(
+        'VALIDER & AJOUTER AU TICKET',
+        style: TextStyle(
+            fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.3),
+      ),
+    );
+
+    final cancelButton = OutlinedButton(
+      onPressed: () => Navigator.of(context).pop(),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.textPrimary,
+        side: const BorderSide(color: AppColors.border),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      child: const Text(
+        'Annuler',
+        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+      ),
+    );
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: const BoxDecoration(
-        color: AppColors.surface,
+        color: Colors.white,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
+          _qtyButton(Icons.remove, () {
+            if (_quantity > 1) setState(() => _quantity--);
+          }),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              '$_quantity',
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
+          _qtyButton(Icons.add, () => setState(() => _quantity++)),
+          const SizedBox(width: 20),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _qtyButton(Icons.remove, () {
-                if (_quantity > 1) setState(() => _quantity--);
-              }),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  '$_quantity',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              const Text(
+                'PRIX UNITAIRE CALCULÉ',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textMuted,
+                  letterSpacing: 0.5,
                 ),
               ),
-              _qtyButton(Icons.add, () => setState(() => _quantity++)),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Text(
+                    _money(_lineTotal),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (_extrasTotal != 0) ...[
+                    const SizedBox(width: 8),
                     Text(
-                      '${_lineTotal.toStringAsFixed(2).replaceAll('.', ',')} €',
+                      '(+${_money(_extrasTotal * _quantity)} suppléments)',
                       style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.success,
                       ),
                     ),
-                    if (_extrasTotal != 0)
-                      Text(
-                        '(+${_extrasTotal.toStringAsFixed(2).replaceAll('.', ',')} € suppléments)',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-                      ),
                   ],
-                ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Annuler'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton.icon(
-                  onPressed: _isValid ? _validate : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text(
-                    'VALIDER & AJOUTER AU TICKET',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          const Spacer(),
+          cancelButton,
+          const SizedBox(width: 12),
+          validateButton,
         ],
       ),
     );
@@ -469,14 +1016,14 @@ class _CustomizationModalState extends State<CustomizationModal> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        width: 34,
-        height: 34,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
-          color: AppColors.background,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.border),
         ),
-        child: Icon(icon, size: 16),
+        child: Icon(icon, size: 16, color: AppColors.textPrimary),
       ),
     );
   }
