@@ -6,7 +6,9 @@ import '../widgets/pos/category_sidebar_item.dart';
 import '../widgets/pos/menu_item_tile.dart';
 import '../widgets/pos/ticket_line_tile.dart';
 import '../widgets/pos/customization_modal.dart';
+import '../services/api_client.dart' show ApiException;
 import '../services/menu_service.dart';
+import '../services/order_service.dart';
 import '../widgets/pos/encaissement_modal.dart';
 
 /// The POS / register screen ("SprintKitchen POS - Caisse Principale").
@@ -33,6 +35,7 @@ class _PosScreenState extends State<PosScreen> {
   int? _selectedLineIndex = 0;
 
   final MenuService _menuService = MenuService();
+  final OrderService _orderService = OrderService();
   List<MenuCategory> _categories = [];
   bool _loading = true;
   String? _error;
@@ -40,9 +43,21 @@ class _PosScreenState extends State<PosScreen> {
   final List<TicketLine> _ticketLines = [];
   final ScrollController _gridScrollController = ScrollController();
 
+  /// Current ticket number (starts from the widget value, then follows the
+  /// number returned by the server after each paid order).
+  late String _ticketNumber;
+
+  /// True while an order/payment request is in flight (blocks double taps).
+  bool _submitting = false;
+
+  /// Order created on the server but not yet paid (kept so a retry after a
+  /// payment failure does not create a duplicate order).
+  CreatedOrder? _pendingOrder;
+
   @override
   void initState() {
     super.initState();
+    _ticketNumber = widget.ticketNumber;
     _loadMenu();
   }
 
@@ -136,35 +151,133 @@ class _PosScreenState extends State<PosScreen> {
     });
   }
 
+  // ───────────────────────── Encaissement flow ─────────────────────────
+
   Future<void> _openEncaissement() async {
+    if (_submitting) return;
     final result = await showDialog<EncaissementResult>(
       context: context,
       barrierColor: Colors.transparent,
       builder: (_) => EncaissementModal(
         total: _total,
-        ticketNumber: widget.ticketNumber,
+        ticketNumber: _ticketNumber,
         posteLabel: widget.posteLabel,
       ),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
+    await _submitOrder(result);
+  }
 
-    // TODO: next step — POST /api/orders with items + this payment info,
-    // then POST /api/payments, then reset the ticket / bump ticketNumber.
+  /// Runs order → payment, retrying on demand. The ticket is only cleared
+  /// after BOTH calls succeed.
+  Future<void> _submitOrder(EncaissementResult result) async {
+    setState(() => _submitting = true);
+    try {
+      while (true) {
+        final failure = await _attempt(result);
+        if (failure == null) return; // success handled in _attempt
+        if (!mounted) return;
+        final retry = await _showPaymentError(failure);
+        if (!retry) {
+          // Cashier backed out: forget the pending order so an edited ticket
+          // gets a fresh order instead of reusing a stale one.
+          _pendingOrder = null;
+          return;
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// One full attempt. Returns null on success, or the failure.
+  Future<ApiException?> _attempt(EncaissementResult result) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    );
+
+    ApiException? failure;
+    CreatedOrder? paid;
+    try {
+      // Reuse the order if a previous attempt created it but payment failed.
+      _pendingOrder ??= await _orderService.createOrder(
+        lines: _ticketLines,
+        orderType: _orderType,
+        expectedTotal: _total,
+      );
+      await _orderService.createPayment(
+        orderId: _pendingOrder!.id,
+        method: result.method,
+        amountReceived: result.amountReceived,
+        printReceipt: result.printReceipt,
+      );
+      paid = _pendingOrder;
+      _pendingOrder = null;
+    } on ApiException catch (e) {
+      failure = e;
+    } catch (e) {
+      failure = ApiException(e.toString());
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop(); // loader
+    }
+
+    if (failure != null || !mounted) return failure;
+
     setState(() {
       _ticketLines.clear();
       _selectedLineIndex = null;
+      _ticketNumber = _nextTicketNumber(paid!.ticketNumber);
     });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
           result.method == PaymentMethod.especes
               ? 'Paiement espèces enregistré — rendu ${result.change.toStringAsFixed(2).replaceAll('.', ',')} €'
               : 'Paiement carte enregistré',
-        )),
-      );
-    }
+        ),
+      ),
+    );
+    return null;
   }
+
+  Future<bool> _showPaymentError(ApiException e) async {
+    final orderNote = _pendingOrder != null
+        ? '\n\nLa commande est créée : seul le paiement reste à enregistrer.'
+        : '';
+    final retry = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Encaissement non enregistré'),
+        content: Text('${e.message}\n\nLe ticket est conservé.$orderNote'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Réessayer'),
+          ),
+        ],
+      ),
+    );
+    return retry ?? false;
+  }
+
+  /// "0000123" -> "0000124". The server's counter is global, so with several
+  /// registers this is only a preview; the real number comes from the server.
+  String _nextTicketNumber(String served) {
+    final n = int.tryParse(served);
+    return n == null ? _ticketNumber : (n + 1).toString().padLeft(7, '0');
+  }
+
+  // ───────────────────────────── UI ─────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -414,7 +527,7 @@ class _PosScreenState extends State<PosScreen> {
             child: Row(
               children: [
                 Text(
-                  'Ticket N° ${widget.ticketNumber}',
+                  'Ticket N° $_ticketNumber',
                   style: const TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
@@ -616,7 +729,9 @@ class _PosScreenState extends State<PosScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: _ticketLines.isEmpty ? null : _openEncaissement,
+                onPressed: (_ticketLines.isEmpty || _submitting)
+                    ? null
+                    : _openEncaissement,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF059669),
                   disabledBackgroundColor:
