@@ -156,8 +156,8 @@ class _EncaissementModalState extends State<EncaissementModal> {
             behavior: HitTestBehavior.opaque,
             onTap: () => Navigator.of(context).maybePop(),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: Container(color: Colors.black.withValues(alpha: 0.35)),
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(color: Colors.black.withValues(alpha: 0.55)),
             ),
           ),
         ),
@@ -171,44 +171,61 @@ class _EncaissementModalState extends State<EncaissementModal> {
                 maxWidth: dialogWidth,
                 maxHeight: dialogHeight,
               ),
-              child: Material(
-                color: AppColors.surface,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                clipBehavior: Clip.antiAlias,
-                elevation: 24,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildHeader(isNarrow),
-                    Flexible(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.all(isNarrow ? 14 : 20),
-                        child: isNarrow
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  _buildPaymentMethods(),
-                                  const SizedBox(height: 20),
-                                  _buildAmountPanel(isNarrow),
-                                ],
-                              )
-                            : Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ConstrainedBox(
-                                    constraints:
-                                        const BoxConstraints(maxWidth: 300),
-                                    child: _buildPaymentMethods(),
-                                  ),
-                                  const SizedBox(width: 24),
-                                  Expanded(
-                                      child: _buildAmountPanel(isNarrow)),
-                                ],
-                              ),
+                clipBehavior: Clip.hardEdge,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        blurRadius: 40,
+                        offset: const Offset(0, 16),
                       ),
+                    ],
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildHeader(isNarrow),
+                        Flexible(
+                          child: SingleChildScrollView(
+                            padding: EdgeInsets.all(isNarrow ? 14 : 20),
+                            child: isNarrow
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _buildPaymentMethods(),
+                                      const SizedBox(height: 20),
+                                      _buildAmountPanel(isNarrow),
+                                    ],
+                                  )
+                                : Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                            maxWidth: 300),
+                                        child: _buildPaymentMethods(),
+                                      ),
+                                      const SizedBox(width: 24),
+                                      Expanded(
+                                          child:
+                                              _buildAmountPanel(isNarrow)),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                        _buildFooter(isNarrow),
+                      ],
                     ),
-                    _buildFooter(isNarrow),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -221,7 +238,13 @@ class _EncaissementModalState extends State<EncaissementModal> {
   Widget _buildHeader(bool isNarrow) {
     return Container(
       padding: EdgeInsets.fromLTRB(isNarrow ? 14 : 20, 16, 12, 16),
-      color: AppColors.brandDark,
+      decoration: const BoxDecoration(
+        color: AppColors.brandDark,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(16),
+          topRight: Radius.circular(16),
+        ),
+      ),
       child: Row(
         children: [
           Container(
@@ -266,8 +289,9 @@ class _EncaissementModalState extends State<EncaissementModal> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.38),
+                color: AppColors.brandDarkHover,
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.goldLight, width: 2),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -283,10 +307,13 @@ class _EncaissementModalState extends State<EncaissementModal> {
                   ),
                   Text(
                     _fmtEuros(widget.total),
-                    style: const TextStyle(
-                      fontSize: 19,
+                    textAlign: TextAlign.right,
+                    style: GoogleFonts.bebasNeue(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w400,
+                      height: 32 / 24,
+                      letterSpacing: 1.2,
                       color: AppColors.gold,
-                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
@@ -296,7 +323,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
           ],
           Container(
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.38),
+              color: AppColors.brandDarkHover,
               borderRadius: BorderRadius.circular(10),
             ),
             child: IconButton(
@@ -358,7 +385,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
           color: selected ? AppColors.brandDark : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? AppColors.gold : AppColors.border,
+            color: selected ? AppColors.goldLight : AppColors.border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -438,8 +465,9 @@ class _EncaissementModalState extends State<EncaissementModal> {
                   _amountBox(
                     'MONTANT REÇU',
                     _fmt(_receivedCents),
-                    insufficient ? AppColors.danger : AppColors.textPrimary,
+                    insufficient ? AppColors.danger : AppColors.brandDark,
                     highlighted: true,
+                    labelColor: insufficient ? AppColors.danger : AppColors.brandDark,
                   ),
                   const SizedBox(height: 8),
                   _amountBox(
@@ -447,7 +475,8 @@ class _EncaissementModalState extends State<EncaissementModal> {
                     _method == PaymentMethod.carte ? _fmt(0) : _fmtEuros(_change),
                     AppColors.success,
                     borderColor: AppColors.success,
-                    fillColor: const Color(0xFFEAFBF1),
+                    fillColor: AppColors.successSoft,
+                    labelColor: AppColors.success,
                   ),
                 ],
               )
@@ -459,8 +488,9 @@ class _EncaissementModalState extends State<EncaissementModal> {
                     child: _amountBox(
                       'MONTANT REÇU',
                       _fmt(_receivedCents),
-                      insufficient ? AppColors.danger : AppColors.textPrimary,
+                      insufficient ? AppColors.danger : AppColors.brandDark,
                       highlighted: true,
+                      labelColor: insufficient ? AppColors.danger : AppColors.brandDark,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -470,7 +500,8 @@ class _EncaissementModalState extends State<EncaissementModal> {
                       _method == PaymentMethod.carte ? _fmt(0) : _fmtEuros(_change),
                       AppColors.success,
                       borderColor: AppColors.success,
-                      fillColor: const Color(0xFFEAFBF1),
+                      fillColor: AppColors.successSoft,
+                      labelColor: AppColors.success,
                     ),
                   ),
                 ],
@@ -550,6 +581,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
     bool highlighted = false,
     Color? borderColor,
     Color? fillColor,
+    Color? labelColor,
   }) {
     final effectiveBorderColor =
         borderColor ?? (highlighted ? AppColors.brandDark : AppColors.border);
@@ -567,9 +599,25 @@ class _EncaissementModalState extends State<EncaissementModal> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textMuted)),
+          Text(
+            label,
+            style: GoogleFonts.openSans(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              height: 15 / 10,
+              color: labelColor ?? AppColors.textMuted,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: valueColor)),
+          Text(
+            value,
+            style: GoogleFonts.bebasNeue(
+              fontSize: 24,
+              fontWeight: FontWeight.w400,
+              height: 32 / 24,
+              color: valueColor,
+            ),
+          ),
         ],
       ),
     );
@@ -591,7 +639,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
                   : AppColors.surface,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected ? AppColors.gold : AppColors.border,
+            color: selected ? AppColors.goldLight : AppColors.border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -604,7 +652,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
             color: disabled
                 ? AppColors.textMuted
                 : selected
-                    ? Colors.white
+                    ? AppColors.gold
                     : AppColors.textPrimary,
           ),
         ),
@@ -660,9 +708,11 @@ class _EncaissementModalState extends State<EncaissementModal> {
         ),
         child: Text(
           label,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.openSans(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            height: 28 / 18,
             color: disabled
                 ? AppColors.textMuted
                 : isClear

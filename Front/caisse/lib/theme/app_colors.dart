@@ -18,9 +18,11 @@ class AppColors {
   static const Color brandDarkHover = Color(0xFF6B4530); // lighter brown hover
 
   static const Color gold = Color(0xFFFACC15); // primary accent — yellow-400
+  static const Color goldLight = Color(0xFFFDE047); // lighter selected-border glow — yellow-300
   static const Color goldSoft = Color(0xFFFCEFC9); // badge background
 
-  static const Color success = Color(0xFF3FB56D);
+  static const Color success = Color(0xFF059669); // emerald-600
+  static const Color successSoft = Color(0xFFECFDF5); // emerald-50 light fill
   static const Color danger = Color(0xFFD9534F);
   static const Color dangerSoft = Color(0xFFFBEAEA);
 
