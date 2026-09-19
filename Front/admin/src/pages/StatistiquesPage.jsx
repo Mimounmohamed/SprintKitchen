@@ -330,6 +330,115 @@ export default function StatistiquesPage() {
   const byChannel = summary?.byChannel || [];
   const paymentMethods = summary?.paymentMethods || [];
 
+  // ── Rapport Z modal state ──────────────────────────────────────────────────
+  const [showRZ, setShowRZ] = React.useState(false);
+  const [rzData, setRzData] = React.useState(null);
+  const [rzLoading, setRzLoading] = React.useState(false);
+
+  const openRapportZ = () => {
+    setShowRZ(true);
+    if (rzData) return; // already loaded
+    setRzLoading(true);
+    const range = getPeriodRange(period);
+    statsService.getRapportZ({ from: range.from, to: range.to })
+      .then(res => setRzData(res.data.data))
+      .catch(() => setRzData(null))
+      .finally(() => setRzLoading(false));
+  };
+
+  // ── PDF Export ─────────────────────────────────────────────────────────────
+  const exportPDF = () => {
+    if (!summary) return;
+    const fmt = (n) => (n || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const date = new Date().toLocaleString("fr-FR");
+
+    const topRows = topProducts.map(p =>
+      `<tr><td>${p.name}</td><td>${p.qty}</td><td>${fmt(p.revenue)} DA</td><td>${ca ? ((p.revenue/ca)*100).toFixed(1) : 0}%</td></tr>`
+    ).join("");
+
+    const channelRows = byChannel.map(c =>
+      `<tr><td>${c._id || "Inconnu"}</td><td>${c.count}</td><td>${fmt(c.revenue)} DA</td></tr>`
+    ).join("");
+
+    const payRows = paymentMethods.map(p =>
+      `<tr><td>${p._id || "Inconnu"}</td><td>${p.count}</td><td>${fmt(p.total)} DA</td></tr>`
+    ).join("");
+
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/>
+    <title>Rapport SprintKitchen — ${period}</title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #1C1917; padding: 32px; }
+      .header { background: #2E2117; color: #F5F0E6; padding: 20px 24px; border-radius: 10px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+      .header h1 { font-size: 22px; letter-spacing: 1px; }
+      .header .sub { font-size: 10px; color: #F2B705; font-weight: 700; letter-spacing: 2px; margin-bottom: 4px; }
+      .header .meta { font-size: 11px; color: rgba(245,240,230,0.6); margin-top: 6px; }
+      .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+      .kpi { background: #F5F4F0; border-radius: 8px; padding: 14px 16px; }
+      .kpi .label { font-size: 10px; font-weight: 700; color: #8B8378; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+      .kpi .value { font-size: 18px; font-weight: 800; color: #1C1917; }
+      .kpi .value.warn { color: #E0533D; }
+      .section { margin-bottom: 22px; }
+      .section-title { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #8B8378; text-transform: uppercase; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #E7E4DD; }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: left; font-size: 10px; font-weight: 700; color: #8B8378; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px; border-bottom: 1px solid #E7E4DD; }
+      td { padding: 9px 10px; border-bottom: 1px solid #F0EDE8; font-size: 12px; }
+      tr:last-child td { border-bottom: none; }
+      .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #E7E4DD; font-size: 10px; color: #8B8378; display: flex; justify-content: space-between; }
+      @media print { body { padding: 20px; } }
+    </style></head><body>
+      <div class="header">
+        <div>
+          <div class="sub">RAPPORT STATISTIQUES</div>
+          <h1>SPRINTKITCHEN</h1>
+          <div class="meta">Période : ${period} &nbsp;·&nbsp; Exporté le ${date}</div>
+        </div>
+        <div style="text-align:right; color:#F2B705; font-weight:800; font-size:14px;">
+          ${fmt(ca)} DA<br/><span style="font-size:10px;color:rgba(245,240,230,0.6);font-weight:400;">${tickets} tickets</span>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="label">Chiffre d'affaires</div><div class="value">${fmt(ca)} DA</div></div>
+        <div class="kpi"><div class="label">Tickets clôturés</div><div class="value">${tickets}</div></div>
+        <div class="kpi"><div class="label">Panier moyen</div><div class="value">${fmt(panier)} DA</div></div>
+        <div class="kpi"><div class="label">Commandes annulées</div><div class="value ${rz.cancelledCount > 0 ? 'warn' : ''}">${rz.cancelledCount || 0}</div></div>
+      </div>
+
+      ${topProducts.length ? `
+      <div class="section">
+        <div class="section-title">Top Produits</div>
+        <table><thead><tr><th>Produit</th><th>Quantité</th><th>CA</th><th>% CA</th></tr></thead>
+        <tbody>${topRows}</tbody></table>
+      </div>` : ""}
+
+      ${byChannel.length ? `
+      <div class="section">
+        <div class="section-title">Par Canal de Vente</div>
+        <table><thead><tr><th>Canal</th><th>Commandes</th><th>CA</th></tr></thead>
+        <tbody>${channelRows}</tbody></table>
+      </div>` : ""}
+
+      ${paymentMethods.length ? `
+      <div class="section">
+        <div class="section-title">Moyens de Paiement</div>
+        <table><thead><tr><th>Mode</th><th>Transactions</th><th>Montant</th></tr></thead>
+        <tbody>${payRows}</tbody></table>
+      </div>` : ""}
+
+      <div class="footer">
+        <span>SprintKitchen — Rapport généré automatiquement</span>
+        <span>${date}</span>
+      </div>
+    </body></html>`;
+
+    const w = window.open("", "_blank", "width=900,height=700");
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 500);
+  };
+
   const pad = mobile ? "14px 14px" : "24px 32px 40px";
 
   const spinner = (
@@ -384,14 +493,14 @@ export default function StatistiquesPage() {
 
         {/* Action buttons */}
         <div style={{ display: "flex", flexDirection: mobile ? "column" : "row", gap: 10, marginBottom: 20 }}>
-          <button style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "13px 20px", borderRadius: 11, border: "none", background: "#FACC15", color: "#583926", cursor: "pointer", fontFamily: "inherit", flex: mobile ? undefined : 1 }}>
+          <button onClick={openRapportZ} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "13px 20px", borderRadius: 11, border: "none", background: "#FACC15", color: "#583926", cursor: "pointer", fontFamily: "inherit", flex: mobile ? undefined : 1 }}>
             <Printer size={15} />
             <span style={{ color: "#583926", textAlign: "center", fontFamily: "Inter,sans-serif", fontSize: 12, fontWeight: 700, lineHeight: "16px", letterSpacing: "0.6px", textTransform: "uppercase" }}>
               CLÔTURE DE CAISSE
             </span>
           </button>
-          <button style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 20px", borderRadius: 11, border: `1px solid ${C.border}`, background: C.cardBg, color: C.ink, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
-            <Download size={14} /> Exporter (.CSV)
+          <button onClick={exportPDF} disabled={!summary || loading} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 20px", borderRadius: 11, border: `1px solid ${C.border}`, background: C.cardBg, color: !summary || loading ? C.muted : C.ink, fontSize: 13, fontWeight: 600, cursor: !summary || loading ? "not-allowed" : "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+            <Download size={14} /> Exporter (.PDF)
           </button>
         </div>
 
@@ -484,6 +593,74 @@ export default function StatistiquesPage() {
           <Circle size={6} fill={C.green} color={C.green} /> Connecté
         </span>
       </footer>
+
+      {/* ── Rapport Z Modal ─────────────────────────────────────────────── */}
+      {showRZ && (
+        <div onClick={() => setShowRZ(false)} style={{
+          position:"fixed", inset:0, background:"rgba(28,25,23,0.55)",
+          display:"flex", alignItems:"center", justifyContent:"center",
+          zIndex:999, padding:16,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background:"#fff", borderRadius:16, width:"100%", maxWidth:480,
+            maxHeight:"90vh", overflowY:"auto",
+            boxShadow:"0 20px 60px rgba(28,25,23,0.18)",
+          }}>
+            <div style={{ background:"#2E2117", padding:"20px 24px", borderRadius:"16px 16px 0 0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:"#F2B705", letterSpacing:"0.08em", marginBottom:4 }}>CLÔTURE DE CAISSE</div>
+                <div style={{ fontSize:18, fontWeight:800, color:"#F5F0E6", fontFamily:"'Bebas Neue',sans-serif", letterSpacing:"0.03em" }}>RAPPORT Z — {period}</div>
+              </div>
+              <button onClick={() => setShowRZ(false)} style={{ background:"rgba(255,255,255,0.1)", border:"none", borderRadius:8, cursor:"pointer", color:"#F5F0E6", padding:"6px 10px", fontSize:16 }}>✕</button>
+            </div>
+
+            <div style={{ padding:"20px 24px", fontFamily:"'Inter',sans-serif" }}>
+              {rzLoading ? (
+                <div style={{ textAlign:"center", padding:"40px 0", color:"#8B8378" }}>Chargement du rapport…</div>
+              ) : !rzData ? (
+                <div style={{ textAlign:"center", padding:"40px 0", color:"#E0533D", fontWeight:600 }}>Aucune donnée disponible pour cette période.</div>
+              ) : (
+                <>
+                  {[
+                    ["Chiffre d'affaires", ((rzData.totalTTC||0).toLocaleString("fr-FR",{minimumFractionDigits:2})) + " DA", false],
+                    ["Tickets clôturés",   rzData.ticketCount||0, false],
+                    ["Panier moyen",       ((rzData.avgBasket||0).toLocaleString("fr-FR",{minimumFractionDigits:2})) + " DA", false],
+                    ["Commandes annulées", rzData.cancelledCount||0, rzData.cancelledCount > 0],
+                    ["Montant remboursé",  ((rzData.cancelledTotal||0).toLocaleString("fr-FR",{minimumFractionDigits:2})) + " DA", rzData.cancelledCount > 0],
+                  ].map(([label, value, warn]) => (
+                    <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"11px 0", borderBottom:"1px solid #F0EDE8" }}>
+                      <span style={{ fontSize:13, color:"#8B8378" }}>{label}</span>
+                      <span style={{ fontSize:14, fontWeight:700, color: warn ? "#E0533D" : "#1C1917" }}>{String(value)}</span>
+                    </div>
+                  ))}
+
+                  {rzData.paymentMethods?.length > 0 && (
+                    <>
+                      <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.06em", color:"#8B8378", marginTop:16, marginBottom:8 }}>MOYENS DE PAIEMENT</div>
+                      {rzData.paymentMethods.map(p => (
+                        <div key={p._id} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid #F0EDE8" }}>
+                          <span style={{ fontSize:13, color:"#1C1917", fontWeight:500 }}>{p._id || "Inconnu"}</span>
+                          <span style={{ fontSize:13, color:"#8B8378" }}>{p.count} ticket{p.count>1?"s":""} · <b style={{color:"#1C1917"}}>{(p.total||0).toLocaleString("fr-FR",{minimumFractionDigits:2})} DA</b></span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  <button onClick={() => window.print()} style={{
+                    marginTop:20, width:"100%", padding:"13px", borderRadius:10,
+                    border:"none", background:"#F2B705", color:"#2E2117",
+                    fontSize:13, fontWeight:800, letterSpacing:"0.05em",
+                    textTransform:"uppercase", cursor:"pointer", fontFamily:"inherit",
+                    display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                  }}>
+                    <Printer size={15}/> Imprimer le Rapport Z
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

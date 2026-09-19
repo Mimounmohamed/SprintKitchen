@@ -591,26 +591,6 @@ function CategoryModal({ category, onClose, onSave }) {
             2. Affichage &amp; Visibilité POS
           </div>
 
-          {/* Color swatches */}
-          <div style={{ background:"#F9F8F6", borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
-            <div style={{ fontSize:11, fontWeight:800, letterSpacing:"0.06em", color:C.ink, textTransform:"uppercase", marginBottom:4 }}>
-              Couleur sur les touches de caisse (pavé tactile)
-            </div>
-            <div style={{ fontSize:11.5, color:C.muted, marginBottom:12 }}>Teinte attribuée aux raccourcis d'articles sur les terminaux de commande.</div>
-            <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-              {POS_COLORS.map(col => (
-                <button key={col} onClick={() => set("color", col)} style={{
-                  width:38, height:38, borderRadius:"50%", background:col, border:"none",
-                  cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
-                  boxShadow: form.color===col ? `0 0 0 3px #fff, 0 0 0 5px ${col}` : "none",
-                  flexShrink:0,
-                }}>
-                  {form.color===col && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* ShowOnPOS toggle */}
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, padding:"14px 16px", background:"#F9F8F6", borderRadius:10 }}>
             <div>

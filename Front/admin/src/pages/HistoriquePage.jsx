@@ -87,6 +87,57 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
     }
   };
 
+  const printReceipt = (kitchenOnly = false) => {
+    const d = detail;
+    const date = new Date(d?.createdAt || order.date).toLocaleString("fr-FR");
+    const items = (d?.items || []).map(i =>
+      `<tr><td>${i.quantity}x ${i.productName}</td><td style="text-align:right">${(i.lineTotal||0).toLocaleString("fr-FR",{minimumFractionDigits:2})} DA</td></tr>`
+    ).join("");
+    const html = kitchenOnly ? `
+      <html><head><title>Bon Cuisine</title><style>
+        body{font-family:monospace;font-size:14px;width:280px;margin:0 auto;padding:10px}
+        h2{text-align:center;margin:0 0 8px} hr{border:1px dashed #000}
+        table{width:100%} td{padding:3px 0}
+      </style></head><body>
+        <h2>BON DE CUISINE</h2>
+        <p style="text-align:center;margin:0">Commande ${order.num} — ${date}</p>
+        <hr/><table>${items}</table><hr/>
+        <p style="text-align:center">MODE: ${order.mode?.toUpperCase()}</p>
+      </body></html>
+    ` : `
+      <html><head><title>Ticket ${order.num}</title><style>
+        body{font-family:monospace;font-size:13px;width:300px;margin:0 auto;padding:12px}
+        h2{text-align:center;margin:4px 0} .center{text-align:center} hr{border:1px dashed #999}
+        table{width:100%} td{padding:3px 0} .right{text-align:right} .bold{font-weight:bold}
+        .total td{font-size:15px;font-weight:bold;border-top:1px solid #000;padding-top:6px}
+      </style></head><body>
+        <h2>SPRINTKITCHEN</h2>
+        <p class="center" style="margin:0;font-size:11px">Votre restaurant fast-food</p>
+        <hr/>
+        <p class="center" style="margin:4px 0">Commande ${order.num}</p>
+        <p class="center" style="margin:0;font-size:11px">${date}</p>
+        <p class="center" style="margin:4px 0;font-size:11px">Mode: ${order.mode || ""} · ${paymentLabel || ""}</p>
+        <hr/>
+        <table>${items}</table>
+        <hr/>
+        <table>
+          <tr><td>Sous-total HT</td><td class="right">${((d?.totalHT||0)).toLocaleString("fr-FR",{minimumFractionDigits:2})} DA</td></tr>
+          <tr><td>TVA (10%)</td><td class="right">${((d?.totalTVA||0)).toLocaleString("fr-FR",{minimumFractionDigits:2})} DA</td></tr>
+          <tr class="total"><td>TOTAL TTC</td><td class="right">${((d?.totalTTC||0)).toLocaleString("fr-FR",{minimumFractionDigits:2})} DA</td></tr>
+        </table>
+        ${payment?.method === "especes" ? `<p class="center" style="font-size:11px">Espèces reçues · Rendu : ${(payment.change||0).toLocaleString("fr-FR",{minimumFractionDigits:2})} DA</p>` : ""}
+        <hr/>
+        <p class="center" style="font-size:12px;margin:8px 0">Merci de votre visite !</p>
+        <p class="center" style="font-size:10px;color:#666">SprintKitchen — Bon appétit</p>
+      </body></html>
+    `;
+    const w = window.open("", "_blank", "width=350,height=600");
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 400);
+  };
+
   return (
     <>
       <div onClick={onClose}
@@ -248,11 +299,11 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
 
         {/* Footer */}
         <div style={{ padding:"14px 20px",borderTop:`1px solid ${COLORS.border}`,background:COLORS.cardBg,display:"flex",flexDirection:"column",gap:10 }}>
-          <button style={{ width:"100%",padding:"13px",borderRadius:11,border:"none",background:COLORS.yellow,color:COLORS.brown,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10 }}>
+          <button onClick={() => printReceipt(false)} style={{ width:"100%",padding:"13px",borderRadius:11,border:"none",background:COLORS.yellow,color:COLORS.brown,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10 }}>
             <Printer size={16} /> IMPRIMER LE TICKET DE CAISSE
           </button>
           <div style={{ display:"flex",gap:10 }}>
-            <button style={{ flex:1,padding:"11px",borderRadius:10,border:`1px solid ${COLORS.border}`,background:COLORS.cardBg,color:COLORS.ink,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7 }}>
+            <button onClick={() => printReceipt(true)} style={{ flex:1,padding:"11px",borderRadius:10,border:`1px solid ${COLORS.border}`,background:COLORS.cardBg,color:COLORS.ink,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7 }}>
               <RotateCcw size={14} /> Réimprimer Bon Cuisine
             </button>
             <button onClick={handleRefundClick} style={{ flex:1,padding:"11px",borderRadius:10,border:`1px solid ${COLORS.redBg}`,background:COLORS.redBg,color:COLORS.red,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7 }}>
