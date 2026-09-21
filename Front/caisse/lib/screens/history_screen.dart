@@ -41,6 +41,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
   static const int _pageSize = 9;
   static const double _minTableWidth = 900;
 
+  // Table palette (Figma): stone neutrals + brand brown.
+  static const Color _ink = Color(0xFF1C1917); //        cells text
+  static const Color _stone700 = Color(0xFF44403C);
+  static const Color _stone600 = Color(0xFF57534E); //   headers, time
+  static const Color _stone500 = Color(0xFF78716C);
+  static const Color _ticketBrown = Color(0xFF583926); // #ticket number
+
   static const _tabs = [
     _Tab('en_attente', 'EN ATTENTE', 'commandes en attente'),
     _Tab('a_encaisser', 'À ENCAISSER', 'commandes à encaisser'),
@@ -187,6 +194,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // ─────────────────────────── formatting ───────────────────────────
 
+  /// Open Sans text style; [lineHeight] is in px (Figma) and converted to
+  /// Flutter's height multiplier.
+  TextStyle _os(
+    double size,
+    FontWeight weight,
+    Color color, {
+    double? lineHeight,
+    double? letterSpacing,
+    FontStyle? fontStyle,
+  }) =>
+      GoogleFonts.openSans(
+        fontSize: size,
+        fontWeight: weight,
+        color: color,
+        height: lineHeight == null ? null : lineHeight / size,
+        letterSpacing: letterSpacing,
+        fontStyle: fontStyle,
+      );
+
   String _two(int n) => n.toString().padLeft(2, '0');
   String _fmtDate(DateTime d) => '${_two(d.day)}/${_two(d.month)}/${d.year}';
   String _fmtTime(DateTime d) =>
@@ -198,13 +224,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
     switch (type) {
       case 'a_emporter':
         return const _ModeStyle('À emporter', Color(0xFFDBEAFE),
-            Color(0xFF1D4ED8), Color(0xFF2563EB));
+            Color(0xFF1E40AF), Color(0xFF2563EB));
       case 'livraison':
         return const _ModeStyle('Livraison', Color(0xFFCCFBF1),
-            Color(0xFF0F766E), Color(0xFF0D9488));
+            Color(0xFF115E59), Color(0xFF0D9488));
       default:
         return const _ModeStyle('Sur place', Color(0xFFFFE4E6),
-            Color(0xFFBE123C), Color(0xFFE11D48));
+            Color(0xFF9F1239), Color(0xFFE11D48));
     }
   }
 
@@ -542,22 +568,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
       onTap: () => _selectTab(tab.status),
       borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
         decoration: BoxDecoration(
-          color: selected ? AppColors.brandDark : const Color(0xFFF3F4F6),
+          // Unselected = gray capsule with a soft outline; selected = brown
+          // capsule with a light ring (as in the design).
+          color: selected ? AppColors.brandDark : const Color(0xFFF3F2F0),
           borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color:
+                selected ? const Color(0xFFD6D3D1) : const Color(0xFFE2E0DC),
+            width: 1.5,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               tab.label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.6,
-                color: selected ? Colors.white : const Color(0xFF4B5563),
-              ),
+              style: _os(12, FontWeight.w700, selected ? Colors.white : _stone600,
+                  lineHeight: 16, letterSpacing: 0.6),
             ),
             if (count > 0) ...[
               const SizedBox(width: 8),
@@ -570,11 +599,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
                 child: Text(
                   '$count',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827),
-                  ),
+                  style: _os(11, FontWeight.w700, _ink, lineHeight: 16),
+                ),
+              ),
+            ] else if (tab.status == 'en_attente') ...[
+              // Gray dot when nothing is waiting (as in the design).
+              const SizedBox(width: 8),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFA8A29E),
+                  shape: BoxShape.circle,
                 ),
               ),
             ],
@@ -658,12 +694,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE7E5E4)),
         boxShadow: [
+          // Soft, wide shadow: lifts the card off the page.
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 24,
+            spreadRadius: -2,
+            offset: const Offset(0, 10),
+          ),
+          // Tight shadow: crisp edge right around the card.
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -720,7 +764,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               children: [
                 _buildTableHeader(),
                 for (var i = 0; i < orders.length; i++)
-                  _buildRow(orders[i], isNewest: _page == 1 && i == 0),
+                  _buildRow(orders[i], isNewest: _page == 1 && i == 0, index: i),
               ],
             ),
           ),
@@ -743,20 +787,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
     Text h(String label, {TextAlign align = TextAlign.left}) => Text(
           label,
           textAlign: align,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-            color: Color(0xFF4B5563),
-          ),
+          style: _os(12, FontWeight.w700, _stone600,
+              lineHeight: 16, letterSpacing: 0.6),
         );
 
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
-        color: Color(0xFFF9FAFB),
-        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+        color: Color(0xFFFAFAF9),
+        border: Border(bottom: BorderSide(color: Color(0xFFE7E5E4))),
       ),
       child: Row(
         children: [
@@ -780,10 +820,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _buildRow(HistoryOrder o, {required bool isNewest}) {
+  Widget _buildRow(
+    HistoryOrder o, {
+    required bool isNewest,
+    required int index,
+  }) {
     final selected = o.id == _selectedId;
     final mode = _modeStyle(o.orderType);
     final client = o.displayClient;
+
+    // Selected row = cream; the others alternate white / very light stone.
+    final rowColor = selected
+        ? const Color(0xFFFEF4A8)
+        : (index.isOdd ? Colors.white : const Color(0xFFFAFAF9));
 
     return InkWell(
       onTap: () => setState(() => _selectedId = o.id),
@@ -791,13 +840,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
         height: 57,
         padding: const EdgeInsets.only(left: 21, right: 24),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFFFFBEB) : Colors.white,
+          color: rowColor,
           border: Border(
             left: BorderSide(
               color: selected ? const Color(0xFFFACC15) : Colors.transparent,
               width: 3,
             ),
-            bottom: const BorderSide(color: Color(0xFFF3F4F6)),
+            bottom: const BorderSide(color: Color(0xFFF5F5F4)),
           ),
         ),
         child: Row(
@@ -806,18 +855,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
               0,
               Text(
                 _fmtDate(o.createdAt),
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: const Color(0xFF111827),
-                ),
+                style: _os(14, FontWeight.w500, _ink, lineHeight: 20),
               ),
             ),
             _cell(
               1,
               Text(
                 _fmtTime(o.createdAt),
-                style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+                style: _os(14, FontWeight.w400, _stone600, lineHeight: 20),
               ),
             ),
             _cell(
@@ -829,17 +874,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF3F4F6),
+                      color: const Color(0xFFF5F5F4),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      border: Border.all(color: const Color(0xFFE7E5E4)),
                     ),
                     child: Text(
                       '#${o.ticketNumber}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1F2937),
-                      ),
+                      style: _os(12, FontWeight.w700, _ticketBrown,
+                          lineHeight: 16, letterSpacing: 0.6),
                     ),
                   ),
                   if (isNewest) ...[
@@ -862,11 +904,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 padding: const EdgeInsets.only(right: 24),
                 child: Text(
                   _euro(o.totalTTC),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827),
-                  ),
+                  style: selected
+                      ? _os(16, FontWeight.w700, _ink, lineHeight: 24)
+                      : _os(14, FontWeight.w700, _ink, lineHeight: 20),
                 ),
               ),
               align: Alignment.centerRight,
@@ -874,22 +914,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
             _cell(
               4,
               o.registerName == null
-                  ? const Text('—',
-                      style: TextStyle(color: Color(0xFF9CA3AF)))
+                  ? Text('—',
+                      style: _os(14, FontWeight.w400, const Color(0xFFA8A29E)))
                   : Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
+                        color: const Color(0xFFF5F5F4),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         o.registerName!,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF374151),
-                        ),
+                        style: _os(12, FontWeight.w500, _stone700,
+                            lineHeight: 16),
                       ),
                     ),
             ),
@@ -898,14 +935,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Text(
                 client ?? 'Client Passant',
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontStyle:
-                      client == null ? FontStyle.italic : FontStyle.normal,
-                  color: client == null
-                      ? const Color(0xFF9CA3AF)
-                      : const Color(0xFF111827),
-                ),
+                style: client == null
+                    ? _os(14, FontWeight.w400, _stone500,
+                        lineHeight: 20, fontStyle: FontStyle.italic)
+                    : _os(14, FontWeight.w400, _ink, lineHeight: 20),
               ),
             ),
             _cell(6, _modeChip(mode)),
@@ -923,7 +956,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       child: const Padding(
                         padding: EdgeInsets.all(4),
                         child: Icon(Icons.print_outlined,
-                            size: 18, color: Color(0xFF4B5563)),
+                            size: 18, color: _stone600),
                       ),
                     ),
                   ],
@@ -955,11 +988,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           const SizedBox(width: 6),
           Text(
             m.label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: m.fg,
-            ),
+            style: _os(12, FontWeight.w700, m.fg, lineHeight: 16),
           ),
         ],
       ),
@@ -973,21 +1002,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF111827) : Colors.white,
+          color: selected ? _ink : Colors.white,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: selected
-                ? const Color(0xFF111827)
-                : const Color(0xFFD1D5DB),
+            color: selected ? _ink : const Color(0xFFD6D3D1),
           ),
         ),
         child: Text(
           'Détails',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : const Color(0xFF374151),
-          ),
+          style: selected
+              ? _os(12, FontWeight.w600, Colors.white, lineHeight: 16)
+              : _os(12, FontWeight.w500, _stone600, lineHeight: 16),
         ),
       ),
     );
@@ -1023,7 +1048,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           Text(
             'Affichage de $firstShown à $lastShown sur ${data.total} ${tab.countLabel}',
-            style: const TextStyle(fontSize: 12.5, color: Color(0xFF6B7280)),
+            style: _os(12, FontWeight.w400, _stone600, lineHeight: 16),
           ),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -1064,14 +1089,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }) {
     final text = Text(
       label,
-      style: TextStyle(
-        fontSize: 12.5,
-        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-        color: selected
+      style: _os(
+        12,
+        selected ? FontWeight.w700 : FontWeight.w600,
+        selected
             ? Colors.white
             : enabled
-                ? const Color(0xFF1F2937)
-                : const Color(0xFFD1D5DB),
+                ? _ink
+                : const Color(0xFFD6D3D1),
+        lineHeight: 16,
       ),
     );
 
