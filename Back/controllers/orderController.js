@@ -2,6 +2,25 @@ const Order = require('../models/Order');
 const Payment = require('../models/Payment');
 const Store = require('../models/Store');
 
+// Escape user input before using it inside a RegExp (a lone "(" would crash).
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Builds a createdAt range from ?from & ?to.
+// - Date-only values ("2026-09-07") mean the whole day (UTC).
+// - Full ISO timestamps are used exactly as sent, so the client can send
+//   its own local start / end of day.
+const buildDateRange = (from, to) => {
+  if (!from && !to) return null;
+  const range = {};
+  if (from) range.$gte = new Date(from);
+  if (to) {
+    const end = new Date(to);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(to)) end.setUTCHours(23, 59, 59, 999);
+    range.$lte = end;
+  }
+  return range;
+};
+
 // @desc  Get orders (with filters & date range)
 // @route GET /api/orders
 exports.getOrders = async (req, res) => {
@@ -13,21 +32,16 @@ exports.getOrders = async (req, res) => {
     if (req.query.orderType) filter.orderType = req.query.orderType;
 
     // Date range filter (from Order History)
-    if (req.query.from || req.query.to) {
-      filter.createdAt = {};
-      if (req.query.from) filter.createdAt.$gte = new Date(req.query.from);
-      if (req.query.to) {
-        const to = new Date(req.query.to);
-        to.setHours(23, 59, 59, 999);
-        filter.createdAt.$lte = to;
-      }
-    }
+    const range = buildDateRange(req.query.from, req.query.to);
+    if (range) filter.createdAt = range;
 
     // Search by ticket number or client name
     if (req.query.search) {
+      const term = escapeRegex(req.query.search);
       filter.$or = [
-        { ticketNumber: { $regex: req.query.search, $options: 'i' } },
-        { clientName: { $regex: req.query.search, $options: 'i' } },
+        { ticketNumber: { $regex: term, $options: 'i' } },
+        { clientName: { $regex: term, $options: 'i' } },
+        { buzzerNumber: { $regex: term, $options: 'i' } },
       ];
     }
 
@@ -52,6 +66,48 @@ exports.getOrders = async (req, res) => {
       totalPages: Math.ceil(total / limit),
       page,
       data: orders,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// @desc  Order counts per status + revenue of paid orders (History tabs)
+// @route GET /api/orders/summary?from=&to=
+exports.getOrdersSummary = async (req, res) => {
+  try {
+    const match = {};
+    const range = buildDateRange(req.query.from, req.query.to);
+    if (range) match.createdAt = range;
+
+    const rows = await Order.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          total: { $sum: '$totalTTC' },
+        },
+      },
+    ]);
+
+    const counts = {
+      en_cours: 0,
+      en_attente: 0,
+      a_encaisser: 0,
+      terminee: 0,
+      repas_employe: 0,
+      annulee: 0,
+    };
+    let totalTerminee = 0;
+    rows.forEach((r) => {
+      counts[r._id] = r.count;
+      if (r._id === 'terminee') totalTerminee = r.total;
+    });
+
+    res.json({
+      success: true,
+      data: { counts, totalTerminee: parseFloat(totalTerminee.toFixed(2)) },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -90,10 +146,6 @@ exports.createOrder = async (req, res) => {
           .json({ success: false, message: 'Aucun magasin configuré' });
       }
       data.storeId = store._id;
-    }
-
-    if (!data.operatorId && req.user?._id) {
-      data.operatorId = req.user._id;
     }
 
     const order = new Order(data);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/hub_module_card.dart';
+import 'history_screen.dart';
 import 'pos_screen.dart';
 
 /// SprintKitchen "Hub" landing screen — Windows/desktop layout.
@@ -348,9 +349,12 @@ class HubScreen extends StatelessWidget {
         );
         return;
       case 'history':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const HistoryScreen()),
+        );
+        return;
       case 'stock':
-        // TODO: wire these up once those screens exist, e.g.:
-        // Navigator.pushNamed(context, '/orders/history');
+        // TODO: wire this up once the stock screen exists, e.g.:
         // Navigator.pushNamed(context, '/stock');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Navigate to: $moduleKey')),
