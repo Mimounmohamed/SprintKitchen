@@ -253,6 +253,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  /// Solid status pill used in the details panel header — green for a
+  /// completed sale, amber/gray otherwise.
+  Color _statusPillColor(String status) {
+    switch (status) {
+      case 'terminee':
+      case 'repas_employe':
+        return AppColors.success;
+      case 'annulee':
+        return AppColors.danger;
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
   // ───────────────────────────── build ─────────────────────────────
 
   @override
@@ -1129,76 +1143,241 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // ─────────────────────────── details dialog ───────────────────────────
+  // ─────────────────────────── details panel ───────────────────────────
 
+  /// Opens the order details as a panel sliding in from the right edge of
+  /// the screen (not a centered dialog), matching the reference design.
   void _showDetails(HistoryOrder o) {
-    final mode = _modeStyle(o.orderType);
-    final client = o.displayClient ?? 'Client Passant';
-
-    showDialog<void>(
+    showGeneralDialog<void>(
       context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
-          child: Padding(
+      barrierDismissible: true,
+      barrierLabel: 'Fermer',
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      transitionDuration: const Duration(milliseconds: 260),
+      pageBuilder: (ctx, anim, secondaryAnim) {
+        final panelWidth = math.min(460.0, MediaQuery.sizeOf(ctx).width);
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            color: Colors.white,
+            elevation: 24,
+            child: SizedBox(
+              width: panelWidth,
+              height: double.infinity,
+              child: _buildDetailsPanel(o, () => Navigator.of(ctx).pop()),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (ctx, anim, secondaryAnim, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return SlideTransition(
+          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(curved),
+          child: child,
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailsPanel(HistoryOrder o, VoidCallback onClose) {
+    final mode = _modeStyle(o.orderType);
+    final tvaPercent =
+        o.subtotalHT > 0 ? (o.tvaAmount / o.subtotalHT * 100) : 0;
+
+    return Column(
+      children: [
+        _buildDetailsHeader(o, onClose),
+        Expanded(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Ticket N° ${o.ticketNumber}',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF111827),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      icon: const Icon(Icons.close, size: 20),
-                    ),
-                  ],
-                ),
+                _buildInfoGrid(o, mode),
+                const SizedBox(height: 20),
                 Text(
-                  '${_fmtDate(o.createdAt)} à ${_fmtTime(o.createdAt)}  •  ${mode.label}  •  ${_statusLabel(o.status)}',
-                  style:
-                      const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  'QTÉ   ARTICLE & SUPPLÉMENTS',
+                  style: _os(11, FontWeight.w700, _stone600,
+                      letterSpacing: 0.5),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  client,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF374151),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Divider(height: 1),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: o.lines.map(_detailLine).toList(),
-                  ),
-                ),
-                const Divider(height: 1),
-                const SizedBox(height: 10),
+                const Divider(height: 16, color: Color(0xFFE5E7EB)),
+                for (final line in o.lines) _detailLine(line),
+                const Divider(height: 24, color: Color(0xFFE5E7EB)),
                 _totalRow('Sous-total HT', _euro(o.subtotalHT)),
-                _totalRow('TVA', _euro(o.tvaAmount)),
-                const SizedBox(height: 4),
-                _totalRow('TOTAL TTC', _euro(o.totalTTC), bold: true),
+                _totalRow(
+                  'TVA (${tvaPercent.toStringAsFixed(1)}%)',
+                  _euro(o.tvaAmount),
+                ),
+                const SizedBox(height: 6),
+                _totalRow('TOTAL PAYÉ', _euro(o.totalTTC), bold: true),
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Text(
+                    'TOUTES TAXES COMPRISES',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF9CA3AF),
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ),
+        _buildDetailsFooter(),
+      ],
+    );
+  }
+
+  Widget _buildDetailsHeader(HistoryOrder o, VoidCallback onClose) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
+                  runSpacing: 6,
+                  children: [
+                    Text(
+                      'COMMANDE #${o.ticketNumber}',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _statusPillColor(o.status),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _statusLabel(o.status),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onClose,
+                icon: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
+                label: const Text(
+                  'Fermer',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Historique de vente • Transaction confirmée',
+            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoGrid(HistoryOrder o, _ModeStyle mode) {
+    final client = o.displayClient ?? 'Client Passant';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _infoCell(
+                Icons.schedule,
+                'DATE & HEURE',
+                '${_fmtDate(o.createdAt)} à ${_fmtTime(o.createdAt)}',
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _infoCell(
+                Icons.point_of_sale_outlined,
+                'CAISSE',
+                o.registerName ?? '—',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _infoCell(
+                Icons.person_outline,
+                'CLIENT / LOCALISATION',
+                client,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'MODE DE CONSOMMATION',
+                    style: _os(10, FontWeight.w700, const Color(0xFF9CA3AF),
+                        letterSpacing: 0.4),
+                  ),
+                  const SizedBox(height: 6),
+                  _modeChip(mode),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _infoCell(IconData icon, String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 13, color: const Color(0xFF9CA3AF)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: _os(10, FontWeight.w700, const Color(0xFF9CA3AF),
+                  letterSpacing: 0.4),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: _os(13, FontWeight.w700, const Color(0xFF111827)),
+        ),
+      ],
     );
   }
 
@@ -1208,37 +1387,57 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SizedBox(
+            width: 28,
+            child: Text(
+              '${l.quantity}×',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${l.quantity}× ${l.name}',
+                  l.name,
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF111827),
                   ),
                 ),
-                if (l.options.isNotEmpty)
-                  Text(
-                    l.options.join(', '),
-                    style: const TextStyle(
-                        fontSize: 12, color: Color(0xFF6B7280)),
+                for (final option in l.options)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '• $option',
+                      style:
+                          const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                    ),
                   ),
-                if (l.removed.isNotEmpty)
-                  Text(
-                    l.removed.join(', '),
-                    style: const TextStyle(
-                        fontSize: 12, color: Color(0xFFDC2626)),
+                for (final removed in l.removed)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '• Sans $removed',
+                      style:
+                          const TextStyle(fontSize: 12, color: Color(0xFFDC2626)),
+                    ),
                   ),
                 if (l.notes != null && l.notes!.isNotEmpty)
-                  Text(
-                    l.notes!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                      color: Color(0xFF6B7280),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      l.notes!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: Color(0xFF6B7280),
+                      ),
                     ),
                   ),
               ],
@@ -1256,7 +1455,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _totalRow(String label, String value, {bool bold = false}) {
     final style = TextStyle(
-      fontSize: bold ? 15 : 13,
+      fontSize: bold ? 20 : 13,
       fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
       color: const Color(0xFF111827),
     );
@@ -1265,6 +1464,79 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [Text(label, style: style), Text(value, style: style)],
+      ),
+    );
+  }
+
+  Widget _buildDetailsFooter() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: () => _comingSoon('Impression du ticket'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: AppColors.brandDark,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.print_outlined, size: 18),
+              label: const Text(
+                'IMPRIMER LE TICKET DE CAISSE',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _comingSoon('Réimpression du bon cuisine'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF374151),
+                    side: const BorderSide(color: Color(0xFFD1D5DB)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.restaurant_menu, size: 16),
+                  label: const Text(
+                    'Réimprimer Bon Cuisine',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _comingSoon('Remboursement / Annulation'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.danger,
+                    side: BorderSide(color: AppColors.danger.withValues(alpha: 0.4)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.undo, size: 16),
+                  label: const Text(
+                    'Remboursement / Annulation',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
