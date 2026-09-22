@@ -18,7 +18,7 @@ import '../widgets/pos/encaissement_modal.dart';
 class PosScreen extends StatefulWidget {
   const PosScreen({
     super.key,
-    this.ticketNumber = '0000123',
+    this.ticketNumber = '000001',
     this.posteLabel = 'Caisse 01',
   });
 
@@ -274,7 +274,7 @@ class _PosScreenState extends State<PosScreen> {
   /// registers this is only a preview; the real number comes from the server.
   String _nextTicketNumber(String served) {
     final n = int.tryParse(served);
-    return n == null ? _ticketNumber : (n + 1).toString().padLeft(7, '0');
+    return n == null ? _ticketNumber : (n + 1).toString().padLeft(6, '0');
   }
 
   // ───────────────────────────── UI ─────────────────────────────

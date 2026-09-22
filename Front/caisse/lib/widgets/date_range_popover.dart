@@ -180,6 +180,11 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
           return _monthNames[prev.month - 1];
         },
       ),
+      _Shortcut(
+        'Tout l\'historique',
+        (t) => DateTimeRange(start: DateTime(2020, 1, 1), end: t),
+        valueLabelBuilder: (_) => 'Toutes dates',
+      ),
     ];
   }
 
@@ -619,7 +624,9 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
                 ),
                 child: Text(
                   hasRange
-                      ? '${_fmtSlash(_start!)} — ${_fmtSlash(_end!)}'
+                      ? (_start!.year <= 2020
+                          ? 'Tout l\'historique'
+                          : '${_fmtSlash(_start!)} — ${_fmtSlash(_end!)}')
                       : 'Choisissez une période',
                   style: GoogleFonts.openSans(
                     fontSize: 12.5,
@@ -628,7 +635,7 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
                   ),
                 ),
               ),
-              if (hasRange) ...[
+              if (hasRange && _start!.year > 2020) ...[
                 const SizedBox(width: 8),
                 Text(
                   '($days jour${days > 1 ? 's' : ''})',

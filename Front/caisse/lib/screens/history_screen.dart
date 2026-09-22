@@ -409,8 +409,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildTitleBlock() {
-    final title =
-        'LISTE DES COMMANDES DU ${_fmtLong(_range.start)} AU ${_fmtLong(_range.end)}';
+    final title = _range.start.year <= 2020
+        ? 'LISTE DE TOUTES LES COMMANDES'
+        : 'LISTE DES COMMANDES DU ${_fmtLong(_range.start)} AU ${_fmtLong(_range.end)}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
