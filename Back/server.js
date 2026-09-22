@@ -38,6 +38,7 @@ app.use('/api/stats',        require('./routes/stats'));
 app.use('/api/ingredients',         require('./routes/ingredients'));
 app.use('/api/dashboard',           require('./routes/dashboard'));
 app.use('/api/ingredient-families', require('./routes/ingredientFamilies'));
+app.use('/api/kds',                 require('./routes/kds'));
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
