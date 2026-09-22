@@ -6,6 +6,7 @@ import '../models/order_models.dart';
 import '../services/history_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/order_details_panel.dart';
+import '../widgets/date_range_popover.dart';
 
 /// "Historique des ventes" — list of past orders, filtered by status tab,
 /// date range and search, with pagination.
@@ -65,6 +66,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   static const _flex = [2, 2, 2, 2, 2, 3, 2, 2];
 
   final HistoryService _service = HistoryService();
+  final LayerLink _calendarLink = LayerLink();
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
 
@@ -171,12 +173,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _pickRange() async {
-    final now = DateTime.now();
-    final picked = await showDateRangePicker(
+    final picked = await showDateRangePopover(
       context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year, now.month, now.day),
-      initialDateRange: _range,
+      link: _calendarLink,
+      initialRange: _range,
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -444,39 +444,42 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        InkWell(
-          onTap: _pickRange,
-          borderRadius: BorderRadius.circular(8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+        CompositedTransformTarget(
+          link: _calendarLink,
+          child: InkWell(
+            onTap: _pickRange,
+            borderRadius: BorderRadius.circular(8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: const Icon(Icons.calendar_today_outlined,
+                      size: 16, color: Color(0xFF374151)),
                 ),
-                child: const Icon(Icons.calendar_today_outlined,
-                    size: 16, color: Color(0xFF374151)),
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  title,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.bebasNeue(
-                    fontSize: 30,
-                    letterSpacing: 0.5,
-                    color: const Color(0xFF111827),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.bebasNeue(
+                      fontSize: 30,
+                      letterSpacing: 0.5,
+                      color: const Color(0xFF111827),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.keyboard_arrow_down,
-                  size: 22, color: Color(0xFF6B7280)),
-            ],
+                const SizedBox(width: 8),
+                const Icon(Icons.keyboard_arrow_down,
+                    size: 22, color: Color(0xFF6B7280)),
+              ],
+            ),
           ),
         ),
       ],
