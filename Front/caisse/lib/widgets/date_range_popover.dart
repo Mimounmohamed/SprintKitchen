@@ -116,9 +116,9 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
   static const Color _stone500 = Color(0xFF78716C);
   static const Color _stone400 = Color(0xFFA8A29E);
   static const Color _border = Color(0xFFE7E5E4);
-  static const Color _brandDark = Color(0xFF583926);
+  static const Color _brandDark = Color(0xFF452B1E);
   static const Color _gold = Color(0xFFFACC15);
-  static const Color _rangeFill = Color(0xFFFDE68A);
+  static const Color _rangeFill = Color(0xFFFDE9A0);
 
   static const _monthNames = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -204,6 +204,9 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
 
   bool _matchesShortcut(_Shortcut s) {
     if (_start == null || _end == null) return false;
+    if (s.label == 'Tout l\'historique') {
+      return _start!.year <= 2020 && _isSameDay(_end!, _today);
+    }
     final r = s.rangeBuilder(_today);
     return _isSameDay(_start!, r.start) && _isSameDay(_end!, r.end);
   }
@@ -244,7 +247,7 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
     return Material(
       color: Colors.transparent,
       child: Container(
-        width: 780,
+        width: 860,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -265,12 +268,12 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
             _buildHeader(),
             const Divider(height: 1, color: _border),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              padding: const EdgeInsets.fromLTRB(26, 22, 26, 22),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 200, child: _buildShortcuts()),
-                  const SizedBox(width: 28),
+                  SizedBox(width: 220, child: _buildShortcuts()),
+                  const SizedBox(width: 32),
                   Expanded(child: _buildCalendars()),
                 ],
               ),
@@ -285,20 +288,20 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
+      padding: const EdgeInsets.fromLTRB(26, 20, 18, 20),
       child: Row(
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: _brandDark,
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.calendar_today_outlined,
-                size: 16, color: _gold),
+                size: 17, color: _gold),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,16 +309,16 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
                 Text(
                   'SÉLECTIONNER UNE PÉRIODE DE VENTE',
                   style: GoogleFonts.openSans(
-                    fontSize: 13.5,
+                    fontSize: 14,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.3,
                     color: _ink,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   "Filtrer l'historique des encaissements, tickets et statistiques",
-                  style: GoogleFonts.openSans(fontSize: 12, color: _stone500),
+                  style: GoogleFonts.openSans(fontSize: 12.5, color: _stone500),
                 ),
               ],
             ),
@@ -325,7 +328,7 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
             borderRadius: BorderRadius.circular(8),
             child: const Padding(
               padding: EdgeInsets.all(6),
-              child: Icon(Icons.close, size: 18, color: _stone500),
+              child: Icon(Icons.close, size: 20, color: _stone500),
             ),
           ),
         ],
@@ -340,13 +343,13 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
         Text(
           'RACCOURCIS RAPIDES',
           style: GoogleFonts.openSans(
-            fontSize: 10.5,
+            fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.6,
             color: _stone500,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         for (final s in _shortcuts) ...[
           _buildShortcutRow(s),
           const SizedBox(height: 4),
@@ -363,19 +366,30 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
       onTap: () => _applyShortcut(s),
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: active ? _brandDark : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           children: [
+            if (active) ...[
+              Container(
+                width: 6,
+                height: 6,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: const BoxDecoration(
+                  color: _gold,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
             Expanded(
               child: Text(
                 s.label,
                 style: GoogleFonts.openSans(
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                   color: active ? Colors.white : _ink,
                 ),
               ),
@@ -413,19 +427,30 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
     // way to make a custom pick, so this row is informational.
     final active = _shortcuts.every((s) => !_matchesShortcut(s));
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: active ? _brandDark : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
+          if (active) ...[
+            Container(
+              width: 6,
+              height: 6,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: const BoxDecoration(
+                color: _gold,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
           Expanded(
             child: Text(
               'Personnalisé',
               style: GoogleFonts.openSans(
                 fontSize: 13,
-                fontWeight: FontWeight.w600,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                 color: active ? Colors.white : _ink,
               ),
             ),
@@ -456,7 +481,7 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
                 '${_monthNames[_leftMonth.month - 1].toUpperCase()} ${_leftMonth.year}',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.openSans(
-                  fontSize: 13,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.4,
                   color: _ink,
@@ -468,7 +493,7 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
                 '${_monthNames[_rightMonth.month - 1].toUpperCase()} ${_rightMonth.year}',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.openSans(
-                  fontSize: 13,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.4,
                   color: _ink,
@@ -486,12 +511,12 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: _buildMonthGrid(_leftMonth)),
-            const SizedBox(width: 24),
+            const SizedBox(width: 28),
             Expanded(child: _buildMonthGrid(_rightMonth)),
           ],
         ),
@@ -522,75 +547,189 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
                   child: Text(
                     h,
                     style: GoogleFonts.openSans(
-                      fontSize: 11.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: _stone400,
+                      color: _stone500,
                     ),
                   ),
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         for (var row = 0; row < cells.length ~/ 7; row++)
-          Row(
-            children: [
-              for (var col = 0; col < 7; col++)
-                Expanded(child: _buildDayCell(cells[row * 7 + col])),
-            ],
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                for (var col = 0; col < 7; col++)
+                  Expanded(
+                    child: _buildDayCell(
+                      cells[row * 7 + col],
+                      col: col,
+                      isFirstInMonth: cells[row * 7 + col]?.day == 1,
+                      isLastInMonth: cells[row * 7 + col]?.day == daysInMonth,
+                    ),
+                  ),
+              ],
+            ),
           ),
       ],
     );
   }
 
-  Widget _buildDayCell(DateTime? day) {
-    if (day == null) return const SizedBox(height: 34);
+  Widget _buildDayCell(
+    DateTime? day, {
+    required int col,
+    bool isFirstInMonth = false,
+    bool isLastInMonth = false,
+  }) {
+    const double cellH = 38.0;
+    const double brownSize = 32.0;
+    const double haloSize = 38.0;
+    const double radius = haloSize / 2;
 
-    final isStart = _start != null && _isSameDay(day, _start!);
-    final isEnd = _end != null && _isSameDay(day, _end!);
+    if (day == null) return const SizedBox(height: cellH);
+
+    final isAllHistory = _start != null && _start!.year <= 2020;
+    final isStart = _start != null && !isAllHistory && _isSameDay(day, _start!);
+    final isEnd = _end != null && !isAllHistory && _isSameDay(day, _end!);
+    final isSingleDay = isStart && isEnd;
     final isEndpoint = isStart || isEnd;
-    final inRange = _start != null &&
+    final inRange = !isAllHistory &&
+        _start != null &&
         _end != null &&
         day.isAfter(_start!) &&
         day.isBefore(_end!);
     final isToday = _isSameDay(day, _today);
     final disabled = day.isAfter(_today);
 
-    Widget content = Center(
-      child: Container(
-        width: 30,
-        height: 30,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isEndpoint ? _brandDark : Colors.transparent,
-          shape: BoxShape.circle,
-          border: (isToday && !isEndpoint)
-              ? Border.all(color: _brandDark, width: 1.4)
-              : null,
-        ),
-        child: Text(
-          '${day.day}',
-          style: GoogleFonts.openSans(
-            fontSize: 13,
-            fontWeight: isEndpoint ? FontWeight.w700 : FontWeight.w500,
-            color: isEndpoint
-                ? Colors.white
-                : disabled
-                    ? _stone400
-                    : _ink,
+    // Strip behind the cell (for multi-day ranges)
+    Widget? strip;
+    if (!isSingleDay && (_start != null && _end != null && !isAllHistory)) {
+      if (inRange) {
+        final roundLeft = col == 0 || isFirstInMonth;
+        final roundRight = col == 6 || isLastInMonth;
+        strip = Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              color: _rangeFill,
+              borderRadius: BorderRadius.horizontal(
+                left: roundLeft ? const Radius.circular(radius) : Radius.zero,
+                right: roundRight ? const Radius.circular(radius) : Radius.zero,
+              ),
+            ),
+          ),
+        );
+      } else if (isStart) {
+        strip = Positioned.fill(
+          child: Row(
+            children: [
+              const Expanded(child: SizedBox()),
+              Expanded(
+                child: Container(
+                  color: (col == 6 || isLastInMonth)
+                      ? Colors.transparent
+                      : _rangeFill,
+                ),
+              ),
+            ],
+          ),
+        );
+      } else if (isEnd) {
+        strip = Positioned.fill(
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  color: (col == 0 || isFirstInMonth)
+                      ? Colors.transparent
+                      : _rangeFill,
+                ),
+              ),
+              const Expanded(child: SizedBox()),
+            ],
+          ),
+        );
+      }
+    }
+
+    // Halo behind endpoints
+    Widget? halo;
+    if (!isSingleDay && isEndpoint) {
+      halo = Center(
+        child: Container(
+          width: haloSize,
+          height: haloSize,
+          decoration: const BoxDecoration(
+            color: _rangeFill,
+            shape: BoxShape.circle,
           ),
         ),
-      ),
-    );
+      );
+    }
+
+    // Day content
+    Widget dayContent;
+    if (isEndpoint) {
+      dayContent = Center(
+        child: Container(
+          width: brownSize,
+          height: brownSize,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: _brandDark,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            '${day.day}',
+            style: GoogleFonts.openSans(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+    } else {
+      dayContent = Center(
+        child: Container(
+          width: brownSize,
+          height: brownSize,
+          alignment: Alignment.center,
+          decoration: (isToday && !inRange)
+              ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _brandDark, width: 1.4),
+                )
+              : null,
+          child: Text(
+            '${day.day}',
+            style: GoogleFonts.openSans(
+              fontSize: 13.5,
+              fontWeight: inRange ? FontWeight.w700 : FontWeight.w500,
+              color: disabled
+                  ? _stone400
+                  : inRange
+                      ? _brandDark
+                      : _ink,
+            ),
+          ),
+        ),
+      );
+    }
 
     return SizedBox(
-      height: 34,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        color: inRange ? _rangeFill : Colors.transparent,
-        child: InkWell(
-          onTap: disabled ? null : () => _onDayTap(day),
-          child: content,
+      height: cellH,
+      child: InkWell(
+        onTap: disabled ? null : () => _onDayTap(day),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            ?strip,
+            ?halo,
+            dayContent,
+          ],
         ),
       ),
     );
@@ -598,50 +737,64 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
 
   Widget _buildFooter() {
     final hasRange = _start != null && _end != null;
+    final isAllHistory = _start != null && _start!.year <= 2020;
     final days = hasRange ? _end!.difference(_start!).inDays + 1 : 0;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 16,
-        runSpacing: 10,
+      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'Période sélectionnée : ',
-                style: GoogleFonts.openSans(fontSize: 12.5, color: _stone600),
+                style: GoogleFonts.openSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: _stone600,
+                ),
               ),
+              const SizedBox(width: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F4),
-                  borderRadius: BorderRadius.circular(6),
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: _border),
                 ),
-                child: Text(
-                  hasRange
-                      ? (_start!.year <= 2020
-                          ? 'Tout l\'historique'
-                          : '${_fmtSlash(_start!)} — ${_fmtSlash(_end!)}')
-                      : 'Choisissez une période',
-                  style: GoogleFonts.openSans(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: _ink,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      hasRange
+                          ? (isAllHistory
+                              ? 'Tout l\'historique'
+                              : '${_fmtSlash(_start!)} — ${_fmtSlash(_end!)}')
+                          : 'Choisissez une période',
+                      style: GoogleFonts.openSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _ink,
+                      ),
+                    ),
+                    if (hasRange) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        isAllHistory
+                            ? '(Toutes dates)'
+                            : '($days jour${days > 1 ? 's' : ''})',
+                        style: GoogleFonts.openSans(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: _stone500,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              if (hasRange && _start!.year > 2020) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '($days jour${days > 1 ? 's' : ''})',
-                  style: GoogleFonts.openSans(fontSize: 12.5, color: _stone500),
-                ),
-              ],
             ],
           ),
           Row(
@@ -649,32 +802,41 @@ class _DateRangePopoverCardState extends State<_DateRangePopoverCard> {
             children: [
               TextButton(
                 onPressed: widget.onCancel,
-                style: TextButton.styleFrom(foregroundColor: _stone600),
+                style: TextButton.styleFrom(
+                  foregroundColor: _stone600,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
                 child: Text(
                   'Annuler',
                   style: GoogleFonts.openSans(
-                      fontSize: 13, fontWeight: FontWeight.w600),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               ElevatedButton.icon(
                 onPressed: hasRange
                     ? () => widget.onApply(DateTimeRange(start: _start!, end: _end!))
                     : null,
-                icon: const Icon(Icons.check, size: 16),
+                icon: const Icon(Icons.check, size: 16, color: _ink),
                 label: Text(
                   'Appliquer la période',
                   style: GoogleFonts.openSans(
-                      fontSize: 13, fontWeight: FontWeight.w700),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _gold,
                   foregroundColor: _ink,
                   disabledBackgroundColor: _gold.withValues(alpha: 0.5),
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
             ],

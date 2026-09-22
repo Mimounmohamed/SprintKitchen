@@ -10,12 +10,14 @@ function parseDateRange(query) {
 }
 function regF(q) { return q.registerId ? { registerId: q.registerId } : {}; }
 
+const PAID_ORDER_STATUSES = ['terminee', 'en_attente'];
+
 /* ── GET /api/stats/rapport-z ─────────────────────────────── */
 exports.getRapportZ = async (req, res, next) => {
   try {
     const { from, to } = parseDateRange(req.query);
     const rf = regF(req.query);
-    const baseMatch = { ...rf, status: 'terminee', createdAt: { $gte: from, $lte: to } };
+    const baseMatch = { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } };
 
     const [[totals], payBreak, [annulees], repasCount] = await Promise.all([
       Order.aggregate([
@@ -58,7 +60,7 @@ exports.getSalesByHour = async (req, res, next) => {
     const rf = regF(req.query);
 
     const raw = await Order.aggregate([
-      { $match: { ...rf, status: 'terminee', createdAt: { $gte: from, $lte: to } } },
+      { $match: { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } } },
       { $group: { _id: { $hour: { date: '$createdAt', timezone: 'Africa/Algiers' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
       { $sort: { _id: 1 } },
       { $project: { _id: 0, hour: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1, avgBasket: { $round: ['$avgBasket', 2] } } },
@@ -77,7 +79,7 @@ exports.getTopProducts = async (req, res, next) => {
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
     const raw = await Order.aggregate([
-      { $match: { ...rf, status: 'terminee', createdAt: { $gte: from, $lte: to } } },
+      { $match: { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } } },
       { $unwind: '$items' },
       { $group: { _id: '$items.productId', productName: { $first: '$items.productName' }, qty: { $sum: '$items.quantity' }, revenue: { $sum: '$items.lineTotal' }, orderCount: { $sum: 1 } } },
       { $sort: { qty: -1 } },
@@ -98,7 +100,7 @@ exports.getByChannel = async (req, res, next) => {
     const rf = regF(req.query);
 
     const raw = await Order.aggregate([
-      { $match: { ...rf, status: 'terminee', createdAt: { $gte: from, $lte: to } } },
+      { $match: { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } } },
       { $group: { _id: '$orderType', revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
       { $project: { _id: 0, channel: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1, avgBasket: { $round: ['$avgBasket', 2] } } },
       { $sort: { revenue: -1 } },
@@ -117,7 +119,7 @@ exports.getSalesTrend = async (req, res, next) => {
     const rf = regF(req.query);
 
     const data = await Order.aggregate([
-      { $match: { ...rf, status: 'terminee', createdAt: { $gte: from, $lte: to } } },
+      { $match: { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } } },
       { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Africa/Algiers' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
       { $sort: { _id: 1 } },
       { $project: { _id: 0, date: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1, avgBasket: { $round: ['$avgBasket', 2] } } },
@@ -138,7 +140,7 @@ exports.getKpis = async (req, res, next) => {
     const prevTo   = new Date(from.getTime() - 1);
 
     const agg = (dateFrom, dateTo) => Order.aggregate([
-      { $match: { ...rf, status: 'terminee', createdAt: { $gte: dateFrom, $lte: dateTo } } },
+      { $match: { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: dateFrom, $lte: dateTo } } },
       { $group: { _id: null, totalTTC: { $sum: '$totalTTC' }, ticketCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
     ]);
 
@@ -185,7 +187,7 @@ exports.getSummary = async (req, res, next) => {
   try {
     const { from, to } = parseDateRange(req.query);
     const rf = regF(req.query);
-    const baseMatch = { ...rf, status: 'terminee', createdAt: { $gte: from, $lte: to } };
+    const baseMatch = { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } };
 
     const [totalsArr, byHourArr, topPArr, byChanArr, payArr, annArr] = await Promise.all([
       Order.aggregate([{ $match: baseMatch }, { $group: { _id: null, totalTTC: { $sum: '$totalTTC' }, totalHT: { $sum: '$subtotalHT' }, totalTVA: { $sum: '$tvaAmount' }, ticketCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } }]),

@@ -39,4 +39,14 @@ class HistoryService {
     });
     return OrdersSummary.fromJson(json as Map<String, dynamic>);
   }
+
+  /// PATCH /api/orders/:id/status — update order status (e.g. 'terminee')
+  Future<void> updateOrderStatus({
+    required String orderId,
+    required String status,
+  }) async {
+    await _client.patch('/orders/$orderId/status', {
+      'status': status,
+    });
+  }
 }

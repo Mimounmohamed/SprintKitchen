@@ -102,7 +102,7 @@ exports.getOrdersSummary = async (req, res) => {
     let totalTerminee = 0;
     rows.forEach((r) => {
       counts[r._id] = r.count;
-      if (r._id === 'terminee') totalTerminee = r.total;
+      if (r._id === 'terminee' || r._id === 'en_attente') totalTerminee += r.total;
     });
 
     res.json({
@@ -183,7 +183,10 @@ exports.updateStatus = async (req, res) => {
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
     order.status = status;
-    if (status === 'terminee') order.completedAt = new Date();
+    if (status === 'terminee') {
+      order.completedAt = new Date();
+      order.kdsStatus = 'served';
+    }
     if (status === 'annulee') {
       order.cancelledAt = new Date();
       order.cancelReason = req.body.cancelReason;
@@ -225,7 +228,7 @@ exports.getDailyStats = async (req, res) => {
     const end = new Date(date.setHours(23, 59, 59, 999));
     const storeId = req.query.storeId;
 
-    const filter = { createdAt: { $gte: start, $lte: end }, status: 'terminee' };
+    const filter = { createdAt: { $gte: start, $lte: end }, status: { $in: ['terminee', 'en_attente'] } };
     if (storeId) filter.storeId = storeId;
 
     const stats = await Order.aggregate([

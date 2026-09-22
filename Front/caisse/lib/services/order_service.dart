@@ -28,6 +28,7 @@ class OrderService {
     final json = await _client.post('/orders', {
       'orderType': _orderTypeToApi(orderType),
       'items': lines.map(_lineToJson).toList(),
+      'status': 'en_attente',
     });
 
     final data = json['data'] as Map<String, dynamic>;

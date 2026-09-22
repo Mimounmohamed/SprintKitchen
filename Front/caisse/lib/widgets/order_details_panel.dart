@@ -24,6 +24,7 @@ class OrderDetailsPanel extends StatelessWidget {
     this.onPrintReceipt,
     this.onReprintKitchenSlip,
     this.onRefundOrCancel,
+    this.onMarkTerminee,
   });
 
   final HistoryOrder order;
@@ -31,6 +32,7 @@ class OrderDetailsPanel extends StatelessWidget {
   final VoidCallback? onPrintReceipt;
   final VoidCallback? onReprintKitchenSlip;
   final VoidCallback? onRefundOrCancel;
+  final VoidCallback? onMarkTerminee;
 
   /// Recommended panel width — pass this (capped to the viewport) as the
   /// width of whatever container hosts this widget.
@@ -590,6 +592,33 @@ class OrderDetailsPanel extends StatelessWidget {
       ),
       child: Column(
         children: [
+          if (order.status == 'en_attente') ...[
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: onMarkTerminee,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.check_circle_outline, size: 22),
+                label: const Text(
+                  'MARQUER COMME TERMINÉE (PRÊTE)',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      letterSpacing: 0.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -662,7 +691,11 @@ class OrderDetailsPanel extends StatelessWidget {
 }
 
 /// Opens [OrderDetailsPanel] sliding in from the right edge of the screen.
-void showOrderDetailsPanel(BuildContext context, HistoryOrder order) {
+void showOrderDetailsPanel(
+  BuildContext context,
+  HistoryOrder order, {
+  VoidCallback? onMarkTerminee,
+}) {
   showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -683,6 +716,7 @@ void showOrderDetailsPanel(BuildContext context, HistoryOrder order) {
             child: OrderDetailsPanel(
               order: order,
               onClose: () => Navigator.of(ctx).pop(),
+              onMarkTerminee: onMarkTerminee,
             ),
           ),
         ),

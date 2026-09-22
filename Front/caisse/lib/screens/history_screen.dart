@@ -41,7 +41,7 @@ class _ModeStyle {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   static const int _pageSize = 9;
-  static const double _minTableWidth = 900;
+  static const double _minTableWidth = 980;
 
   // Table palette (Figma): stone neutrals + brand brown.
   static const Color _ink = Color(0xFF1C1917); //        cells text
@@ -63,14 +63,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   ];
 
   // Column flex: DATE, HEURE, NUMÉRO, MONTANT, CAISSE, CLIENT, MODE, ACTIONS
-  static const _flex = [2, 2, 2, 2, 2, 3, 2, 2];
+  static const _flex = [2, 2, 2, 2, 2, 3, 2, 3];
 
   final HistoryService _service = HistoryService();
   final LayerLink _calendarLink = LayerLink();
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
 
-  String _status = 'terminee';
+  String _status = 'en_attente';
   late DateTimeRange _range;
   int _page = 1;
 
@@ -933,6 +933,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (o.status == 'en_attente') ...[
+                    _finishButton(o),
+                    const SizedBox(width: 8),
+                  ],
                   _detailsButton(o, selected),
                   if (selected) ...[
                     const SizedBox(width: 10),
@@ -999,6 +1003,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
           style: selected
               ? _os(12, FontWeight.w600, Colors.white, lineHeight: 16)
               : _os(12, FontWeight.w500, _stone600, lineHeight: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _finishButton(HistoryOrder o) {
+    return InkWell(
+      onTap: () => _markOrderTerminee(o),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFF059669),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check, size: 14, color: Colors.white),
+            const SizedBox(width: 4),
+            Text(
+              'Terminer',
+              style: _os(12, FontWeight.w600, Colors.white, lineHeight: 16),
+            ),
+          ],
         ),
       ),
     );
@@ -1115,7 +1144,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  void _showDetails(HistoryOrder o) => showOrderDetailsPanel(context, o);
+  Future<void> _markOrderTerminee(HistoryOrder o) async {
+    try {
+      await _service.updateOrderStatus(orderId: o.id, status: 'terminee');
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).maybePop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF059669),
+          content: Text('Commande #${o.ticketNumber} marquée comme terminée !'),
+        ),
+      );
+      _loadSummary();
+      _loadOrders(keepData: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text('Erreur : $e'),
+        ),
+      );
+    }
+  }
+
+  void _showDetails(HistoryOrder o) => showOrderDetailsPanel(
+        context,
+        o,
+        onMarkTerminee:
+            o.status == 'en_attente' ? () => _markOrderTerminee(o) : null,
+      );
 
   // ───────────────────────────── status bar ─────────────────────────────
 
