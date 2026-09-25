@@ -26,6 +26,7 @@ const TAB_STATUS = {
   attente: "en_attente",
   encaisser: "a_encaisser",
   repas: "repas_employe",
+  annulees: "annulee",
 };
 
 function fmtPrice(n) {
@@ -81,6 +82,9 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
   const handleRefundClick = async () => {
     try {
       await orderService.cancel(order._id, "Remboursement demandé");
+      if (payment?._id) {
+        await paymentService.refund(payment._id, "Remboursement demandé");
+      }
       onRefund(order._id);
     } catch (e) {
       console.error(e);
@@ -649,6 +653,7 @@ export default function HistoriquePage() {
             <Tab          onClick={() => handleTabChange("encaisser")} active={activeTab === "encaisser"}>À encaisser</Tab>
             <Tab active={activeTab === "terminées"} badge={totalOrders} onClick={() => handleTabChange("terminées")}>Terminées</Tab>
             <Tab          onClick={() => handleTabChange("repas")}     active={activeTab === "repas"}>Repas Empl.</Tab>
+            <Tab          onClick={() => handleTabChange("annulees")}  active={activeTab === "annulees"}>Annulées</Tab>
           </div>
           <span style={{ fontSize:12.5,color:COLORS.muted,whiteSpace:"nowrap" }}>
             Affichage : <b style={{ color:COLORS.ink,fontWeight:700 }}>{totalOrders} commande{totalOrders !== 1 ? "s" : ""}</b>

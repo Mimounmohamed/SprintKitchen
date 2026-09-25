@@ -134,7 +134,7 @@ class KitchenOrder {
 
     final ts = j['kdsSentAt'] ?? j['createdAt'];
     return KitchenOrder(
-      id:           j['_id'] as String,
+      id:           j['_id']?.toString() ?? '',
       ticketNumber: '#${j['ticketNumber'] ?? '?'}',
       mode:         mode,
       createdAt:    ts != null
@@ -445,7 +445,7 @@ class _OrderCard extends StatefulWidget {
   final KitchenOrder order;
   final DateTime now;
   final R r;
-  final VoidCallback onAdvance;
+  final Future<void> Function() onAdvance;
   const _OrderCard({required this.order, required this.now,
     required this.r, required this.onAdvance});
   @override State<_OrderCard> createState() => _OrderCardState();
@@ -456,6 +456,7 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
   late AnimationController _bounce;
   late Animation<double> _bounceAnim;
   bool _canScrollDown = false;
+  bool _advancing     = false; // debounce — prevents double-tap
 
   @override
   void initState() {
@@ -657,7 +658,11 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
           width: double.infinity,
           height: r.w < 800 ? 32 : 38,
           child: ElevatedButton(
-            onPressed: widget.onAdvance,
+            onPressed: _advancing ? null : () async {
+              setState(() => _advancing = true);
+              await widget.onAdvance();
+              if (mounted) setState(() => _advancing = false);
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: btn.bg, foregroundColor: btn.fg,
               elevation: 0, padding: EdgeInsets.zero,
