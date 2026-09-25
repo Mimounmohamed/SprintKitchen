@@ -4,6 +4,7 @@ import '../services/dashboard_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/hub_module_card.dart';
 import 'history_screen.dart';
+import 'inventory_screen.dart';
 import 'pos_screen.dart';
 
 /// SprintKitchen Caisse Hub — Identical design and visual hierarchy
@@ -844,7 +845,11 @@ class _HubScreenState extends State<HubScreen> {
         ],
         cta: 'GÉRER LES STOCKS & 86',
         ctaStyle: CtaStyle.secondary,
-        onClick: () => _showStockModal(context),
+        onClick: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const InventoryScreen()),
+          );
+        },
       ),
     ];
 
@@ -979,6 +984,23 @@ class _HubScreenState extends State<HubScreen> {
                 color: AppColors.ink,
               ),
             ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const InventoryScreen()),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: AppColors.brown,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Gérer les stocks',
+                style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
