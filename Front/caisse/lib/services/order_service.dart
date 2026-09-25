@@ -20,16 +20,41 @@ class OrderService {
   /// POST /api/orders
   /// The server picks the store automatically and computes totalTTC / TVA
   /// from the line totals we send.
+  ///
+  /// [tableNumber] (sur place), [clientName] (à emporter, optional) and
+  /// [deliveryAddress] / [deliveryPhone] (livraison) are only sent when set,
+  /// so an order carries just the fields its type actually needs.
   Future<CreatedOrder> createOrder({
     required List<TicketLine> lines,
     required OrderType orderType,
     required double expectedTotal,
+    String? tableNumber,
+    String? clientName,
+    String? deliveryAddress,
+    String? deliveryPhone,
   }) async {
-    final json = await _client.post('/orders', {
+    final body = <String, dynamic>{
       'orderType': _orderTypeToApi(orderType),
       'items': lines.map(_lineToJson).toList(),
       'status': 'en_attente',
-    });
+    };
+
+    if (tableNumber != null && tableNumber.trim().isNotEmpty) {
+      body['buzzerNumber'] = 'Table ${tableNumber.trim()}';
+    }
+    if (clientName != null && clientName.trim().isNotEmpty) {
+      body['clientName'] = clientName.trim();
+    }
+    final hasAddress = deliveryAddress != null && deliveryAddress.trim().isNotEmpty;
+    final hasPhone = deliveryPhone != null && deliveryPhone.trim().isNotEmpty;
+    if (hasAddress || hasPhone) {
+      body['delivery'] = {
+        if (hasAddress) 'address': deliveryAddress.trim(),
+        if (hasPhone) 'phone': deliveryPhone.trim(),
+      };
+    }
+
+    final json = await _client.post('/orders', body);
 
     final data = json['data'] as Map<String, dynamic>;
     final created = CreatedOrder(

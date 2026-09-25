@@ -10,6 +10,7 @@ import '../services/api_client.dart' show ApiException;
 import '../services/menu_service.dart';
 import '../services/order_service.dart';
 import '../widgets/pos/encaissement_modal.dart';
+import '../widgets/pos/order_details_modal.dart';
 
 /// The POS / register screen ("SprintKitchen POS - Caisse Principale").
 ///
@@ -53,6 +54,13 @@ class _PosScreenState extends State<PosScreen> {
   /// Order created on the server but not yet paid (kept so a retry after a
   /// payment failure does not create a duplicate order).
   CreatedOrder? _pendingOrder;
+
+  /// Table number / client name / delivery info the cashier entered for the
+  /// order currently in flight. Cleared together with [_pendingOrder]: once
+  /// an order exists server-side its details are already saved, so a retry
+  /// after a payment failure skips straight to the payment modal instead of
+  /// asking again.
+  OrderDetailsResult? _orderDetails;
 
   @override
   void initState() {
@@ -155,6 +163,25 @@ class _PosScreenState extends State<PosScreen> {
 
   Future<void> _openEncaissement() async {
     if (_submitting) return;
+
+    // No order created yet for this ticket: ask for the order-type details
+    // first (table number / delivery info / optional client name). If an
+    // order already exists (retrying payment after a failure), its details
+    // are already saved server-side, so skip straight to payment.
+    if (_pendingOrder == null) {
+      final details = await showDialog<OrderDetailsResult>(
+        context: context,
+        barrierColor: Colors.transparent,
+        builder: (_) => OrderDetailsModal(
+          orderType: _orderType,
+          ticketNumber: _ticketNumber,
+          posteLabel: widget.posteLabel,
+        ),
+      );
+      if (details == null || !mounted) return;
+      _orderDetails = details;
+    }
+
     final result = await showDialog<EncaissementResult>(
       context: context,
       barrierColor: Colors.transparent,
@@ -179,9 +206,11 @@ class _PosScreenState extends State<PosScreen> {
         if (!mounted) return;
         final retry = await _showPaymentError(failure);
         if (!retry) {
-          // Cashier backed out: forget the pending order so an edited ticket
-          // gets a fresh order instead of reusing a stale one.
+          // Cashier backed out: forget the pending order (and its details)
+          // so an edited ticket gets a fresh order instead of reusing a
+          // stale one.
           _pendingOrder = null;
+          _orderDetails = null;
           return;
         }
       }
@@ -209,6 +238,10 @@ class _PosScreenState extends State<PosScreen> {
         lines: _ticketLines,
         orderType: _orderType,
         expectedTotal: _total,
+        tableNumber: _orderDetails?.tableNumber,
+        clientName: _orderDetails?.clientName,
+        deliveryAddress: _orderDetails?.deliveryAddress,
+        deliveryPhone: _orderDetails?.deliveryPhone,
       );
       await _orderService.createPayment(
         orderId: _pendingOrder!.id,
@@ -218,6 +251,7 @@ class _PosScreenState extends State<PosScreen> {
       );
       paid = _pendingOrder;
       _pendingOrder = null;
+      _orderDetails = null;
     } on ApiException catch (e) {
       failure = e;
     } catch (e) {
