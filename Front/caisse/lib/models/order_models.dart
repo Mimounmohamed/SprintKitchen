@@ -57,6 +57,7 @@ class HistoryOrder {
     this.clientName,
     this.buzzerNumber,
     this.deliveryName,
+    this.notes,
     this.lines = const [],
   });
 
@@ -74,6 +75,7 @@ class HistoryOrder {
   final String? clientName;
   final String? buzzerNumber;
   final String? deliveryName;
+  final String? notes;
   final List<HistoryOrderLine> lines;
 
   /// First non-empty of client name / buzzer / delivery name, else null
@@ -102,6 +104,7 @@ class HistoryOrder {
       clientName: json['clientName'] as String?,
       buzzerNumber: json['buzzerNumber'] as String?,
       deliveryName: delivery is Map ? delivery['fullName'] as String? : null,
+      notes: json['notes'] as String?,
       lines: (json['items'] as List<dynamic>? ?? [])
           .map((e) => HistoryOrderLine.fromJson(e as Map<String, dynamic>))
           .toList(),

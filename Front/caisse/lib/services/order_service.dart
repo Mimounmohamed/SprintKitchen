@@ -32,6 +32,7 @@ class OrderService {
     String? clientName,
     String? deliveryAddress,
     String? deliveryPhone,
+    String? notes,
   }) async {
     final body = <String, dynamic>{
       'orderType': _orderTypeToApi(orderType),
@@ -39,6 +40,9 @@ class OrderService {
       'status': 'en_attente',
     };
 
+    if (notes != null && notes.trim().isNotEmpty) {
+      body['notes'] = notes.trim();
+    }
     if (tableNumber != null && tableNumber.trim().isNotEmpty) {
       body['buzzerNumber'] = 'Table ${tableNumber.trim()}';
     }

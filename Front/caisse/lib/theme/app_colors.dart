@@ -11,7 +11,7 @@ class AppColors {
   static const Color surface = Colors.white;         // C.cardBg
   static const Color border = Color(0xFFE7E4DD);     // C.border
   static const Color ink = Color(0xFF1C1917);        // C.ink
-  static const Color brown = Color(0xFF2E2117);      // C.brown
+  static const Color brown = Color(0xFF583926);      // C.brown (lighter menu brown)
   static const Color gold = Color(0xFFF2B705);       // C.yellow
   static const Color muted = Color(0xFF8B8378);      // C.muted
   static const Color green = Color(0xFF2FAE5C);      // C.green
@@ -30,7 +30,7 @@ class AppColors {
   static const Color textMuted = muted;
 
   static const Color brandDark = brown;
-  static const Color brandDarkHover = Color(0xFF433022);
+  static const Color brandDarkHover = Color(0xFF452B1E);
 
   static const Color goldLight = Color(0xFFFDE047);
   static const Color goldSoft = yellowBg;

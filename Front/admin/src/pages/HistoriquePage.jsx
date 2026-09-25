@@ -102,6 +102,7 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
         <h2>BON DE CUISINE</h2>
         <p style="text-align:center;margin:0">Commande ${order.num} — ${date}</p>
         <hr/><table>${items}</table><hr/>
+        ${d?.notes ? `<div style="background:#fef3c7;border:1px solid #f59e0b;padding:8px;margin:8px 0;border-radius:4px;font-weight:bold;font-size:13px;color:#92400e">NOTE CUISINE : ${d.notes}</div>` : ""}
         <p style="text-align:center">MODE: ${order.mode?.toUpperCase()}</p>
       </body></html>
     ` : `
@@ -117,6 +118,7 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
         <p class="center" style="margin:4px 0">Commande ${order.num}</p>
         <p class="center" style="margin:0;font-size:11px">${date}</p>
         <p class="center" style="margin:4px 0;font-size:11px">Mode: ${order.mode || ""} · ${paymentLabel || ""}</p>
+        ${d?.notes ? `<p style="margin:6px 0;font-size:12px;font-weight:bold;color:#333">NOTE CUISINE : ${d.notes}</p>` : ""}
         <hr/>
         <table>${items}</table>
         <hr/>
@@ -220,6 +222,21 @@ function OrderDetailDrawer({ order, onClose, onRefund }) {
                   </span>
                 </div>
               </div>
+
+              {/* Note cuisine */}
+              {detail?.notes && (
+                <div style={{ background:"#FEF3C7",border:"1px solid #F59E0B",borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"flex-start",gap:10 }}>
+                  <span style={{ fontSize:16,lineHeight:1 }}>📝</span>
+                  <div>
+                    <div style={{ fontSize:11,fontWeight:700,letterSpacing:"0.07em",color:"#B45309",textTransform:"uppercase",marginBottom:4 }}>
+                      Note Cuisine / Commentaire
+                    </div>
+                    <div style={{ fontSize:13.5,fontWeight:600,color:"#78350F" }}>
+                      {detail.notes}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Items card */}
               <div style={{ background:COLORS.cardBg,border:`1px solid ${COLORS.border}`,borderRadius:12,overflow:"hidden" }}>

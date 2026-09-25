@@ -116,6 +116,7 @@ class OrderDetailsPanel extends StatelessWidget {
               children: [
                 _buildInfoCard(mode),
                 const SizedBox(height: 16),
+                _buildKitchenNotesCard(),
                 _buildItemsCard(tvaPercent),
               ],
             ),
@@ -287,6 +288,54 @@ class OrderDetailsPanel extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKitchenNotesCard() {
+    if (order.notes == null || order.notes!.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.chat_bubble_outline, size: 20, color: Color(0xFFB45309)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'NOTE CUISINE / COMMENTAIRE',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: Color(0xFFB45309),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  order.notes!,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF78350F),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
