@@ -5,15 +5,14 @@ const {
   createIngredient, updateIngredient,
   updateAvailability, bulkAvailability, deleteIngredient,
 } = require('../controllers/ingredientController');
-const protect = require('../middleware/auth');
 
 router.get('/families',              getFamilies);
 router.get('/',                      getIngredients);
 router.get('/:id',                   getIngredient);
-router.post('/bulk-availability',    protect, bulkAvailability);
-router.post('/',                     protect, createIngredient);
-router.put('/:id',                   protect, updateIngredient);
-router.patch('/:id/availability',    protect, updateAvailability);
-router.delete('/:id',                protect, deleteIngredient);
+router.post('/bulk-availability',    bulkAvailability);
+router.post('/',                     createIngredient);
+router.put('/:id',                   updateIngredient);
+router.patch('/:id/availability',    updateAvailability);
+router.delete('/:id',                deleteIngredient);
 
 module.exports = router;

@@ -10,6 +10,8 @@ import '../services/api_client.dart' show ApiException;
 import '../services/menu_service.dart';
 import '../services/order_service.dart';
 import '../widgets/pos/encaissement_modal.dart';
+import '../widgets/pos/order_details_modal.dart';
+import 'history_screen.dart';
 
 /// The POS / register screen ("SprintKitchen POS - Caisse Principale").
 ///
@@ -18,7 +20,7 @@ import '../widgets/pos/encaissement_modal.dart';
 class PosScreen extends StatefulWidget {
   const PosScreen({
     super.key,
-    this.ticketNumber = '0000123',
+    this.ticketNumber = '000001',
     this.posteLabel = 'Caisse 01',
   });
 
@@ -53,6 +55,16 @@ class _PosScreenState extends State<PosScreen> {
   /// Order created on the server but not yet paid (kept so a retry after a
   /// payment failure does not create a duplicate order).
   CreatedOrder? _pendingOrder;
+
+  /// Table number / client name / delivery info the cashier entered for the
+  /// order currently in flight. Cleared together with [_pendingOrder]: once
+  /// an order exists server-side its details are already saved, so a retry
+  /// after a payment failure skips straight to the payment modal instead of
+  /// asking again.
+  OrderDetailsResult? _orderDetails;
+
+  /// Optional kitchen note / comment for the current order.
+  String? _orderNotes;
 
   @override
   void initState() {
@@ -151,10 +163,170 @@ class _PosScreenState extends State<PosScreen> {
     });
   }
 
+  void _repriseOrder() {
+    if (_ticketLines.isEmpty && (_orderNotes == null || _orderNotes!.isEmpty)) return;
+    final backupLines = List<TicketLine>.from(_ticketLines);
+    final backupNotes = _orderNotes;
+    setState(() {
+      _ticketLines.clear();
+      _selectedLineIndex = null;
+      _pendingOrder = null;
+      _orderDetails = null;
+      _orderNotes = null;
+    });
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Commande réinitialisée — tous les articles ont été supprimés'),
+        action: SnackBarAction(
+          label: 'ANNULER',
+          textColor: AppColors.gold,
+          onPressed: () {
+            setState(() {
+              _ticketLines.addAll(backupLines);
+              _orderNotes = backupNotes;
+              _selectedLineIndex =
+                  _ticketLines.isNotEmpty ? _ticketLines.length - 1 : null;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCommentDialog() async {
+    final controller = TextEditingController(text: _orderNotes ?? '');
+    final result = await showDialog<String?>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (ctx) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+          actionsPadding: const EdgeInsets.all(16),
+          title: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.gold,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.chat_bubble,
+                    size: 16, color: AppColors.brandDark),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'NOTE CUISINE / COMMENTAIRE',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Ce commentaire sera visible en cuisine et imprimé sur le bon de commande.',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                maxLines: 3,
+                autofocus: true,
+                style: const TextStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText:
+                      'Ex: Sans sel sur les frites, bien cuit, allergie...',
+                  hintStyle:
+                      const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        const BorderSide(color: AppColors.brandDark, width: 2),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFFAFAF9),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            if (_orderNotes != null && _orderNotes!.isNotEmpty)
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(''),
+                style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+                child: const Text('Effacer',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              style: TextButton.styleFrom(foregroundColor: AppColors.textMuted),
+              child: const Text('Annuler',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brandDark,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+              child: const Text('Enregistrer',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        _orderNotes = result.isEmpty ? null : result;
+      });
+    }
+  }
+
   // ───────────────────────── Encaissement flow ─────────────────────────
 
   Future<void> _openEncaissement() async {
     if (_submitting) return;
+
+    // No order created yet for this ticket: ask for the order-type details
+    // first (table number / delivery info / optional client name). If an
+    // order already exists (retrying payment after a failure), its details
+    // are already saved server-side, so skip straight to payment.
+    if (_pendingOrder == null) {
+      final details = await showDialog<OrderDetailsResult>(
+        context: context,
+        barrierColor: Colors.transparent,
+        builder: (_) => OrderDetailsModal(
+          orderType: _orderType,
+          ticketNumber: _ticketNumber,
+          posteLabel: widget.posteLabel,
+        ),
+      );
+      if (details == null || !mounted) return;
+      _orderDetails = details;
+    }
+
     final result = await showDialog<EncaissementResult>(
       context: context,
       barrierColor: Colors.transparent,
@@ -179,9 +351,11 @@ class _PosScreenState extends State<PosScreen> {
         if (!mounted) return;
         final retry = await _showPaymentError(failure);
         if (!retry) {
-          // Cashier backed out: forget the pending order so an edited ticket
-          // gets a fresh order instead of reusing a stale one.
+          // Cashier backed out: forget the pending order (and its details)
+          // so an edited ticket gets a fresh order instead of reusing a
+          // stale one.
           _pendingOrder = null;
+          _orderDetails = null;
           return;
         }
       }
@@ -209,6 +383,11 @@ class _PosScreenState extends State<PosScreen> {
         lines: _ticketLines,
         orderType: _orderType,
         expectedTotal: _total,
+        tableNumber: _orderDetails?.tableNumber,
+        clientName: _orderDetails?.clientName,
+        deliveryAddress: _orderDetails?.deliveryAddress,
+        deliveryPhone: _orderDetails?.deliveryPhone,
+        notes: _orderNotes,
       );
       await _orderService.createPayment(
         orderId: _pendingOrder!.id,
@@ -218,6 +397,7 @@ class _PosScreenState extends State<PosScreen> {
       );
       paid = _pendingOrder;
       _pendingOrder = null;
+      _orderDetails = null;
     } on ApiException catch (e) {
       failure = e;
     } catch (e) {
@@ -231,6 +411,7 @@ class _PosScreenState extends State<PosScreen> {
     setState(() {
       _ticketLines.clear();
       _selectedLineIndex = null;
+      _orderNotes = null;
       _ticketNumber = _nextTicketNumber(paid!.ticketNumber);
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -274,7 +455,7 @@ class _PosScreenState extends State<PosScreen> {
   /// registers this is only a preview; the real number comes from the server.
   String _nextTicketNumber(String served) {
     final n = int.tryParse(served);
-    return n == null ? _ticketNumber : (n + 1).toString().padLeft(7, '0');
+    return n == null ? _ticketNumber : (n + 1).toString().padLeft(6, '0');
   }
 
   // ───────────────────────────── UI ─────────────────────────────
@@ -560,6 +741,39 @@ class _PosScreenState extends State<PosScreen> {
               ],
             ),
           ),
+          if (_orderNotes != null && _orderNotes!.isNotEmpty)
+            InkWell(
+              onTap: _openCommentDialog,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFF59E0B)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.chat_bubble, size: 14, color: Color(0xFFB45309)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Note cuisine : $_orderNotes',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.edit, size: 13, color: Color(0xFFB45309)),
+                  ],
+                ),
+              ),
+            ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
             decoration: const BoxDecoration(
@@ -651,9 +865,13 @@ class _PosScreenState extends State<PosScreen> {
                 const SizedBox(width: 8),
                 _lineActionButton(
                   icon: Icons.chat_bubble,
-                  color: const Color(0xFF4B5563),
-                  bg: const Color(0xFFF3F4F6),
-                  onTap: () {},
+                  color: (_orderNotes != null && _orderNotes!.isNotEmpty)
+                      ? AppColors.brandDark
+                      : const Color(0xFF4B5563),
+                  bg: (_orderNotes != null && _orderNotes!.isNotEmpty)
+                      ? const Color(0xFFFEF3C7)
+                      : const Color(0xFFF3F4F6),
+                  onTap: _openCommentDialog,
                 ),
                 const SizedBox(width: 8),
                 _lineActionButton(
@@ -772,7 +990,14 @@ class _PosScreenState extends State<PosScreen> {
                     icon: Icons.inventory_2_outlined,
                     bg: const Color(0xFF27272A),
                     fg: Colors.white,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              HistoryScreen(posteLabel: widget.posteLabel),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -792,7 +1017,7 @@ class _PosScreenState extends State<PosScreen> {
                     icon: Icons.sync,
                     bg: const Color(0xFF452B1E),
                     fg: const Color(0xFFFBBF24),
-                    onTap: () {},
+                    onTap: _repriseOrder,
                   ),
                 ),
               ],
