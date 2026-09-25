@@ -62,6 +62,7 @@ const TABS = [
   { status: 'a_encaisser', label: 'À ENCAISSER', countLabel: 'commandes à encaisser' },
   { status: 'terminee', label: 'TERMINÉES', countLabel: 'commandes terminées' },
   { status: 'repas_employe', label: 'REPAS EMPL.', countLabel: 'repas employés' },
+  { status: 'annulee', label: 'ANNULÉES', countLabel: 'commandes annulées' },
 ];
 
 const MONTHS_SHORT = [
@@ -1875,6 +1876,12 @@ export default function HistoriquePage() {
     if (!window.confirm('Voulez-vous vraiment rembourser ou annuler cette commande ?')) return;
     try {
       await orderService.cancel(orderId, 'Remboursement demandé');
+      const paymentRes = await paymentService.getByOrder(orderId).catch(() => ({ data: { data: null } }));
+      const payData = paymentRes?.data?.data;
+      const payment = Array.isArray(payData) ? payData[0] : payData;
+      if (payment?._id) {
+        await paymentService.refund(payment._id, 'Remboursement demandé');
+      }
       loadSummary();
       loadOrders(true);
       if (drawerOrder?._id === orderId) {

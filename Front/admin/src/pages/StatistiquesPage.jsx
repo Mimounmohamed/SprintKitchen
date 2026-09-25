@@ -184,6 +184,7 @@ function HourlyChart({ isMobile, data }) {
 
 /* TopArticles — receives data as prop */
 function TopArticles({ data, totalCA }) {
+  const navigate = useNavigate();
   const items = (data || []).slice(0, 4).map((a, i) => ({ ...a, rank: i + 1 }));
   const total = items.reduce((s, a) => s + a.revenue, 0);
   const pctOfCA = totalCA > 0 ? ((total / totalCA) * 100).toFixed(1) : "0.0";
@@ -212,7 +213,7 @@ function TopArticles({ data, totalCA }) {
       ))}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 11, color: C.muted }}>Total : {pctOfCA}% du CA</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: C.blue, cursor: "pointer" }}>
+        <span onClick={() => navigate("/menu")} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: C.blue, cursor: "pointer" }}>
           Catalogue complet <ChevronRight size={12} />
         </span>
       </div>
