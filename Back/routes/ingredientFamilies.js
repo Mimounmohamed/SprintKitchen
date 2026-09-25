@@ -3,11 +3,10 @@ const router   = express.Router();
 const {
   getFamilies, createFamily, updateFamily, deleteFamily,
 } = require('../controllers/ingredientFamilyController');
-const protect = require('../middleware/auth');
 
 router.get('/',      getFamilies);
-router.post('/',     protect, createFamily);
-router.put('/:id',   protect, updateFamily);
-router.delete('/:id',protect, deleteFamily);
+router.post('/',     createFamily);
+router.put('/:id',   updateFamily);
+router.delete('/:id',deleteFamily);
 
 module.exports = router;

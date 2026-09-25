@@ -9,7 +9,8 @@ exports.createPayment = async (req, res) => {
 
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-    if (order.status === 'terminee') {
+    const existingPayment = await Payment.findOne({ orderId, isRefunded: { $ne: true } });
+    if (existingPayment || order.status === 'terminee') {
       return res.status(400).json({ success: false, message: 'Order already paid' });
     }
 
@@ -29,9 +30,10 @@ exports.createPayment = async (req, res) => {
       receiptPrinted: req.body.receiptPrinted || false,
     });
 
-    // Mark order as completed
-    order.status = 'terminee';
-    order.completedAt = new Date();
+    // Send order to kitchen (en attente de préparation)
+    order.status = 'en_attente';
+    order.kdsStatus = 'pending';
+    order.kdsSentAt = new Date();
     await order.save();
 
     res.status(201).json({ success: true, data: payment, change });

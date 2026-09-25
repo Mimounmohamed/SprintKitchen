@@ -142,7 +142,7 @@ OrderSchema.pre('save', async function (next) {
       { $inc: { seq: 1 } },
       { new: true, upsert: true }
     );
-    this.ticketNumber = String(counter.seq).padStart(7, '0');
+    this.ticketNumber = String(counter.seq).padStart(6, '0');
     next();
   } catch (err) {
     next(err);

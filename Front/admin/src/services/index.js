@@ -15,6 +15,7 @@ export const orderService = {
     api.patch(`/orders/${id}/status`, { status, ...extra }),
   cancel: (id, reason) => api.patch(`/orders/${id}/cancel`, { reason }),
   getDailyStats: (params) => api.get('/orders/stats/daily', { params }),
+  getSummary: (params) => api.get('/orders/summary', { params }),
 };
 
 // ── Products ──────────────────────────────────────────────────────────────────
