@@ -39,44 +39,7 @@ app.use('/api/ingredients',       require('./routes/ingredients'));
 app.use('/api/dashboard',         require('./routes/dashboard'));
 app.use('/api/ingredient-families', require('./routes/ingredientFamilies'));
 
-// ── KDS (inline — no external file needed) ───────────────────────────────────
-const Order = require('./models/Order');
-
-app.get('/api/kds/orders', async (req, res) => {
-  try {
-    const now   = new Date();
-    const start = new Date(now); start.setHours(0, 0, 0, 0);
-    const end   = new Date(now); end.setHours(23, 59, 59, 999);
-    const orders = await Order.find({
-      status:    { $in: ['en_attente', 'a_encaisser'] },
-      createdAt: { $gte: start, $lte: end },
-    })
-      .select('ticketNumber orderType status kdsStatus kdsSentAt items notes createdAt clientName buzzerNumber')
-      .sort({ createdAt: 1 })
-      .limit(60);
-    res.json({ success: true, data: orders });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-app.patch('/api/kds/orders/:id/kds-status', async (req, res) => {
-  try {
-    const { kdsStatus } = req.body;
-    if (!['in_progress', 'ready', 'served'].includes(kdsStatus)) {
-      return res.status(400).json({ success: false, message: 'Invalid kdsStatus' });
-    }
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-    order.kdsStatus = kdsStatus;
-    if (kdsStatus === 'ready')  { order.kdsReadyAt = new Date(); order.status = 'a_encaisser'; }
-    if (kdsStatus === 'served') { order.status = 'terminee'; order.completedAt = new Date(); }
-    await order.save();
-    res.json({ success: true, data: { _id: order._id, kdsStatus: order.kdsStatus, status: order.status } });
-  } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
-  }
-});
+app.use('/api/kds',               require('./routes/kds'));
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
