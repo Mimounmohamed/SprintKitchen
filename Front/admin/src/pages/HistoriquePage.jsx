@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -69,13 +69,6 @@ const MONTHS_SHORT = [
   'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.',
 ];
 
-const FR_MONTHS_FULL = [
-  'JANVIER', 'FÉVRIER', 'MARS', 'AVRIL', 'MAI', 'JUIN',
-  'JUILLET', 'AOÛT', 'SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE', 'DÉCEMBRE',
-];
-
-const FR_DAYS_SHORT = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-
 function fmtPrice(n) {
   return (n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DA';
 }
@@ -100,20 +93,6 @@ function fmtLongDate(d) {
   if (!d) return '';
   const date = new Date(d);
   return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]} ${date.getFullYear()}`;
-}
-
-function addDays(d, n) {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
-}
-
-function startOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function endOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
 function isSameDay(a, b) {
@@ -913,470 +892,860 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
   );
 }
 
-/* ── Date Range Modal (Exact replica of DateRangePopover) ────────────────────────── */
-function MonthCalendar({ year, month, lo, hi, picking, hovered, onDayClick, onDayHover }) {
-  const TODAY = new Date();
-  let startDow = new Date(year, month, 1).getDay();
-  startDow = startDow === 0 ? 6 : startDow - 1;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < startDow; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+/* ── Date Range Popover (Exact 1:1 replica of Caisse DateRangePopover) ───────────── */
+const POPOVER_COLORS = {
+  ink: '#1C1917',
+  stone600: '#57534E',
+  stone500: '#78716C',
+  stone400: '#A8A29E',
+  border: '#E7E5E4',
+  brandDark: '#452B1E',
+  gold: '#FACC15',
+  rangeFill: '#FDE9A0',
+};
 
-  const effHi = hi || (picking && hovered ? hovered : null);
-  const realLo = lo && effHi ? (lo <= effHi ? lo : effHi) : lo;
-  const realHi = lo && effHi ? (lo <= effHi ? effHi : lo) : null;
+const POPOVER_MONTHS = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+];
 
-  return (
-    <div style={{ flex: 1, minWidth: 0 }}>
+const POPOVER_MONTHS_SHORT = [
+  'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+  'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
+];
+
+const POPOVER_WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+const fmtShortVal = (d) => `${d.getDate()} ${POPOVER_MONTHS_SHORT[d.getMonth()]}`;
+const fmtSlashVal = (d) => `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()}`;
+
+function PopoverDayCell({
+  day,
+  col,
+  start,
+  end,
+  today,
+  daysInMonth,
+  onDayTap,
+}) {
+  const cellH = 38;
+  const brownSize = 32;
+  const haloSize = 38;
+  const radius = haloSize / 2; // 19
+
+  if (!day) return <div style={{ flex: 1, height: cellH }} />;
+
+  const isAllHistory = start && start.getFullYear() <= 2020;
+  const isStart = start && !isAllHistory && isSameDay(day, start);
+  const isEnd = end && !isAllHistory && isSameDay(day, end);
+  const isSingleDay = isStart && isEnd;
+  const isEndpoint = isStart || isEnd;
+  const inRange = !isAllHistory && start && end && day > start && day < end;
+  const isToday = isSameDay(day, today);
+  const disabled = day > today;
+
+  const isFirstInMonth = day.getDate() === 1;
+  const isLastInMonth = day.getDate() === daysInMonth;
+
+  let strip = null;
+  if (!isSingleDay && start && end && !isAllHistory) {
+    if (inRange) {
+      const roundLeft = col === 0 || isFirstInMonth;
+      const roundRight = col === 6 || isLastInMonth;
+      strip = (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: POPOVER_COLORS.rangeFill,
+            borderTopLeftRadius: roundLeft ? radius : 0,
+            borderBottomLeftRadius: roundLeft ? radius : 0,
+            borderTopRightRadius: roundRight ? radius : 0,
+            borderBottomRightRadius: roundRight ? radius : 0,
+          }}
+        />
+      );
+    } else if (isStart) {
+      strip = (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: '50%',
+            right: 0,
+            background: col === 6 || isLastInMonth ? 'transparent' : POPOVER_COLORS.rangeFill,
+          }}
+        />
+      );
+    } else if (isEnd) {
+      strip = (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: '50%',
+            background: col === 0 || isFirstInMonth ? 'transparent' : POPOVER_COLORS.rangeFill,
+          }}
+        />
+      );
+    }
+  }
+
+  const halo =
+    !isSingleDay && isEndpoint ? (
       <div
         style={{
-          textAlign: 'center',
-          fontWeight: 800,
-          fontSize: 13,
-          letterSpacing: '0.07em',
-          color: COLORS.ink,
-          marginBottom: 12,
+          position: 'absolute',
+          width: haloSize,
+          height: haloSize,
+          borderRadius: '50%',
+          background: POPOVER_COLORS.rangeFill,
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
         }}
-      >
-        {FR_MONTHS_FULL[month]} {year}
-      </div>
+      />
+    ) : null;
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 34px)', rowGap: 1, justifyContent: 'center' }}>
-        {FR_DAYS_SHORT.map((d, i) => (
-          <div
-            key={i}
-            style={{
-              textAlign: 'center',
-              fontSize: 11,
-              fontWeight: 700,
-              color: COLORS.stone500,
-              height: 22,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {d}
-          </div>
-        ))}
+  let dayContentStyle = {
+    width: brownSize,
+    height: brownSize,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    zIndex: 2,
+    fontSize: 13.5,
+    fontFamily: FONT_BODY,
+  };
 
-        {cells.map((d, i) => {
-          if (!d) return <div key={`e${i}`} style={{ height: 36 }} />;
-          const isStart = realLo && isSameDay(d, realLo);
-          const isEnd = realHi && isSameDay(d, realHi);
-          const isBoth = isStart && isEnd;
-          const inRange = realLo && realHi && d > realLo && d < realHi;
-          const isToday = isSameDay(d, TODAY);
-          const isSelect = isStart || isEnd;
+  if (isEndpoint) {
+    dayContentStyle = {
+      ...dayContentStyle,
+      background: POPOVER_COLORS.brandDark,
+      color: '#FFFFFF',
+      fontWeight: 700,
+    };
+  } else if (isToday && !inRange) {
+    dayContentStyle = {
+      ...dayContentStyle,
+      border: `1.4px solid ${POPOVER_COLORS.brandDark}`,
+      color: POPOVER_COLORS.ink,
+      fontWeight: 500,
+      background: 'transparent',
+    };
+  } else if (inRange) {
+    dayContentStyle = {
+      ...dayContentStyle,
+      color: POPOVER_COLORS.brandDark,
+      fontWeight: 700,
+      background: 'transparent',
+    };
+  } else {
+    dayContentStyle = {
+      ...dayContentStyle,
+      color: disabled ? POPOVER_COLORS.stone400 : POPOVER_COLORS.ink,
+      fontWeight: 500,
+      background: 'transparent',
+    };
+  }
 
-          let cellBg = 'transparent';
-          if (!isBoth) {
-            if (isStart && realHi) cellBg = `linear-gradient(to right, transparent 50%, ${COLORS.rangeFill} 50%)`;
-            else if (isEnd) cellBg = `linear-gradient(to left, transparent 50%, ${COLORS.rangeFill} 50%)`;
-            else if (inRange) cellBg = COLORS.rangeFill;
-          }
-
-          return (
-            <div
-              key={i}
-              onClick={() => onDayClick(d)}
-              onMouseEnter={() => onDayHover(d)}
-              style={{
-                height: 36,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                background: cellBg,
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  fontSize: 13,
-                  fontWeight: isSelect ? 700 : 400,
-                  background: isSelect ? COLORS.brandDark : inRange ? COLORS.rangeFill : 'transparent',
-                  color: isSelect ? '#FFF8E7' : inRange ? '#78350F' : isToday ? COLORS.brandDark : COLORS.ink,
-                  boxShadow: isToday && !isSelect ? `0 0 0 2px ${COLORS.gold}` : 'none',
-                }}
-              >
-                {d.getDate()}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+  return (
+    <div
+      onClick={disabled ? undefined : () => onDayTap(day)}
+      style={{
+        flex: 1,
+        height: cellH,
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: disabled ? 'default' : 'pointer',
+        userSelect: 'none',
+      }}
+    >
+      {strip}
+      {halo}
+      <div style={dayContentStyle}>{day.getDate()}</div>
     </div>
   );
 }
 
-function DateRangeModal({ initialRange, onClose, onApply }) {
-  const TODAY = useMemo(() => new Date(), []);
-  const [rangeStart, setRangeStart] = useState(initialRange.start);
-  const [rangeEnd, setRangeEnd] = useState(initialRange.end);
-  const [hovered, setHovered] = useState(null);
-  const [picking, setPicking] = useState(false);
-  const [activeKey, setActiveKey] = useState(
-    initialRange.start.getFullYear() <= 2020 ? 'all' : 'today'
-  );
+function PopoverMonthGrid({ month, start, end, today, onDayTap }) {
+  const year = month.getFullYear();
+  const m = month.getMonth();
+  const firstDay = new Date(year, m, 1);
+  const daysInMonth = new Date(year, m + 1, 0).getDate();
+  const leading = (firstDay.getDay() + 6) % 7; // Monday = 0
 
-  const [rightMonth, setRightMonth] = useState({
-    year: (initialRange.end || TODAY).getFullYear(),
-    month: (initialRange.end || TODAY).getMonth(),
+  const cells = [];
+  for (let i = 0; i < leading; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, m, d));
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const rows = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    rows.push(cells.slice(i, i + 7));
+  }
+
+  return (
+    <div style={{ flex: 1 }}>
+      {/* Weekday headers */}
+      <div style={{ display: 'flex', marginBottom: 8 }}>
+        {POPOVER_WEEKDAYS.map((h, i) => (
+          <div
+            key={i}
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: 12,
+              fontWeight: 700,
+              color: POPOVER_COLORS.stone500,
+              fontFamily: FONT_BODY,
+            }}
+          >
+            {h}
+          </div>
+        ))}
+      </div>
+
+      {/* Day rows */}
+      {rows.map((row, rIdx) => (
+        <div
+          key={rIdx}
+          style={{
+            display: 'flex',
+            margin: '2px 0',
+          }}
+        >
+          {row.map((day, cIdx) => (
+            <PopoverDayCell
+              key={cIdx}
+              day={day}
+              col={cIdx}
+              start={start}
+              end={end}
+              today={today}
+              daysInMonth={daysInMonth}
+              onDayTap={onDayTap}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DateRangePopover({ anchorRef, initialRange, onClose, onApply }) {
+  const today = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }, []);
+
+  const [start, setStart] = useState(() => initialRange?.start || today);
+  const [end, setEnd] = useState(() => initialRange?.end || today);
+
+  const [rightMonth, setRightMonth] = useState(() => {
+    const anchor = initialRange?.end || today;
+    return new Date(anchor.getFullYear(), anchor.getMonth(), 1);
   });
 
-  const leftMonth =
-    rightMonth.month === 0
-      ? { year: rightMonth.year - 1, month: 11 }
-      : { year: rightMonth.year, month: rightMonth.month - 1 };
+  const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 });
 
-  const applyShortcut = (fn, key) => {
-    fn();
-    setActiveKey(key);
-    setPicking(false);
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      if (!anchorRef?.current) return;
+      const rect = anchorRef.current.getBoundingClientRect();
+      const popoverWidth = 860;
+      let left = rect.left - 4;
+      if (left + popoverWidth > window.innerWidth - 16) {
+        left = Math.max(16, window.innerWidth - popoverWidth - 16);
+      }
+      if (left < 16) left = 16;
+      let top = rect.bottom + 10;
+      if (top + 480 > window.innerHeight && rect.top > 480) {
+        top = Math.max(16, rect.top - 480 - 10);
+      }
+      setPopoverPos({ top, left });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [anchorRef]);
+
+  const leftMonth = useMemo(() => {
+    return new Date(rightMonth.getFullYear(), rightMonth.getMonth() - 1, 1);
+  }, [rightMonth]);
+
+  const canGoNext = useMemo(() => {
+    const next = new Date(rightMonth.getFullYear(), rightMonth.getMonth() + 1, 1);
+    return next <= new Date(today.getFullYear(), today.getMonth(), 1);
+  }, [rightMonth, today]);
+
+  const goPrevMonth = () => {
+    setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() - 1, 1));
   };
 
-  const shortcuts = [
-    {
-      key: 'today',
-      label: "Aujourd'hui",
-      fn: () => {
-        const t = new Date();
-        setRangeStart(t);
-        setRangeEnd(t);
-      },
-    },
-    {
-      key: 'hier',
-      label: 'Hier',
-      fn: () => {
-        const y = addDays(new Date(), -1);
-        setRangeStart(y);
-        setRangeEnd(y);
-      },
-    },
-    {
-      key: '7j',
-      label: '7 derniers jours',
-      fn: () => {
-        const t = new Date();
-        setRangeStart(addDays(t, -6));
-        setRangeEnd(t);
-      },
-    },
-    {
-      key: 'mois',
-      label: 'Ce mois-ci',
-      fn: () => {
-        const t = new Date();
-        setRangeStart(startOfMonth(t));
-        setRangeEnd(t);
-      },
-    },
-    {
-      key: 'last',
-      label: 'Mois dernier',
-      fn: () => {
-        const t = new Date();
-        const prev = new Date(t.getFullYear(), t.getMonth() - 1, 1);
-        setRangeStart(prev);
-        setRangeEnd(endOfMonth(prev));
-      },
-    },
-    {
-      key: 'all',
-      label: "Tout l'historique",
-      fn: () => {
-        setRangeStart(new Date(2020, 0, 1));
-        setRangeEnd(new Date());
-      },
-    },
-  ];
+  const goNextMonth = () => {
+    if (!canGoNext) return;
+    setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() + 1, 1));
+  };
 
-  const handleDayClick = (d) => {
-    setActiveKey('custom');
-    if (!picking) {
-      setRangeStart(d);
-      setRangeEnd(null);
-      setPicking(true);
+  const shortcuts = useMemo(
+    () => [
+      {
+        label: "Aujourd'hui",
+        range: (t) => ({ start: t, end: t }),
+        valueLabel: fmtShortVal(today),
+      },
+      {
+        label: 'Hier',
+        range: (t) => {
+          const y = new Date(t);
+          y.setDate(y.getDate() - 1);
+          return { start: y, end: y };
+        },
+        valueLabel: (() => {
+          const y = new Date(today);
+          y.setDate(y.getDate() - 1);
+          return fmtShortVal(y);
+        })(),
+      },
+      {
+        label: '7 derniers jours',
+        range: (t) => {
+          const s = new Date(t);
+          s.setDate(s.getDate() - 6);
+          return { start: s, end: t };
+        },
+        valueLabel: null,
+      },
+      {
+        label: 'Ce mois-ci',
+        range: (t) => ({
+          start: new Date(t.getFullYear(), t.getMonth(), 1),
+          end: t,
+        }),
+        valueLabel: POPOVER_MONTHS[today.getMonth()],
+      },
+      {
+        label: 'Mois dernier',
+        range: (t) => {
+          const lastMonthEnd = new Date(t.getFullYear(), t.getMonth(), 0);
+          const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
+          return { start: lastMonthStart, end: lastMonthEnd };
+        },
+        valueLabel: (() => {
+          const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          return POPOVER_MONTHS[prev.getMonth()];
+        })(),
+      },
+      {
+        label: "Tout l'historique",
+        range: (t) => ({
+          start: new Date(2020, 0, 1),
+          end: t,
+        }),
+        valueLabel: 'Toutes dates',
+      },
+    ],
+    [today]
+  );
+
+  const matchesShortcut = (s) => {
+    if (!start || !end) return false;
+    if (s.label === "Tout l'historique") {
+      return start.getFullYear() <= 2020 && isSameDay(end, today);
+    }
+    const r = s.range(today);
+    return isSameDay(start, r.start) && isSameDay(end, r.end);
+  };
+
+  const applyShortcut = (s) => {
+    const r = s.range(today);
+    setStart(r.start);
+    setEnd(r.end);
+    setRightMonth(new Date(r.end.getFullYear(), r.end.getMonth(), 1));
+  };
+
+  const handleDayTap = (day) => {
+    if (!start || (start && end)) {
+      setStart(day);
+      setEnd(null);
+    } else if (day < start) {
+      setEnd(start);
+      setStart(day);
     } else {
-      if (d < rangeStart) {
-        setRangeEnd(rangeStart);
-        setRangeStart(d);
-      } else {
-        setRangeEnd(d);
-      }
-      setPicking(false);
+      setEnd(day);
     }
   };
 
-  const effEnd = rangeEnd || rangeStart;
-  const lo = rangeStart && effEnd ? (rangeStart <= effEnd ? rangeStart : effEnd) : rangeStart;
-  const hi = rangeStart && effEnd ? (rangeStart <= effEnd ? effEnd : rangeStart) : null;
-  const dayCount = lo && hi ? Math.round(Math.abs(hi - lo) / 86400000) + 1 : 1;
+  const isCustomActive = shortcuts.every((s) => !matchesShortcut(s));
+
+  const hasRange = start != null && end != null;
+  const isAllHistory = start && start.getFullYear() <= 2020;
+  const days = hasRange ? Math.round(Math.abs(end - start) / 86400000) + 1 : 0;
 
   return (
-    <div
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(28,25,23,0.5)',
-        zIndex: 400,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-        fontFamily: FONT_BODY,
-      }}
-    >
+    <>
+      {/* Invisible dismiss barrier */}
       <div
+        onClick={onClose}
         style={{
-          background: COLORS.surface,
+          position: 'fixed',
+          inset: 0,
+          zIndex: 499,
+          background: 'transparent',
+        }}
+      />
+
+      {/* Popover Card */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'fixed',
+          top: `${popoverPos.top}px`,
+          left: `${popoverPos.left}px`,
+          zIndex: 500,
+          width: 'min(860px, calc(100vw - 32px))',
+          maxHeight: 'calc(100vh - 32px)',
+          overflowY: 'auto',
+          background: '#FFFFFF',
           borderRadius: 16,
-          width: 'min(760px, 96vw)',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.3)',
-          overflow: 'hidden',
+          border: `1px solid ${POPOVER_COLORS.border}`,
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          fontFamily: FONT_BODY,
         }}
       >
-        {/* Modal Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '18px 22px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 9,
-                background: '#F1F0EC',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <Calendar size={17} color={COLORS.ink} />
-            </div>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: COLORS.ink, lineHeight: 1.2 }}>
-                SÉLECTIONNER UNE PÉRIODE DE VENTE
-              </div>
-              <div style={{ fontSize: 12, color: COLORS.stone500, marginTop: 3 }}>
-                Filtrer l'historique des encaissements, tickets et statistiques
-              </div>
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.stone500, padding: 4 }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={{ height: 1, background: COLORS.border }} />
-
-        {/* Modal Content */}
-        <div style={{ display: 'flex', flexWrap: 'wrap' }}>
-          {/* Shortcuts column */}
-          <div style={{ width: 190, borderRight: `1px solid ${COLORS.border}`, padding: '14px 0', flexShrink: 0 }}>
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.09em',
-                color: COLORS.stone500,
-                textTransform: 'uppercase',
-                padding: '0 14px 10px',
-              }}
-            >
-              Raccourcis rapides
-            </div>
-            {shortcuts.map((s) => {
-              const on = activeKey === s.key;
-              return (
-                <button
-                  key={s.key}
-                  onClick={() => applyShortcut(s.fn, s.key)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: on ? 'calc(100% - 12px)' : '100%',
-                    margin: on ? '3px 6px' : '3px 0',
-                    padding: '9px 14px',
-                    background: on ? COLORS.brandDark : 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontFamily: FONT_BODY,
-                    textAlign: 'left',
-                    borderRadius: on ? 9 : 0,
-                  }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 600, color: on ? '#FFF8E7' : COLORS.ink }}>{s.label}</span>
-                  {on && (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 800,
-                        background: COLORS.gold,
-                        color: COLORS.brandDark,
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                      }}
-                    >
-                      Actif
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Calendars */}
-          <div style={{ flex: 1, padding: '14px 12px 18px', minWidth: 320 }} onMouseLeave={() => setHovered(null)}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-              <button
-                onClick={() =>
-                  setRightMonth((p) => (p.month === 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: p.month - 1 }))
-                }
-                style={{
-                  background: 'none',
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: 8,
-                  width: 30,
-                  height: 30,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: COLORS.ink,
-                  flexShrink: 0,
-                  marginTop: 2,
-                }}
-              >
-                <ChevronLeft size={14} />
-              </button>
-
-              <div style={{ display: 'flex', flex: 1, gap: 12 }}>
-                <MonthCalendar
-                  {...leftMonth}
-                  lo={lo}
-                  hi={hi}
-                  picking={picking}
-                  hovered={hovered}
-                  onDayClick={handleDayClick}
-                  onDayHover={setHovered}
-                />
-                <MonthCalendar
-                  {...rightMonth}
-                  lo={lo}
-                  hi={hi}
-                  picking={picking}
-                  hovered={hovered}
-                  onDayClick={handleDayClick}
-                  onDayHover={setHovered}
-                />
-              </div>
-
-              <button
-                onClick={() =>
-                  setRightMonth((p) => (p.month === 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: p.month + 1 }))
-                }
-                style={{
-                  background: 'none',
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: 8,
-                  width: 30,
-                  height: 30,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: COLORS.ink,
-                  flexShrink: 0,
-                  marginTop: 2,
-                }}
-              >
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ height: 1, background: COLORS.border }} />
-
-        {/* Modal Footer */}
+        {/* Header */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '14px 22px',
-            gap: 12,
-            flexWrap: 'wrap',
+            padding: '20px 18px 20px 26px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13, color: COLORS.ink, fontWeight: 500 }}>Période sélectionnée :</span>
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                background: COLORS.background,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: 7,
-                padding: '4px 10px',
-                fontFamily: 'monospace',
-              }}
-            >
-              {fmtDate(lo)} — {fmtDate(hi || lo)}
-              {lo && lo.getFullYear() <= 2020 ? ' (Tout)' : ` (${dayCount} j)`}
-            </span>
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: POPOVER_COLORS.brandDark,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Calendar size={17} color={POPOVER_COLORS.gold} />
           </div>
 
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ marginLeft: 14, flex: 1 }}>
+            <div
+              style={{
+                fontFamily: FONT_BODY,
+                fontSize: 14,
+                fontWeight: 800,
+                letterSpacing: '0.3px',
+                color: POPOVER_COLORS.ink,
+              }}
+            >
+              SÉLECTIONNER UNE PÉRIODE DE VENTE
+            </div>
+            <div
+              style={{
+                fontFamily: FONT_BODY,
+                fontSize: 12.5,
+                color: POPOVER_COLORS.stone500,
+                marginTop: 3,
+              }}
+            >
+              Filtrer l'historique des encaissements, tickets et statistiques
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: 6,
+              borderRadius: 8,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: POPOVER_COLORS.stone500,
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: POPOVER_COLORS.border }} />
+
+        {/* Body */}
+        <div
+          style={{
+            padding: '22px 26px',
+            display: 'flex',
+            alignItems: 'flex-start',
+          }}
+        >
+          {/* Shortcuts column */}
+          <div style={{ width: 220, flexShrink: 0 }}>
+            <div
+              style={{
+                fontFamily: FONT_BODY,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.6px',
+                color: POPOVER_COLORS.stone500,
+                textTransform: 'uppercase',
+                marginBottom: 12,
+              }}
+            >
+              RACCOURCIS RAPIDES
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {shortcuts.map((s, idx) => {
+                const active = matchesShortcut(s);
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => applyShortcut(s)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      background: active ? POPOVER_COLORS.brandDark : 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      width: '100%',
+                      textAlign: 'left',
+                      fontFamily: FONT_BODY,
+                    }}
+                  >
+                    {active && (
+                      <div
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: POPOVER_COLORS.gold,
+                          marginRight: 8,
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    <span
+                      style={{
+                        flex: 1,
+                        fontSize: 13,
+                        fontWeight: active ? 700 : 600,
+                        color: active ? '#FFFFFF' : POPOVER_COLORS.ink,
+                      }}
+                    >
+                      {s.label}
+                    </span>
+                    {active ? (
+                      <span
+                        style={{
+                          padding: '3px 8px',
+                          background: POPOVER_COLORS.gold,
+                          borderRadius: 6,
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                          color: POPOVER_COLORS.ink,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        Actif
+                      </span>
+                    ) : s.valueLabel ? (
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: POPOVER_COLORS.stone500,
+                          fontWeight: 400,
+                        }}
+                      >
+                        {s.valueLabel}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+
+              {/* Personnalisé row */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  background: isCustomActive ? POPOVER_COLORS.brandDark : 'transparent',
+                  fontFamily: FONT_BODY,
+                }}
+              >
+                {isCustomActive && (
+                  <div
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: POPOVER_COLORS.gold,
+                      marginRight: 8,
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    fontWeight: isCustomActive ? 700 : 600,
+                    color: isCustomActive ? '#FFFFFF' : POPOVER_COLORS.ink,
+                  }}
+                >
+                  Personnalisé
+                </span>
+                <ChevronRight
+                  size={18}
+                  color={isCustomActive ? '#FFFFFF' : POPOVER_COLORS.stone400}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ width: 32, flexShrink: 0 }} />
+
+          {/* Calendars column */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Months Header Navigation */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: 14,
+              }}
+            >
+              <button
+                type="button"
+                onClick={goPrevMonth}
+                style={{
+                  padding: 4,
+                  borderRadius: 6,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: POPOVER_COLORS.stone600,
+                }}
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div
+                style={{
+                  flex: 1,
+                  textAlign: 'center',
+                  fontFamily: FONT_BODY,
+                  fontSize: 13.5,
+                  fontWeight: 800,
+                  letterSpacing: '0.4px',
+                  color: POPOVER_COLORS.ink,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {POPOVER_MONTHS[leftMonth.getMonth()]} {leftMonth.getFullYear()}
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  textAlign: 'center',
+                  fontFamily: FONT_BODY,
+                  fontSize: 13.5,
+                  fontWeight: 800,
+                  letterSpacing: '0.4px',
+                  color: POPOVER_COLORS.ink,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {POPOVER_MONTHS[rightMonth.getMonth()]} {rightMonth.getFullYear()}
+              </div>
+              <button
+                type="button"
+                onClick={canGoNext ? goNextMonth : undefined}
+                disabled={!canGoNext}
+                style={{
+                  padding: 4,
+                  borderRadius: 6,
+                  background: 'none',
+                  border: 'none',
+                  cursor: canGoNext ? 'pointer' : 'default',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: canGoNext ? POPOVER_COLORS.stone600 : POPOVER_COLORS.border,
+                }}
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+
+            {/* Side-by-side Grids */}
+            <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
+              <PopoverMonthGrid
+                month={leftMonth}
+                start={start}
+                end={end}
+                today={today}
+                onDayTap={handleDayTap}
+              />
+              <PopoverMonthGrid
+                month={rightMonth}
+                start={start}
+                end={end}
+                today={today}
+                onDayTap={handleDayTap}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: POPOVER_COLORS.border }} />
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: '16px 26px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: POPOVER_COLORS.stone600,
+                fontFamily: FONT_BODY,
+              }}
+            >
+              Période sélectionnée :{' '}
+            </span>
+            <div
+              style={{
+                marginLeft: 6,
+                padding: '8px 14px',
+                background: '#F3F4F6',
+                borderRadius: 8,
+                border: `1px solid ${POPOVER_COLORS.border}`,
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: POPOVER_COLORS.ink,
+                  fontFamily: FONT_BODY,
+                }}
+              >
+                {hasRange
+                  ? isAllHistory
+                    ? "Tout l'historique"
+                    : `${fmtSlashVal(start)} — ${fmtSlashVal(end)}`
+                  : 'Choisissez une période'}
+              </span>
+              {hasRange && (
+                <span
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: 500,
+                    color: POPOVER_COLORS.stone500,
+                    marginLeft: 8,
+                    fontFamily: FONT_BODY,
+                  }}
+                >
+                  {isAllHistory ? '(Toutes dates)' : `(${days} jour${days > 1 ? 's' : ''})`}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
+              type="button"
               onClick={onClose}
               style={{
-                padding: '9px 18px',
-                borderRadius: 9,
-                border: `1px solid ${COLORS.borderDark}`,
-                background: COLORS.surface,
-                fontSize: 13,
+                padding: '10px 16px',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: 8,
+                color: POPOVER_COLORS.stone600,
+                fontSize: 13.5,
                 fontWeight: 600,
                 cursor: 'pointer',
                 fontFamily: FONT_BODY,
-                color: COLORS.ink,
               }}
             >
               Annuler
             </button>
+
             <button
+              type="button"
+              disabled={!hasRange}
               onClick={() => {
-                onApply(lo, hi || lo);
-                onClose();
+                if (hasRange) {
+                  onApply(start, end);
+                  onClose();
+                }
               }}
               style={{
-                padding: '9px 20px',
-                borderRadius: 9,
+                padding: '12px 18px',
+                background: POPOVER_COLORS.gold,
+                color: POPOVER_COLORS.ink,
                 border: 'none',
-                background: COLORS.gold,
-                fontSize: 13,
+                borderRadius: 10,
+                fontSize: 13.5,
                 fontWeight: 800,
-                cursor: 'pointer',
+                cursor: hasRange ? 'pointer' : 'not-allowed',
+                opacity: hasRange ? 1 : 0.5,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
                 fontFamily: FONT_BODY,
-                color: COLORS.brandDark,
               }}
             >
-              ✓ Appliquer la période
+              <Check size={16} color={POPOVER_COLORS.ink} />
+              <span>Appliquer la période</span>
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -1390,6 +1759,7 @@ export default function HistoriquePage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const calendarTriggerRef = useRef(null);
 
   // Date Range (default: Today)
   const [range, setRange] = useState(() => {
@@ -1644,7 +2014,8 @@ export default function HistoriquePage() {
             </div>
 
             <div
-              onClick={() => setShowDatePicker(true)}
+              ref={calendarTriggerRef}
+              onClick={() => setShowDatePicker((prev) => !prev)}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -1675,6 +2046,7 @@ export default function HistoriquePage() {
                   margin: 0,
                   fontFamily: FONT_TITLE,
                   fontSize: 30,
+                  fontWeight: 400,
                   letterSpacing: '0.5px',
                   color: '#111827',
                   lineHeight: 1.1,
@@ -2233,7 +2605,8 @@ export default function HistoriquePage() {
 
       {/* ── Modals & Drawers ── */}
       {showDatePicker && (
-        <DateRangeModal
+        <DateRangePopover
+          anchorRef={calendarTriggerRef}
           initialRange={range}
           onClose={() => setShowDatePicker(false)}
           onApply={handleApplyRange}
