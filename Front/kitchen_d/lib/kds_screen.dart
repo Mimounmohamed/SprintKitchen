@@ -5,8 +5,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 
 /* ─── Config ─────────────────────────────────────────────── */
-const _kBaseUrl =
-    'https://sprintkitchen-backend-api-dxedcmdth6avgha4.francecentral-01.azurewebsites.net/api';
+const String _kBaseUrl = String.fromEnvironment(
+  'API_URL',
+  defaultValue:
+      'https://sprintkitchen-backend-api-dxedcmdth6avgha4.francecentral-01.azurewebsites.net/api',
+);
 
 /* ─── Colors ─────────────────────────────────────────────── */
 class C {
@@ -62,20 +65,36 @@ class KdsItem {
     final subs = <String>[];
     final customs = j['customizations'] as List? ?? [];
     for (final c in customs) {
-      final opts = (c['selectedOptions'] as List? ?? [])
-          .map((o) => o['label']?.toString() ?? '')
-          .where((s) => s.isNotEmpty)
-          .join(', ');
-      if (opts.isNotEmpty) { subs.add('${c['groupName']}: $opts'); }
+      if (c is Map) {
+        final opts = (c['selectedOptions'] as List? ?? [])
+            .map((o) => (o is Map) ? (o['label']?.toString() ?? '') : o.toString())
+            .where((s) => s.isNotEmpty)
+            .join(', ');
+        final gName = c['groupName']?.toString() ?? '';
+        if (opts.isNotEmpty) {
+          subs.add(gName.isNotEmpty ? '$gName: $opts' : opts);
+        }
+      }
     }
     final removed = j['removedIngredients'] as List? ?? [];
-    for (final r in removed) { subs.add('Sans $r'); }
-    if (j['notes'] != null && (j['notes'] as String).isNotEmpty) {
-      subs.add(j['notes'] as String);
+    for (final r in removed) {
+      final s = r.toString().trim();
+      if (s.isNotEmpty) {
+        subs.add(s.toLowerCase().startsWith('sans') ? s : 'Sans $s');
+      }
     }
+    if (j['notes'] != null && j['notes'].toString().trim().isNotEmpty) {
+      subs.add(j['notes'].toString().trim());
+    }
+    String name = j['productName']?.toString() ?? '';
+    if (name.isEmpty && j['productId'] is Map) {
+      name = (j['productId'] as Map)['name']?.toString() ?? '';
+    }
+    if (name.isEmpty) name = '?';
+
     return KdsItem(
       qty:      '${j['quantity'] ?? 1}\u00d7',
-      name:     j['productName']?.toString() ?? '?',
+      name:     name,
       subLines: subs,
     );
   }
@@ -120,6 +139,10 @@ class KitchenOrder {
         status = OrderStatus.pret;
         note   = 'PR\u00caT';
         break;
+      case 'served':
+        status = OrderStatus.pret;
+        note   = 'SERVI';
+        break;
       default:
         status = OrderStatus.attente;
     }
@@ -133,9 +156,12 @@ class KitchenOrder {
         .toList();
 
     final ts = j['kdsSentAt'] ?? j['createdAt'];
+    final rawTicket = j['ticketNumber']?.toString() ?? '?';
+    final ticketNumber = rawTicket.startsWith('#') ? rawTicket : '#$rawTicket';
+
     return KitchenOrder(
       id:           j['_id']?.toString() ?? '',
-      ticketNumber: '#${j['ticketNumber'] ?? '?'}',
+      ticketNumber: ticketNumber,
       mode:         mode,
       createdAt:    ts != null
           ? DateTime.tryParse(ts as String) ?? DateTime.now()
@@ -150,25 +176,98 @@ class KitchenOrder {
 /* ─── API ────────────────────────────────────────────────── */
 class KdsApi {
   static Future<List<KitchenOrder>> fetchOrders() async {
+    // 1. Try dedicated KDS endpoint first
+    try {
+      final res = await http
+          .get(Uri.parse('$_kBaseUrl/kds/orders'))
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final data = body['data'] as List? ?? [];
+        return data
+            .map((j) => KitchenOrder.fromJson(j as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {
+      // In case /api/kds is not yet deployed on server, fall back to /api/orders below
+    }
+
+    // 2. Fallback to /orders endpoint
     final res = await http
-        .get(Uri.parse('$_kBaseUrl/kds/orders'))
+        .get(Uri.parse('$_kBaseUrl/orders?limit=100'))
         .timeout(const Duration(seconds: 8));
     if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
     final body = jsonDecode(res.body) as Map<String, dynamic>;
-    final data = body['data'] as List;
-    return data
-        .map((j) => KitchenOrder.fromJson(j as Map<String, dynamic>))
-        .toList();
+    final data = body['data'] as List? ?? [];
+
+    final activeOrders = data.where((j) {
+      if (j is! Map<String, dynamic>) return false;
+      final status = j['status'] as String? ?? '';
+      final kdsStatus = j['kdsStatus'] as String? ?? 'pending';
+
+      // Ignore drafts, paid/served orders, cancelled orders
+      if (status == 'terminee' ||
+          status == 'annulee' ||
+          status == 'repas_employe' ||
+          status == 'en_cours') {
+        return false;
+      }
+      if (kdsStatus == 'served') {
+        return false;
+      }
+      return status == 'en_attente' ||
+          status == 'a_encaisser' ||
+          kdsStatus == 'in_progress' ||
+          kdsStatus == 'ready' ||
+          kdsStatus == 'pending';
+    }).map((j) => KitchenOrder.fromJson(j as Map<String, dynamic>)).toList();
+
+    // Sort FIFO: oldest first
+    activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return activeOrders;
   }
 
   static Future<void> advanceOrder(String id, String kdsStatus) async {
-    await http.patch(
-      Uri.parse('$_kBaseUrl/kds/orders/$id/kds-status'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'kdsStatus': kdsStatus}),
-    ).timeout(const Duration(seconds: 6));
+    // 1. Try dedicated KDS endpoint first
+    try {
+      final res = await http
+          .patch(
+            Uri.parse('$_kBaseUrl/kds/orders/$id/kds-status'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'kdsStatus': kdsStatus}),
+          )
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode == 200) return;
+    } catch (_) {
+      // Fallback
+    }
+
+    // 2. Fallback to PUT /orders/:id
+    final body = <String, dynamic>{'kdsStatus': kdsStatus};
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    if (kdsStatus == 'ready') {
+      body['status'] = 'a_encaisser';
+      body['kdsReadyAt'] = nowIso;
+    } else if (kdsStatus == 'served') {
+      body['status'] = 'terminee';
+      body['completedAt'] = nowIso;
+    }
+
+    final res = await http
+        .put(
+          Uri.parse('$_kBaseUrl/orders/$id'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 6));
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}');
+    }
   }
 }
+
 
 /* ─── Screen ─────────────────────────────────────────────── */
 class KdsScreen extends StatefulWidget {
@@ -282,7 +381,7 @@ class _KdsState extends State<KdsScreen> {
             style: TextStyle(color: C.muted, fontSize: r.fs(14))),
       ]));
     }
-    if (_error != null) {
+    if (_error != null && _orders.isEmpty) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.wifi_off_rounded, size: 48, color: C.muted),
         const SizedBox(height: 12),
@@ -332,7 +431,7 @@ class _KdsState extends State<KdsScreen> {
   Widget _buildHeader(R r) {
     String two(int v) => v.toString().padLeft(2, '0');
     final clock = '${two(_now.hour)}:${two(_now.minute)}:${two(_now.second)}';
-    final connected = _error == null && !_loading;
+    final connected = _error == null;
     final iconSize  = r.w < 800 ? 32.0 : 36.0;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: r.fs(18), vertical: r.w < 800 ? 8 : 11),
