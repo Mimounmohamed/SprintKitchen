@@ -54,7 +54,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _Tab('en_attente', 'EN ATTENTE', 'commandes en attente'),
     _Tab('a_encaisser', 'À ENCAISSER', 'commandes à encaisser'),
     _Tab('terminee', 'TERMINÉES', 'commandes terminées'),
-    _Tab('repas_employe', 'REPAS EMPL.', 'repas employés'),
   ];
 
   static const _months = [

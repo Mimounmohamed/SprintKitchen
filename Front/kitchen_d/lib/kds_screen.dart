@@ -51,9 +51,24 @@ class R {
   double fs(double base) => (base * scale).roundToDouble();
 }
 
+/* ─── Helpers ────────────────────────────────────────────── */
+bool _isToday(DateTime dt) {
+  final now = DateTime.now();
+  final local = dt.toLocal();
+  // Same calendar day
+  if (local.year == now.year && local.month == now.month && local.day == now.day) {
+    return true;
+  }
+  // Within the last 20 hours (covers late-night service crossing midnight)
+  if (now.difference(local).inHours < 20 && !local.isAfter(now)) {
+    return true;
+  }
+  return false;
+}
+
 /* ─── Models ─────────────────────────────────────────────── */
 enum OrderMode   { surPlace, emporter, livraison }
-enum OrderStatus { attente, preparation, pret }
+enum OrderStatus { attente, preparation, terminee }
 enum Urgency     { normal, warning, critical, ready }
 
 class KdsItem {
@@ -129,26 +144,20 @@ class KitchenOrder {
     }
 
     final rawKds = j['kdsStatus'] as String? ?? 'pending';
+    final rawStatus = j['status'] as String? ?? '';
     OrderStatus status;
     String? note;
-    switch (rawKds) {
-      case 'in_progress':
-        status = OrderStatus.preparation;
-        break;
-      case 'ready':
-        status = OrderStatus.pret;
-        note   = 'PR\u00caT';
-        break;
-      case 'served':
-        status = OrderStatus.pret;
-        note   = 'SERVI';
-        break;
-      default:
-        status = OrderStatus.attente;
-    }
-    if (j['status'] == 'a_encaisser' && status != OrderStatus.pret) {
-      status = OrderStatus.pret;
-      note   = 'PR\u00caT \u2022 EN ATTENTE CAISSE';
+
+    if (rawStatus == 'terminee' || rawKds == 'served') {
+      status = OrderStatus.terminee;
+      note   = 'TERMIN\u00c9';
+    } else if (rawKds == 'in_progress') {
+      status = OrderStatus.preparation;
+    } else if (rawKds == 'ready' || rawStatus == 'a_encaisser') {
+      status = OrderStatus.terminee;
+      note   = 'PR\u00caT';
+    } else {
+      status = OrderStatus.attente;
     }
 
     final items = (j['items'] as List? ?? [])
@@ -176,23 +185,6 @@ class KitchenOrder {
 /* ─── API ────────────────────────────────────────────────── */
 class KdsApi {
   static Future<List<KitchenOrder>> fetchOrders() async {
-    // 1. Try dedicated KDS endpoint first
-    try {
-      final res = await http
-          .get(Uri.parse('$_kBaseUrl/kds/orders'))
-          .timeout(const Duration(seconds: 8));
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        final data = body['data'] as List? ?? [];
-        return data
-            .map((j) => KitchenOrder.fromJson(j as Map<String, dynamic>))
-            .toList();
-      }
-    } catch (_) {
-      // In case /api/kds is not yet deployed on server, fall back to /api/orders below
-    }
-
-    // 2. Fallback to /orders endpoint
     final res = await http
         .get(Uri.parse('$_kBaseUrl/orders?limit=100'))
         .timeout(const Duration(seconds: 8));
@@ -201,31 +193,33 @@ class KdsApi {
     final data = body['data'] as List? ?? [];
 
     final activeOrders = data.where((j) {
-      if (j is! Map<String, dynamic>) return false;
+      if (j is! Map) return false;
       final status = j['status'] as String? ?? '';
       final kdsStatus = j['kdsStatus'] as String? ?? 'pending';
 
-      // Ignore drafts, paid/served orders, cancelled orders
-      if (status == 'terminee' ||
-          status == 'annulee' ||
-          status == 'repas_employe' ||
-          status == 'en_cours') {
+      // Ignore drafts, cancelled orders, employee meals
+      if (status == 'annulee' || status == 'repas_employe' || status == 'en_cours') {
         return false;
       }
-      if (kdsStatus == 'served') {
-        return false;
+
+      final ts = j['kdsSentAt'] ?? j['createdAt'];
+      final dt = ts != null
+          ? (DateTime.tryParse(ts as String) ?? DateTime.now())
+          : DateTime.now();
+
+      // If completed / served, only include if from today
+      if (status == 'terminee' || kdsStatus == 'served' || kdsStatus == 'ready' || status == 'a_encaisser') {
+        return _isToday(dt);
       }
-      return status == 'en_attente' ||
-          status == 'a_encaisser' ||
-          kdsStatus == 'in_progress' ||
-          kdsStatus == 'ready' ||
-          kdsStatus == 'pending';
+
+      // Active orders (en_attente, in_progress, pending)
+      return true;
     }).map((j) => KitchenOrder.fromJson(j as Map<String, dynamic>)).toList();
 
-    // Sort FIFO: oldest first
-    activeOrders.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return activeOrders;
   }
+
+
 
   static Future<void> advanceOrder(String id, String kdsStatus) async {
     // 1. Try dedicated KDS endpoint first
@@ -275,7 +269,7 @@ class KdsScreen extends StatefulWidget {
   @override State<KdsScreen> createState() => _KdsState();
 }
 
-enum _Tab { toutes, attente, preparation, pretes }
+enum _Tab { toutes, attente, preparation, terminees }
 
 class _KdsState extends State<KdsScreen> {
   List<KitchenOrder> _orders = [];
@@ -316,10 +310,24 @@ class _KdsState extends State<KdsScreen> {
 
   List<KitchenOrder> get _visible {
     switch (_tab) {
-      case _Tab.toutes:      return _orders;
-      case _Tab.attente:     return _orders.where((o) => o.status == OrderStatus.attente).toList();
-      case _Tab.preparation: return _orders.where((o) => o.status == OrderStatus.preparation).toList();
-      case _Tab.pretes:      return _orders.where((o) => o.status == OrderStatus.pret).toList();
+      case _Tab.toutes:
+        final active = _orders.where((o) => o.status != OrderStatus.terminee).toList();
+        final done = _orders.where((o) => o.status == OrderStatus.terminee).toList();
+        active.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        done.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return [...active, ...done];
+      case _Tab.attente:
+        final list = _orders.where((o) => o.status == OrderStatus.attente).toList();
+        list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        return list;
+      case _Tab.preparation:
+        final list = _orders.where((o) => o.status == OrderStatus.preparation).toList();
+        list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        return list;
+      case _Tab.terminees:
+        final list = _orders.where((o) => o.status == OrderStatus.terminee).toList();
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return list;
     }
   }
 
@@ -328,21 +336,28 @@ class _KdsState extends State<KdsScreen> {
       case _Tab.toutes:      return _orders.length;
       case _Tab.attente:     return _orders.where((o) => o.status == OrderStatus.attente).length;
       case _Tab.preparation: return _orders.where((o) => o.status == OrderStatus.preparation).length;
-      case _Tab.pretes:      return _orders.where((o) => o.status == OrderStatus.pret).length;
+      case _Tab.terminees:   return _orders.where((o) => o.status == OrderStatus.terminee).length;
     }
   }
 
   Future<void> _advance(KitchenOrder order) async {
+    if (order.status == OrderStatus.terminee) return;
+
     String nextKds;
-    if      (order.status == OrderStatus.attente)     { nextKds = 'in_progress'; }
-    else if (order.status == OrderStatus.preparation) { nextKds = 'ready'; }
-    else                                              { nextKds = 'served'; }
+    if (order.status == OrderStatus.attente) {
+      nextKds = 'in_progress';
+    } else {
+      nextKds = 'served';
+    }
 
     // Optimistic UI update
     setState(() {
-      if      (order.status == OrderStatus.attente)     { order.status = OrderStatus.preparation; }
-      else if (order.status == OrderStatus.preparation) { order.status = OrderStatus.pret; order.note = 'PR\u00caT'; }
-      else                                              { _orders.remove(order); }
+      if (order.status == OrderStatus.attente) {
+        order.status = OrderStatus.preparation;
+      } else {
+        order.status = OrderStatus.terminee;
+        order.note = 'TERMIN\u00c9';
+      }
     });
 
     try {
@@ -429,8 +444,6 @@ class _KdsState extends State<KdsScreen> {
 
   /* ── Header ── */
   Widget _buildHeader(R r) {
-    String two(int v) => v.toString().padLeft(2, '0');
-    final clock = '${two(_now.hour)}:${two(_now.minute)}:${two(_now.second)}';
     final connected = _error == null;
     final iconSize  = r.w < 800 ? 32.0 : 36.0;
     return Container(
@@ -448,13 +461,6 @@ class _KdsState extends State<KdsScreen> {
         SizedBox(width: r.fs(8)),
         Text('SPRINTKITCHEN', style: TextStyle(fontWeight: FontWeight.w800,
             fontSize: r.fs(14), letterSpacing: 0.2, color: C.ink)),
-        SizedBox(width: r.fs(6)),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: r.fs(5), vertical: 2),
-          decoration: BoxDecoration(color: C.brown, borderRadius: BorderRadius.circular(4)),
-          child: Text('KDS', style: TextStyle(color: const Color(0xFFF5F0E6),
-              fontWeight: FontWeight.w800, fontSize: r.fs(9), letterSpacing: 0.3)),
-        ),
         Expanded(
           child: Center(
             child: Text('\u00c9CRAN CUISINE \u2013 POSTE PRINCIPAL',
@@ -462,26 +468,21 @@ class _KdsState extends State<KdsScreen> {
                   color: const Color(0xFF1C1917), fontWeight: FontWeight.w400, letterSpacing: 0.8)),
           ),
         ),
-        if (r.w >= 700) ...[
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: r.fs(10), vertical: 5),
-            decoration: BoxDecoration(
-              color: connected ? C.greenBg : C.orangeBg,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 7, height: 7, decoration: BoxDecoration(
-                  color: connected ? C.green : C.orange, shape: BoxShape.circle)),
-              SizedBox(width: r.fs(5)),
-              Text(connected ? 'Cuisine Connect\u00e9e' : 'Reconnexion\u2026',
-                style: TextStyle(fontSize: r.fs(11), fontWeight: FontWeight.w700,
-                    color: connected ? C.greenText : C.orange)),
-            ]),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: r.fs(10), vertical: 5),
+          decoration: BoxDecoration(
+            color: connected ? C.greenBg : C.orangeBg,
+            borderRadius: BorderRadius.circular(999),
           ),
-          SizedBox(width: r.fs(14)),
-        ],
-        Text(clock, style: TextStyle(fontSize: r.fs(14), fontWeight: FontWeight.w700,
-            color: C.ink, fontFeatures: const [FontFeature.tabularFigures()])),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 7, height: 7, decoration: BoxDecoration(
+                color: connected ? C.green : C.orange, shape: BoxShape.circle)),
+            SizedBox(width: r.fs(5)),
+            Text(connected ? 'Cuisine Connect\u00e9e' : 'Reconnexion\u2026',
+              style: TextStyle(fontSize: r.fs(11), fontWeight: FontWeight.w700,
+                  color: connected ? C.greenText : C.orange)),
+          ]),
+        ),
       ]),
     );
   }
@@ -491,52 +492,63 @@ class _KdsState extends State<KdsScreen> {
     _Tab.toutes:      'TOUTES',
     _Tab.attente:     'EN ATTENTE',
     _Tab.preparation: 'EN PR\u00c9PARATION',
-    _Tab.pretes:      'PR\u00caTES',
+    _Tab.terminees:   'TERMIN\u00c9ES',
   };
 
   Widget _buildTabs(R r) {
     return Container(
       color: C.bg,
       padding: EdgeInsets.fromLTRB(r.hPad, r.w < 800 ? 8 : 10, r.hPad, r.w < 800 ? 6 : 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: _Tab.values.map((t) {
-          final active = t == _tab;
-          return Padding(
-            padding: EdgeInsets.only(right: r.fs(9)),
-            child: GestureDetector(
-              onTap: () => setState(() => _tab = t),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                    horizontal: r.fs(13), vertical: r.w < 800 ? 7 : 9),
-                decoration: BoxDecoration(
-                  color: active ? const Color(0xFFFCF0CA) : C.cardBg,
-                  border: Border.all(
-                      color: active ? C.yellow : C.border, width: active ? 1.5 : 1),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_tabLabels[t]!, style: TextStyle(fontSize: r.fs(11.5),
-                      fontWeight: FontWeight.w800, letterSpacing: 0.3,
-                      color: active ? C.ink : C.muted)),
-                  SizedBox(width: r.fs(6)),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
-                    decoration: BoxDecoration(
-                      color: active ? C.yellow : const Color(0xFFEBE8E1),
-                      borderRadius: BorderRadius.circular(999),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: _Tab.values.map((t) {
+              final active = t == _tab;
+              return Padding(
+                padding: EdgeInsets.only(right: r.fs(9)),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _tab = t),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: r.fs(13), vertical: r.w < 800 ? 7 : 9),
+                      decoration: BoxDecoration(
+                        color: active ? const Color(0xFFFCF0CA) : C.cardBg,
+                        border: Border.all(
+                            color: active ? C.yellow : C.border, width: active ? 1.5 : 1),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_tabLabels[t]!, style: TextStyle(fontSize: r.fs(11.5),
+                            fontWeight: FontWeight.w800, letterSpacing: 0.3,
+                            color: active ? C.ink : C.muted)),
+                        SizedBox(width: r.fs(6)),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                          decoration: BoxDecoration(
+                            color: active ? C.yellow : const Color(0xFFEBE8E1),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text('${_count(t)}', style: TextStyle(fontSize: r.fs(10),
+                              fontWeight: FontWeight.w800, color: active ? C.brown : C.ink)),
+                        ),
+                      ]),
                     ),
-                    child: Text('${_count(t)}', style: TextStyle(fontSize: r.fs(10),
-                        fontWeight: FontWeight.w800, color: active ? C.brown : C.ink)),
                   ),
-                ]),
-              ),
-            ),
-          );
-        }).toList()),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }
+
 }
 
 /* ─── Order Card ─────────────────────────────────────────── */
@@ -594,7 +606,7 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
   }
 
   Urgency get _urgency {
-    if (widget.order.status == OrderStatus.pret) return Urgency.ready;
+    if (widget.order.status == OrderStatus.terminee) return Urgency.ready;
     final m = _elapsed.inMinutes;
     if (m >= 15) return Urgency.critical;
     if (m >= 10) return Urgency.warning;
@@ -602,6 +614,7 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
   }
 
   Color get _borderColor {
+    if (widget.order.status == OrderStatus.terminee) return C.border;
     switch (_urgency) {
       case Urgency.critical: return C.red;
       case Urgency.warning:  return C.orange;
@@ -610,9 +623,12 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
     }
   }
 
-  Color get _cardBg => _urgency == Urgency.critical ? C.redBg : C.cardBg;
+  Color get _cardBg => widget.order.status == OrderStatus.terminee
+      ? C.cardBg
+      : (_urgency == Urgency.critical ? C.redBg : C.cardBg);
 
   Color get _timerColor {
+    if (widget.order.status == OrderStatus.terminee) return C.greenText;
     switch (_urgency) {
       case Urgency.critical: return C.red;
       case Urgency.warning:  return C.orange;
@@ -632,16 +648,16 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
   ({String label, Color bg, Color fg}) get _btn {
     switch (widget.order.status) {
       case OrderStatus.attente:     return (label: 'COMMENCER',        bg: C.yellow, fg: C.brown);
-      case OrderStatus.preparation: return (label: 'PR\u00caT \u2713', bg: C.green,  fg: Colors.white);
-      case OrderStatus.pret:        return (label: 'TERMIN\u00c9',     bg: C.gray,   fg: Colors.white);
+      case OrderStatus.preparation: return (label: 'TERMINER \u2713',  bg: C.green,  fg: Colors.white);
+      case OrderStatus.terminee:    return (label: 'TERMIN\u00c9 \u2713', bg: const Color(0xFFEBE8E1), fg: C.muted);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final r      = widget.r;
-    final muted  = widget.order.status == OrderStatus.pret;
-    final isCrit = _urgency == Urgency.critical;
+    final muted  = widget.order.status == OrderStatus.terminee;
+    final isCrit = _urgency == Urgency.critical && widget.order.status != OrderStatus.terminee;
     final b      = _badge;
     final btn    = _btn;
     final pad    = r.w < 800 ? 10.0 : 13.0;
@@ -673,7 +689,13 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
         SizedBox(height: r.fs(4)),
         /* Timer */
         Row(children: [
-          Icon(Icons.access_time_rounded, size: r.fs(12), color: _timerColor),
+          Icon(
+            widget.order.status == OrderStatus.terminee
+                ? Icons.check_circle_outline_rounded
+                : Icons.access_time_rounded,
+            size: r.fs(12),
+            color: _timerColor,
+          ),
           SizedBox(width: r.fs(4)),
           Text(widget.order.note ?? _elapsedLabel,
             style: TextStyle(fontSize: r.fs(11.5), fontWeight: FontWeight.w700,
@@ -757,14 +779,20 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
           width: double.infinity,
           height: r.w < 800 ? 32 : 38,
           child: ElevatedButton(
-            onPressed: _advancing ? null : () async {
-              setState(() => _advancing = true);
-              await widget.onAdvance();
-              if (mounted) setState(() => _advancing = false);
-            },
+            onPressed: (_advancing || widget.order.status == OrderStatus.terminee)
+                ? null
+                : () async {
+                    setState(() => _advancing = true);
+                    await widget.onAdvance();
+                    if (mounted) setState(() => _advancing = false);
+                  },
             style: ElevatedButton.styleFrom(
-              backgroundColor: btn.bg, foregroundColor: btn.fg,
-              elevation: 0, padding: EdgeInsets.zero,
+              backgroundColor: btn.bg,
+              foregroundColor: btn.fg,
+              disabledBackgroundColor: const Color(0xFFEBE8E1),
+              disabledForegroundColor: C.muted,
+              elevation: 0,
+              padding: EdgeInsets.zero,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               shadowColor: Colors.transparent,
             ),
@@ -776,3 +804,4 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
     );
   }
 }
+

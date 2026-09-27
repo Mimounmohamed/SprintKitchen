@@ -61,7 +61,6 @@ const TABS = [
   { status: 'en_attente', label: 'EN ATTENTE', countLabel: 'commandes en attente' },
   { status: 'a_encaisser', label: 'À ENCAISSER', countLabel: 'commandes à encaisser' },
   { status: 'terminee', label: 'TERMINÉES', countLabel: 'commandes terminées' },
-  { status: 'repas_employe', label: 'REPAS EMPL.', countLabel: 'repas employés' },
   { status: 'annulee', label: 'ANNULÉES', countLabel: 'commandes annulées' },
 ];
 

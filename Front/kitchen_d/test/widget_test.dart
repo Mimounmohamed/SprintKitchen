@@ -75,9 +75,20 @@ void main() {
         'kdsStatus': 'ready',
         'items': [],
       });
-      expect(orderReady.status, OrderStatus.pret);
+      expect(orderReady.status, OrderStatus.terminee);
       expect(orderReady.note, 'PRÊT');
       expect(orderReady.mode, OrderMode.livraison);
+
+      final orderServed = KitchenOrder.fromJson({
+        '_id': '3',
+        'ticketNumber': '003',
+        'orderType': 'sur_place',
+        'status': 'terminee',
+        'kdsStatus': 'served',
+        'items': [],
+      });
+      expect(orderServed.status, OrderStatus.terminee);
+      expect(orderServed.note, 'TERMINÉ');
     });
   });
 }

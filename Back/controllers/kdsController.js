@@ -20,8 +20,7 @@ exports.getKdsOrders = async (req, res) => {
     todayEnd.setHours(23, 59, 59, 999);
 
     const orders = await Order.find({
-      status:    { $in: ['en_attente', 'a_encaisser'] },
-      kdsStatus: { $ne: 'served' },
+      status:    { $in: ['en_attente', 'a_encaisser', 'terminee'] },
       createdAt: { $gte: todayStart, $lte: todayEnd },
     })
       .select(
