@@ -406,6 +406,16 @@ class _KdsState extends State<KdsScreen> {
     );
   }
 
+  void _showOrderDetails(KitchenOrder order) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Détails de la commande ${order.ticketNumber}'),
+        duration: const Duration(milliseconds: 1500),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   /* ── Body states ── */
   Widget _buildBody(R r) {
     if (_loading) {
@@ -456,7 +466,13 @@ class _KdsState extends State<KdsScreen> {
         itemCount: _visible.length,
         itemBuilder: (_, i) {
           final o = _visible[i];
-          return _OrderCard(order: o, now: _now, r: gr, onAdvance: () => _advance(o));
+          return _OrderCard(
+            order: o,
+            now: _now,
+            r: gr,
+            onAdvance: () => _advance(o),
+            onDetails: () => _showOrderDetails(o),
+          );
         },
       );
     });
@@ -577,8 +593,14 @@ class _OrderCard extends StatefulWidget {
   final DateTime now;
   final R r;
   final Future<void> Function() onAdvance;
-  const _OrderCard({required this.order, required this.now,
-    required this.r, required this.onAdvance});
+  final VoidCallback? onDetails;
+  const _OrderCard({
+    required this.order,
+    required this.now,
+    required this.r,
+    required this.onAdvance,
+    this.onDetails,
+  });
   @override State<_OrderCard> createState() => _OrderCardState();
 }
 
@@ -869,30 +891,62 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
           ]),
         ),
         SizedBox(height: r.fs(6)),
-        /* Button */
+        /* Action buttons row */
         SizedBox(
           width: double.infinity,
           height: r.w < 800 ? 32 : 38,
-          child: ElevatedButton(
-            onPressed: (_advancing || widget.order.status == OrderStatus.terminee)
-                ? null
-                : () async {
-                    setState(() => _advancing = true);
-                    await widget.onAdvance();
-                    if (mounted) setState(() => _advancing = false);
-                  },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: btn.bg,
-              foregroundColor: btn.fg,
-              disabledBackgroundColor: const Color(0xFFEBE8E1),
-              disabledForegroundColor: C.muted,
-              elevation: 0,
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              shadowColor: Colors.transparent,
-            ),
-            child: Text(btn.label, style: TextStyle(fontSize: r.fs(11.5),
-                fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+          child: Row(
+            children: [
+              /* Main action button (Commencer / Terminer / Terminé) - 85% */
+              Expanded(
+                flex: 85,
+                child: ElevatedButton(
+                  onPressed: (_advancing || widget.order.status == OrderStatus.terminee)
+                      ? null
+                      : () async {
+                          setState(() => _advancing = true);
+                          await widget.onAdvance();
+                          if (mounted) setState(() => _advancing = false);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: btn.bg,
+                    foregroundColor: btn.fg,
+                    disabledBackgroundColor: const Color(0xFFEBE8E1),
+                    disabledForegroundColor: C.muted,
+                    elevation: 0,
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shadowColor: Colors.transparent,
+                  ),
+                  child: Text(btn.label, style: TextStyle(fontSize: r.fs(11.5),
+                      fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                ),
+              ),
+              SizedBox(width: r.fs(5)),
+              /* Order details button - 15% */
+              Expanded(
+                flex: 15,
+                child: Tooltip(
+                  message: 'Détails de la commande',
+                  child: OutlinedButton(
+                    onPressed: widget.onDetails,
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: C.ink,
+                      side: const BorderSide(color: C.border, width: 1.2),
+                      elevation: 0,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Icon(
+                      Icons.receipt_long_rounded,
+                      size: r.fs(15),
+                      color: C.ink,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ]),
