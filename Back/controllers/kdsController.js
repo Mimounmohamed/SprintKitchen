@@ -25,7 +25,7 @@ exports.getKdsOrders = async (req, res) => {
     })
       .select(
         'ticketNumber orderType status kdsStatus kdsSentAt ' +
-        'items notes createdAt clientName buzzerNumber'
+        'items notes createdAt clientName buzzerNumber tableNumber'
       )
       .sort({ createdAt: 1 }) // oldest first = FIFO
       .limit(60);

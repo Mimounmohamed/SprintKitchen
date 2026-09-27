@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const {
   getOrders, getOrdersSummary, getOrder, createOrder, updateOrder,
-  updateStatus, cancelOrder, getDailyStats,
+  updateStatus, cancelOrder, getDailyStats, getOccupiedTables,
 } = require('../controllers/orderController');
 
-// NOTE: fixed paths (/stats/daily, /summary) must stay above '/:id'.
+// NOTE: fixed paths (/stats/daily, /summary, /occupied-tables) must stay above '/:id'.
 router.get('/stats/daily', getDailyStats);
 router.get('/summary', getOrdersSummary);
+router.get('/occupied-tables', getOccupiedTables);
 router.get('/', getOrders);
 router.post('/', createOrder);
 router.get('/:id', getOrder);

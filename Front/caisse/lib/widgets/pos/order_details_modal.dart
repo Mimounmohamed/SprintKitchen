@@ -1,7 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../models/order_models.dart' show OccupiedTableInfo;
 import '../../models/pos_models.dart';
+import '../../services/order_service.dart';
 import '../../theme/app_colors.dart';
 
 /// What the cashier entered before going to payment. Only the fields that
@@ -12,6 +14,7 @@ class OrderDetailsResult {
     this.clientName,
     this.deliveryAddress,
     this.deliveryPhone,
+    this.notes,
   });
 
   /// Sur place — becomes `Table 5` on the order's `buzzerNumber`.
@@ -23,6 +26,9 @@ class OrderDetailsResult {
   /// Livraison — required, go on `delivery.address` / `delivery.phone`.
   final String? deliveryAddress;
   final String? deliveryPhone;
+
+  /// Optional kitchen note / comment
+  final String? notes;
 }
 
 /// "Informations de la commande" popup shown right before payment, so the
@@ -39,11 +45,13 @@ class OrderDetailsModal extends StatefulWidget {
     required this.orderType,
     required this.ticketNumber,
     required this.posteLabel,
+    this.initialNotes,
   });
 
   final OrderType orderType;
   final String ticketNumber;
   final String posteLabel;
+  final String? initialNotes;
 
   @override
   State<OrderDetailsModal> createState() => _OrderDetailsModalState();
@@ -55,6 +63,36 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
   final _clientController = TextEditingController();
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _notesController = TextEditingController();
+
+  List<OccupiedTableInfo> _occupiedTables = [];
+  bool _loadingOccupied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialNotes != null) {
+      _notesController.text = widget.initialNotes!;
+    }
+    if (widget.orderType == OrderType.dineIn) {
+      _loadOccupiedTables();
+    }
+  }
+
+  Future<void> _loadOccupiedTables() async {
+    setState(() => _loadingOccupied = true);
+    try {
+      final list = await OrderService().getOccupiedTables();
+      if (mounted) {
+        setState(() {
+          _occupiedTables = list;
+          _loadingOccupied = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingOccupied = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -62,6 +100,7 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
     _clientController.dispose();
     _addressController.dispose();
     _phoneController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -103,6 +142,9 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
             : null,
         deliveryPhone: widget.orderType == OrderType.delivery
             ? _phoneController.text.trim()
+            : null,
+        notes: _notesController.text.trim().isNotEmpty
+            ? _notesController.text.trim()
             : null,
       ),
     );
@@ -253,9 +295,102 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
               icon: Icons.table_restaurant_outlined,
               keyboardType: TextInputType.text,
               autofocus: true,
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Le numéro de table est requis'
-                  : null,
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return 'Le numéro de table est requis';
+                }
+                final clean = v.trim().toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
+                final occupied = _occupiedTables.cast<OccupiedTableInfo?>().firstWhere(
+                  (t) {
+                    if (t == null) return false;
+                    final tClean = t.tableNumber.toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
+                    return tClean == clean;
+                  },
+                  orElse: () => null,
+                );
+                if (occupied != null) {
+                  return 'Table occupée (Commande active #${occupied.ticketNumber})';
+                }
+                return null;
+              },
+            ),
+            if (_loadingOccupied) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: const [
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.gold),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Vérification des tables en cours...',
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ] else if (_occupiedTables.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.info_outline, size: 14, color: AppColors.danger),
+                        SizedBox(width: 6),
+                        Text(
+                          'Tables actuellement occupées :',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: _occupiedTables.map((t) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                          ),
+                          child: Text(
+                            'Table ${t.tableNumber} (#${t.ticketNumber})',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFB91C1C),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
+            const SizedBox(height: 8),
+            _field(
+              controller: _notesController,
+              hint: 'ex. Sans sel sur les frites, allergie...',
+              icon: Icons.chat_bubble_outline_rounded,
             ),
           ],
         );
@@ -270,6 +405,14 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
               hint: 'ex. Thomas B.',
               icon: Icons.person_outline,
               autofocus: true,
+            ),
+            const SizedBox(height: 16),
+            _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
+            const SizedBox(height: 8),
+            _field(
+              controller: _notesController,
+              hint: 'ex. Sans sel sur les frites, allergie...',
+              icon: Icons.chat_bubble_outline_rounded,
             ),
           ],
         );
@@ -299,6 +442,14 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Le téléphone est requis'
                   : null,
+            ),
+            const SizedBox(height: 16),
+            _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
+            const SizedBox(height: 8),
+            _field(
+              controller: _notesController,
+              hint: 'ex. Sans sel sur les frites, allergie...',
+              icon: Icons.chat_bubble_outline_rounded,
             ),
           ],
         );

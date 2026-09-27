@@ -321,10 +321,14 @@ class _PosScreenState extends State<PosScreen> {
           orderType: _orderType,
           ticketNumber: _ticketNumber,
           posteLabel: widget.posteLabel,
+          initialNotes: _orderNotes,
         ),
       );
       if (details == null || !mounted) return;
       _orderDetails = details;
+      if (details.notes != null) {
+        _orderNotes = details.notes!.isEmpty ? null : details.notes;
+      }
     }
 
     final result = await showDialog<EncaissementResult>(
@@ -349,6 +353,12 @@ class _PosScreenState extends State<PosScreen> {
         final failure = await _attempt(result);
         if (failure == null) return; // success handled in _attempt
         if (!mounted) return;
+        if (failure.message.contains('occupée') || failure.message.contains('déjà liée')) {
+          _pendingOrder = null;
+          _orderDetails = null;
+          await _showTableOccupiedError(failure);
+          return;
+        }
         final retry = await _showPaymentError(failure);
         if (!retry) {
           // Cashier backed out: forget the pending order (and its details)
@@ -449,6 +459,35 @@ class _PosScreenState extends State<PosScreen> {
       ),
     );
     return retry ?? false;
+  }
+
+  Future<void> _showTableOccupiedError(ApiException e) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.table_restaurant_outlined, color: AppColors.danger),
+            SizedBox(width: 8),
+            Text('Table indisponible'),
+          ],
+        ),
+        content: Text(
+          '${e.message}\n\nVeuillez choisir une autre table avant de procéder au paiement.',
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandDark,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Changer de table'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// "0000123" -> "0000124". The server's counter is global, so with several

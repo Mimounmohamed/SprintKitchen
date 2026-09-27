@@ -123,6 +123,8 @@ class KitchenOrder {
   final List<KdsItem> items;
   OrderStatus status;
   String? note;
+  final String? comment;
+  final String? tableNumber;
 
   KitchenOrder({
     required this.id,
@@ -132,6 +134,8 @@ class KitchenOrder {
     required this.items,
     required this.status,
     this.note,
+    this.comment,
+    this.tableNumber,
   });
 
   factory KitchenOrder.fromJson(Map<String, dynamic> j) {
@@ -168,6 +172,20 @@ class KitchenOrder {
     final rawTicket = j['ticketNumber']?.toString() ?? '?';
     final ticketNumber = rawTicket.startsWith('#') ? rawTicket : '#$rawTicket';
 
+    final rawComment = j['notes'] ?? j['comment'] ?? j['orderNotes'];
+    final comment = rawComment?.toString().trim();
+
+    String? table = j['tableNumber']?.toString().trim();
+    if (table == null || table.isEmpty) {
+      final buzzer = j['buzzerNumber']?.toString().trim() ?? '';
+      final match = RegExp(r'^Table\s*(.+)$', caseSensitive: false).firstMatch(buzzer);
+      if (match != null) {
+        table = match.group(1)?.trim();
+      } else if (buzzer.isNotEmpty && !buzzer.toLowerCase().startsWith('buzzer')) {
+        table = buzzer;
+      }
+    }
+
     return KitchenOrder(
       id:           j['_id']?.toString() ?? '',
       ticketNumber: ticketNumber,
@@ -178,6 +196,8 @@ class KitchenOrder {
       items:        items,
       status:       status,
       note:         note,
+      comment:      (comment != null && comment.isNotEmpty) ? comment : null,
+      tableNumber:  (table != null && table.isNotEmpty) ? table : null,
     );
   }
 }
@@ -675,10 +695,37 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
       ),
       padding: EdgeInsets.fromLTRB(pad, pad, pad, pad),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        /* ID + badge */
+        /* ID + table badge + badge */
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(widget.order.ticketNumber, style: TextStyle(fontSize: r.fs(13.5),
-              fontWeight: FontWeight.w800, color: isCrit ? C.red : C.ink)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(widget.order.ticketNumber, style: TextStyle(fontSize: r.fs(13.5),
+                  fontWeight: FontWeight.w800, color: isCrit ? C.red : C.ink)),
+              if (widget.order.tableNumber != null && widget.order.tableNumber!.isNotEmpty) ...[
+                SizedBox(width: r.fs(6)),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: const Color(0xFFBFDBFE), width: 0.8),
+                  ),
+                  child: Text(
+                    widget.order.tableNumber!.toUpperCase().startsWith('TABLE')
+                        ? widget.order.tableNumber!.toUpperCase()
+                        : 'TABLE ${widget.order.tableNumber}',
+                    style: TextStyle(
+                      fontSize: r.fs(9.5),
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1D4ED8),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
           Container(
             padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
             decoration: BoxDecoration(color: b.bg, borderRadius: BorderRadius.circular(5)),
@@ -715,6 +762,54 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.order.comment != null && widget.order.comment!.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      margin: EdgeInsets.only(bottom: r.fs(8)),
+                      padding: EdgeInsets.symmetric(horizontal: r.fs(8), vertical: r.fs(6)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFFCD34D), width: 1),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: r.fs(13),
+                            color: const Color(0xFFD97706),
+                          ),
+                          SizedBox(width: r.fs(6)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'COMMENTAIRE :',
+                                  style: TextStyle(
+                                    fontSize: r.fs(9),
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFFB45309),
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                SizedBox(height: r.fs(2)),
+                                Text(
+                                  widget.order.comment!,
+                                  style: TextStyle(
+                                    fontSize: r.fs(11.5),
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF78350F),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   for (final item in widget.order.items) ...[
                     Text('${item.qty} ${item.name}', style: TextStyle(
                         fontSize: r.fs(13.5), fontWeight: FontWeight.w700,

@@ -154,3 +154,24 @@ class OrdersSummary {
     );
   }
 }
+
+/// Information about a table currently occupied by an active order.
+class OccupiedTableInfo {
+  const OccupiedTableInfo({
+    required this.tableNumber,
+    required this.ticketNumber,
+    this.orderId,
+  });
+
+  final String tableNumber;
+  final String ticketNumber;
+  final String? orderId;
+
+  factory OccupiedTableInfo.fromJson(Map<String, dynamic> json) {
+    return OccupiedTableInfo(
+      tableNumber: json['tableNumber']?.toString() ?? '',
+      ticketNumber: json['ticketNumber']?.toString() ?? '',
+      orderId: json['orderId']?.toString(),
+    );
+  }
+}
