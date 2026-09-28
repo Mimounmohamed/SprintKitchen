@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'kitchen_order_details_dialog.dart';
 
 /* ─── Config ─────────────────────────────────────────────── */
 const String _kBaseUrl = String.fromEnvironment(
@@ -71,36 +72,103 @@ enum OrderMode   { surPlace, emporter, livraison }
 enum OrderStatus { attente, preparation, terminee }
 enum Urgency     { normal, warning, critical, ready }
 
+class KdsCustomization {
+  final String groupName;
+  final List<String> selectedOptions;
+  const KdsCustomization({required this.groupName, required this.selectedOptions});
+}
+
 class KdsItem {
-  final String qty, name;
+  final String qty;
+  final String name;
   final List<String> subLines;
-  const KdsItem({required this.qty, required this.name, this.subLines = const []});
+  final int quantity;
+  final double unitPrice;
+  final double lineTotal;
+  final String? station;
+  final String? kdsStatus;
+  final List<String> ingredients;
+  final List<KdsCustomization> customizations;
+  final List<String> removedIngredients;
+  final String? notes;
+
+  const KdsItem({
+    required this.qty,
+    required this.name,
+    this.subLines = const [],
+    this.quantity = 1,
+    this.unitPrice = 0.0,
+    this.lineTotal = 0.0,
+    this.station,
+    this.kdsStatus,
+    this.ingredients = const [],
+    this.customizations = const [],
+    this.removedIngredients = const [],
+    this.notes,
+  });
 
   factory KdsItem.fromJson(Map<String, dynamic> j) {
-    final subs = <String>[];
+    final int qtyInt = (j['quantity'] as num?)?.toInt() ?? 1;
+    final double uPrice = (j['unitPrice'] as num?)?.toDouble() ?? 0.0;
+    final double lTotal = (j['lineTotal'] as num?)?.toDouble() ?? (uPrice * qtyInt);
+    final String? station = j['kdsStation']?.toString() ??
+        (j['productId'] is Map ? (j['productId'] as Map)['kdsStation']?.toString() : null);
+    final String? itemKdsStatus = j['kdsStatus']?.toString();
+    final String? itemNotes = (j['notes'] != null && j['notes'].toString().trim().isNotEmpty)
+        ? j['notes'].toString().trim()
+        : null;
+
+    final parsedCustoms = <KdsCustomization>[];
     final customs = j['customizations'] as List? ?? [];
     for (final c in customs) {
       if (c is Map) {
-        final opts = (c['selectedOptions'] as List? ?? [])
-            .map((o) => (o is Map) ? (o['label']?.toString() ?? '') : o.toString())
-            .where((s) => s.isNotEmpty)
-            .join(', ');
         final gName = c['groupName']?.toString() ?? '';
-        if (opts.isNotEmpty) {
-          subs.add(gName.isNotEmpty ? '$gName: $opts' : opts);
+        final optsList = <String>[];
+        final rawOpts = c['selectedOptions'] as List? ?? [];
+        for (final o in rawOpts) {
+          if (o is Map) {
+            final lbl = o['label']?.toString() ?? '';
+            if (lbl.isNotEmpty) optsList.add(lbl);
+          } else if (o != null && o.toString().isNotEmpty) {
+            optsList.add(o.toString());
+          }
+        }
+        if (optsList.isNotEmpty) {
+          parsedCustoms.add(KdsCustomization(groupName: gName, selectedOptions: optsList));
         }
       }
     }
-    final removed = j['removedIngredients'] as List? ?? [];
-    for (final r in removed) {
-      final s = r.toString().trim();
+
+    final removed = <String>[];
+    final rawRemoved = j['removedIngredients'] as List? ?? [];
+    for (final r in rawRemoved) {
+      final s = r?.toString().trim() ?? '';
       if (s.isNotEmpty) {
-        subs.add(s.toLowerCase().startsWith('sans') ? s : 'Sans $s');
+        removed.add(s);
       }
     }
-    if (j['notes'] != null && j['notes'].toString().trim().isNotEmpty) {
-      subs.add(j['notes'].toString().trim());
+
+    final ingredientsList = <String>[];
+    if (j['productId'] is Map && (j['productId'] as Map)['ingredients'] is List) {
+      for (final ing in (j['productId'] as Map)['ingredients'] as List) {
+        if (ing != null && ing.toString().trim().isNotEmpty) {
+          ingredientsList.add(ing.toString().trim());
+        }
+      }
     }
+
+    final subs = <String>[];
+    for (final c in parsedCustoms) {
+      final opts = c.selectedOptions.join(', ');
+      subs.add(c.groupName.isNotEmpty ? '${c.groupName}: $opts' : opts);
+    }
+    for (final r in removed) {
+      subs.add(r.toLowerCase().startsWith('sans') ? r : 'Sans $r');
+    }
+    if (itemNotes != null && itemNotes.isNotEmpty) {
+      subs.add(itemNotes);
+    }
+
     String name = j['productName']?.toString() ?? '';
     if (name.isEmpty && j['productId'] is Map) {
       name = (j['productId'] as Map)['name']?.toString() ?? '';
@@ -108,9 +176,18 @@ class KdsItem {
     if (name.isEmpty) name = '?';
 
     return KdsItem(
-      qty:      '${j['quantity'] ?? 1}\u00d7',
-      name:     name,
+      qty: '$qtyInt\u00d7',
+      name: name,
       subLines: subs,
+      quantity: qtyInt,
+      unitPrice: uPrice,
+      lineTotal: lTotal,
+      station: station,
+      kdsStatus: itemKdsStatus,
+      ingredients: ingredientsList,
+      customizations: parsedCustoms,
+      removedIngredients: removed,
+      notes: itemNotes,
     );
   }
 }
@@ -125,6 +202,12 @@ class KitchenOrder {
   String? note;
   final String? comment;
   final String? tableNumber;
+  final double subtotalHT;
+  final double tvaRate;
+  final double tvaAmount;
+  final double totalTTC;
+  final String? clientName;
+  final String? registerName;
 
   KitchenOrder({
     required this.id,
@@ -136,6 +219,12 @@ class KitchenOrder {
     this.note,
     this.comment,
     this.tableNumber,
+    this.subtotalHT = 0.0,
+    this.tvaRate = 10.0,
+    this.tvaAmount = 0.0,
+    this.totalTTC = 0.0,
+    this.clientName,
+    this.registerName,
   });
 
   factory KitchenOrder.fromJson(Map<String, dynamic> j) {
@@ -186,6 +275,20 @@ class KitchenOrder {
       }
     }
 
+    final double computedTotal =
+        items.fold<double>(0.0, (sum, it) => sum + it.lineTotal);
+    final double totalTTC =
+        (j['totalTTC'] as num?)?.toDouble() ?? computedTotal;
+    final double tvaRate = (j['tvaRate'] as num?)?.toDouble() ?? 10.0;
+    final double tvaAmount = (j['tvaAmount'] as num?)?.toDouble() ??
+        (totalTTC > 0 ? (totalTTC - totalTTC / (1 + tvaRate / 100)) : 0.0);
+    final double subtotalHT = (j['subtotalHT'] as num?)?.toDouble() ??
+        (totalTTC - tvaAmount);
+    final clientName = j['clientName']?.toString();
+    final registerName = j['registerId'] is Map
+        ? (j['registerId'] as Map)['name']?.toString()
+        : null;
+
     return KitchenOrder(
       id:           j['_id']?.toString() ?? '',
       ticketNumber: ticketNumber,
@@ -198,6 +301,12 @@ class KitchenOrder {
       note:         note,
       comment:      (comment != null && comment.isNotEmpty) ? comment : null,
       tableNumber:  (table != null && table.isNotEmpty) ? table : null,
+      subtotalHT:   subtotalHT,
+      tvaRate:      tvaRate,
+      tvaAmount:    tvaAmount,
+      totalTTC:     totalTTC,
+      clientName:   (clientName != null && clientName.isNotEmpty) ? clientName : null,
+      registerName: (registerName != null && registerName.isNotEmpty) ? registerName : null,
     );
   }
 }
@@ -407,11 +516,16 @@ class _KdsState extends State<KdsScreen> {
   }
 
   void _showOrderDetails(KitchenOrder order) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Détails de la commande ${order.ticketNumber}'),
-        duration: const Duration(milliseconds: 1500),
-        behavior: SnackBarBehavior.floating,
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogCtx) => KitchenOrderDetailsDialog(
+        order: order,
+        onClose: () => Navigator.of(dialogCtx).pop(),
+        onAdvance: (ord) async {
+          Navigator.of(dialogCtx).pop();
+          await _advance(ord);
+        },
       ),
     );
   }

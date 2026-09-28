@@ -1,0 +1,1531 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'kds_screen.dart';
+
+/* ─── Mode styling helper ─────────────────────────────────────────── */
+class _ModeStyle {
+  const _ModeStyle(this.label, this.bg, this.fg, this.dot);
+  final String label;
+  final Color bg;
+  final Color fg;
+  final Color dot;
+}
+
+/// A comprehensive order details dialog inspired directly by the POS order details panel,
+/// featuring:
+/// - Left side: The complete order receipt / ticket with info card, totals, and print actions.
+/// - Right side: Interactive item list and technical sheet / recipe for the selected item.
+class KitchenOrderDetailsDialog extends StatefulWidget {
+  const KitchenOrderDetailsDialog({
+    super.key,
+    required this.order,
+    required this.onClose,
+    this.onAdvance,
+    this.onPrint,
+  });
+
+  final KitchenOrder order;
+  final VoidCallback onClose;
+  final Future<void> Function(KitchenOrder)? onAdvance;
+  final VoidCallback? onPrint;
+
+  @override
+  State<KitchenOrderDetailsDialog> createState() =>
+      _KitchenOrderDetailsDialogState();
+}
+
+class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
+  int _selectedIndex = 0;
+  bool _advancing = false;
+  final Map<int, bool> _itemsReady = {};
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize ready states from items
+    for (int i = 0; i < widget.order.items.length; i++) {
+      _itemsReady[i] = widget.order.items[i].kdsStatus == 'ready' ||
+          widget.order.items[i].kdsStatus == 'served' ||
+          widget.order.status == OrderStatus.terminee;
+    }
+  }
+
+  // ────────────────────────── Formatting helpers ──────────────────────────
+
+  String _two(int n) => n.toString().padLeft(2, '0');
+  String _fmtDate(DateTime d) => '${_two(d.day)}/${_two(d.month)}/${d.year}';
+  String _fmtTime(DateTime d) =>
+      '${_two(d.hour)}:${_two(d.minute)}:${_two(d.second)}';
+  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} €';
+
+  _ModeStyle _modeStyle(OrderMode mode) {
+    switch (mode) {
+      case OrderMode.emporter:
+        return const _ModeStyle('À emporter', Color(0xFFDBEAFE),
+            Color(0xFF1E40AF), Color(0xFF2563EB));
+      case OrderMode.livraison:
+        return const _ModeStyle('Livraison', Color(0xFFCCFBF1),
+            Color(0xFF115E59), Color(0xFF0D9488));
+      case OrderMode.surPlace:
+        return const _ModeStyle('Sur place', Color(0xFFFFE4E6),
+            Color(0xFF9F1239), Color(0xFFE11D48));
+    }
+  }
+
+  String _statusLabel(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.attente:
+        return 'En attente';
+      case OrderStatus.preparation:
+        return 'En préparation';
+      case OrderStatus.terminee:
+        return 'Terminée';
+    }
+  }
+
+  Color _statusColor(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.attente:
+        return const Color(0xFFE08E0B);
+      case OrderStatus.preparation:
+        return const Color(0xFF2563EB);
+      case OrderStatus.terminee:
+        return const Color(0xFF22A45D);
+    }
+  }
+
+  /// Derives recipe ingredients for a given item name if not present in the DB
+  List<String> _getRecipeFor(KdsItem item) {
+    if (item.ingredients.isNotEmpty) return item.ingredients;
+
+    final lower = item.name.toLowerCase();
+    if (lower.contains('burger') || lower.contains('menu b')) {
+      return [
+        'Pain burger brioché artisanal (toasté doré)',
+        'Steak haché pur bœuf 150g façon bouchère',
+        'Tranche de fromage Cheddar fondant affiné',
+        'Sauce sélectionnée (nappage fond & chapeau)',
+        'Salade iceberg croquante & rondelles d\'oignon doux',
+        if (lower.contains('menu'))
+          'Accompagnement : Portion de frites fraîches maison',
+        if (lower.contains('menu'))
+          'Boisson fraîche 33cl au choix',
+      ];
+    } else if (lower.contains('tacos')) {
+      return [
+        'Galette de blé fine chauffée sur plaque',
+        'Viande hachée assaisonnée & émincé de poulet mariné',
+        'Sauce fromagère crémeuse maison signature',
+        'Frites croustillantes intégrées au pliage',
+        'Sauce d\'assaisonnement au choix',
+      ];
+    } else if (lower.contains('frite')) {
+      return [
+        'Pommes de terre fraîches sélectionnées',
+        'Double bain de friture à 180°C pour croustillant optimal',
+        'Assaisonnement au sel de Guérande minute',
+      ];
+    } else if (lower.contains('pizza')) {
+      return [
+        'Pâte à pizza artisanale fermentée 24h et étalée main',
+        'Sauce tomate mijotée à l\'huile d\'olive et origan',
+        'Mozzarella fior di latte râpée généreuse',
+        'Garniture cuite au four à haute température',
+      ];
+    } else if (lower.contains('salade')) {
+      return [
+        'Mélange de jeunes pousses fraîches lavées',
+        'Tomates cerises fraîches & dès de concombre',
+        'Vinaigrette maison émulsionnée à part',
+      ];
+    } else if (lower.contains('coca') ||
+        lower.contains('eau') ||
+        lower.contains('boisson') ||
+        lower.contains('fanta') ||
+        lower.contains('sprite')) {
+      return [
+        'Canette réfrigérée maintenue à 4°C',
+        'Vérifier la capsule et servir avec paille / serviette',
+      ];
+    } else if (lower.contains('tiramisu') || lower.contains('dessert')) {
+      return [
+        'Dessert artisanal préparé au frais',
+        'Saupoudrage cacao / coulis selon parfum',
+      ];
+    }
+
+    return [
+      'Préparation selon fiche technique de l\'établissement',
+      'Vérifier la température de service et la cuisson',
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mode = _modeStyle(widget.order.mode);
+    final items = widget.order.items;
+    final selectedIndex = _selectedIndex.clamp(0, items.isEmpty ? 0 : items.length - 1);
+    final selectedItem = items.isNotEmpty ? items[selectedIndex] : null;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        width: 1200,
+        height: 750,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F2EF),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            _buildTopBar(mode),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  /* ─── LEFT: ORDER RECEIPT (Ticket) ─── */
+                  Expanded(
+                    flex: 48,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF9F8F6),
+                        border: Border(
+                          right: BorderSide(color: Color(0xFFE2DFD8), width: 1.2),
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildInfoCard(mode),
+                            const SizedBox(height: 14),
+                            if (widget.order.comment != null &&
+                                widget.order.comment!.trim().isNotEmpty) ...[
+                              _buildKitchenNotesCard(widget.order.comment!),
+                              const SizedBox(height: 14),
+                            ],
+                            _buildReceiptItemsCard(),
+                            const SizedBox(height: 14),
+                            _buildReceiptFooterButtons(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  /* ─── RIGHT: ITEM SELECTOR & TECHNICAL RECIPE ─── */
+                  Expanded(
+                    flex: 52,
+                    child: Container(
+                      color: Colors.white,
+                      child: Column(
+                        children: [
+                          _buildRightHeader(items.length),
+                          _buildItemSelectorTabs(items, selectedIndex),
+                          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                          Expanded(
+                            child: selectedItem != null
+                                ? _buildSelectedItemDetails(
+                                    selectedItem, selectedIndex)
+                                : const Center(
+                                    child: Text(
+                                      'Aucun article dans cette commande',
+                                      style: TextStyle(color: Color(0xFF9CA3AF)),
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ───────────────────────────── TOP BAR ─────────────────────────────
+
+  Widget _buildTopBar(_ModeStyle mode) {
+    final statusColor = _statusColor(widget.order.status);
+    final statusText = _statusLabel(widget.order.status);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 14, 16, 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2DFD8))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF2B705).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.receipt_long_rounded,
+              color: Color(0xFF2E1F0F),
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'COMMANDE ${widget.order.ticketNumber}',
+                      style: GoogleFonts.bebasNeue(
+                        color: const Color(0xFF1A1714),
+                        fontSize: 26,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        statusText,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    if (widget.order.tableNumber != null &&
+                        widget.order.tableNumber!.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Text(
+                          widget.order.tableNumber!.toUpperCase().startsWith('TABLE')
+                              ? widget.order.tableNumber!.toUpperCase()
+                              : 'TABLE ${widget.order.tableNumber}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1D4ED8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                Text(
+                  'Reçue le ${_fmtDate(widget.order.createdAt)} à ${_fmtTime(widget.order.createdAt)} • Mode : ${mode.label}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: widget.onClose,
+            icon: const Icon(Icons.close, size: 18, color: Color(0xFF4B5563)),
+            label: const Text(
+              'Fermer',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF4B5563),
+              ),
+            ),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              backgroundColor: const Color(0xFFF3F4F6),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ────────────────────────── LEFT: RECEIPT CARDS ──────────────────────────
+
+  Widget _buildInfoCard(_ModeStyle mode) {
+    final client = widget.order.tableNumber != null &&
+            widget.order.tableNumber!.isNotEmpty
+        ? (widget.order.tableNumber!.toLowerCase().startsWith('table')
+            ? widget.order.tableNumber!
+            : 'Table ${widget.order.tableNumber}')
+        : (widget.order.clientName ?? 'Client Passant');
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _infoCell(
+                  Icons.schedule,
+                  'DATE & HEURE',
+                  '${_fmtDate(widget.order.createdAt)} à ${_fmtTime(widget.order.createdAt)}',
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _infoCell(
+                  Icons.point_of_sale_outlined,
+                  'CAISSE & OPÉRATEUR',
+                  widget.order.registerName ?? 'Caisse Tactile Comptoir',
+                  dotColor: const Color(0xFF22A45D),
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(height: 1, color: Color(0xFFF3F4F6)),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _infoCell(
+                  Icons.person_outline,
+                  'CLIENT / LOCALISATION',
+                  client,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'MODE DE CONSOMMATION',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF9CA3AF),
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: mode.bg,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                                color: mode.dot, shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            mode.label,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: mode.fg,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(height: 1, color: Color(0xFFF3F4F6)),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                'Canal de prise de commande :',
+                style: TextStyle(fontSize: 11.5, color: Color(0xFF9CA3AF)),
+              ),
+              Text(
+                'Caisse Tactile Comptoir',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF374151),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoCell(IconData icon, String label, String value,
+      {Color? dotColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF9CA3AF),
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            if (dotColor != null) ...[
+              Container(
+                width: 7,
+                height: 7,
+                decoration:
+                    BoxDecoration(color: dotColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+            ] else ...[
+              Icon(icon, size: 13, color: const Color(0xFF9CA3AF)),
+              const SizedBox(width: 6),
+            ],
+            Flexible(
+              child: Text(
+                value,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildKitchenNotesCard(String notes) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.chat_bubble_outline_rounded,
+              size: 18, color: Color(0xFFB45309)),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'NOTE CUISINE / COMMENTAIRE',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: Color(0xFFB45309),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  notes,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF78350F),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReceiptItemsCard() {
+    final subtotal = widget.order.subtotalHT > 0
+        ? widget.order.subtotalHT
+        : (widget.order.totalTTC / 1.10);
+    final tva = widget.order.tvaAmount > 0
+        ? widget.order.tvaAmount
+        : (widget.order.totalTTC - subtotal);
+    final total = widget.order.totalTTC > 0
+        ? widget.order.totalTTC
+        : widget.order.items.fold(0.0, (sum, it) => sum + it.lineTotal);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'QTÉ',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B7280),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 6,
+                child: Text(
+                  'ARTICLE & SUPPLÉMENTS',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B7280),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'PRIX',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B7280),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(height: 1, color: Color(0xFFE5E7EB)),
+          ),
+          for (var i = 0; i < widget.order.items.length; i++) ...[
+            _buildReceiptItemRow(widget.order.items[i], i),
+            if (i != widget.order.items.length - 1)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Divider(height: 1, color: Color(0xFFF3F4F6)),
+              ),
+          ],
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1, color: Color(0xFFE5E7EB)),
+          ),
+          _receiptTotalRow('Sous-total HT', _euro(subtotal)),
+          const SizedBox(height: 4),
+          _receiptTotalRow(
+              'TVA (${widget.order.tvaRate.toStringAsFixed(1)}%)', _euro(tva)),
+          const SizedBox(height: 8),
+          _receiptTotalRow('TOTAL PAYÉ', _euro(total), bold: true),
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Text(
+              'TOUTES TAXES COMPRISES',
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF9CA3AF),
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReceiptItemRow(KdsItem item, int index) {
+    final isSelected = _selectedIndex == index;
+
+    return InkWell(
+      onTap: () => setState(() => _selectedIndex = index),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          color: isSelected
+              ? const Color(0xFFF2B705).withValues(alpha: 0.08)
+              : Colors.transparent,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xFFF2B705)
+                      : const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  item.qty,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: isSelected
+                        ? const Color(0xFF2E1F0F)
+                        : const Color(0xFF111827),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 6,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected
+                            ? const Color(0xFF92400E)
+                            : const Color(0xFF111827),
+                      ),
+                    ),
+                    if (item.subLines.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Container(
+                        padding: const EdgeInsets.only(left: 8),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            left: BorderSide(
+                                color: Color(0xFFF2B705), width: 2.5),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final sub in item.subLines)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  '• $sub',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: sub.toLowerCase().startsWith('sans')
+                                        ? const Color(0xFFB45309)
+                                        : const Color(0xFF6B7280),
+                                    fontWeight:
+                                        sub.toLowerCase().startsWith('sans')
+                                            ? FontWeight.w600
+                                            : FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                _euro(item.lineTotal),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? const Color(0xFF92400E)
+                      : const Color(0xFF111827),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _receiptTotalRow(String label, String value, {bool bold = false}) {
+    final style = TextStyle(
+      fontSize: bold ? 18 : 12,
+      fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+      color: bold ? const Color(0xFF1A1714) : const Color(0xFF374151),
+    );
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [Text(label, style: style), Text(value, style: style)],
+    );
+  }
+
+  Widget _buildReceiptFooterButtons() {
+    return Column(
+      children: [
+        /* Yellow Print button */
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                      'Impression du bon cuisine #${widget.order.ticketNumber} envoyée'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF2B705),
+              foregroundColor: const Color(0xFF2E1F0F),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            icon: const Icon(Icons.print_outlined, size: 20),
+            label: const Text(
+              'IMPRIMER LE TICKET DE CAISSE',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Réimpression du bon cuisine envoyée'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF374151),
+                  side: const BorderSide(color: Color(0xFFD1D5DB)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.restaurant_menu, size: 15),
+                label: const Text(
+                  'Réimprimer Bon Cuisine',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: (_advancing ||
+                        widget.order.status == OrderStatus.terminee)
+                    ? null
+                    : () async {
+                        setState(() => _advancing = true);
+                        if (widget.onAdvance != null) {
+                          await widget.onAdvance!(widget.order);
+                        }
+                        if (mounted) setState(() => _advancing = false);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: widget.order.status == OrderStatus.attente
+                      ? const Color(0xFFF2B705)
+                      : const Color(0xFF22A45D),
+                  foregroundColor: widget.order.status == OrderStatus.attente
+                      ? const Color(0xFF2E1F0F)
+                      : Colors.white,
+                  disabledBackgroundColor: const Color(0xFFEBE8E1),
+                  disabledForegroundColor: const Color(0xFF9A948A),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: Icon(
+                  widget.order.status == OrderStatus.attente
+                      ? Icons.play_arrow_rounded
+                      : Icons.check_circle_outline_rounded,
+                  size: 16,
+                ),
+                label: Text(
+                  widget.order.status == OrderStatus.attente
+                      ? 'Commencer'
+                      : (widget.order.status == OrderStatus.preparation
+                          ? 'Terminer ✓'
+                          : 'Terminée'),
+                  style: const TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ──────────────────────── RIGHT: ITEMS & RECIPE ────────────────────────
+
+  Widget _buildRightHeader(int count) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+      color: Colors.white,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.restaurant_outlined,
+                  size: 18, color: Color(0xFFB45309)),
+              const SizedBox(width: 8),
+              Text(
+                'ARTICLES DE LA COMMANDE ($count)',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1F2937),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const Text(
+            'Sélectionnez un article pour voir sa recette',
+            style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemSelectorTabs(List<KdsItem> items, int selectedIndex) {
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      color: const Color(0xFFF9FAFB),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (ctx, i) {
+          final it = items[i];
+          final isSelected = i == selectedIndex;
+          final isReady = _itemsReady[i] ?? false;
+
+          return InkWell(
+            onTap: () => setState(() => _selectedIndex = i),
+            borderRadius: BorderRadius.circular(10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFFFFFBEB) : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isSelected
+                      ? const Color(0xFFF59E0B)
+                      : const Color(0xFFE5E7EB),
+                  width: isSelected ? 1.8 : 1,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFF2B705)
+                          : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      it.qty,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: isSelected
+                            ? const Color(0xFF2E1F0F)
+                            : const Color(0xFF374151),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        it.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isSelected
+                              ? const Color(0xFF92400E)
+                              : const Color(0xFF111827),
+                        ),
+                      ),
+                      Text(
+                        it.station != null && it.station!.isNotEmpty
+                            ? 'Poste : ${it.station!.toUpperCase()}'
+                            : _euro(it.lineTotal),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isSelected
+                              ? const Color(0xFFB45309)
+                              : const Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (isReady) ...[
+                    const SizedBox(width: 8),
+                    const Icon(Icons.check_circle,
+                        size: 14, color: Color(0xFF22A45D)),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSelectedItemDetails(KdsItem item, int index) {
+    final recipeIngredients = _getRecipeFor(item);
+    final isReady = _itemsReady[index] ?? false;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          /* Item title card */
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFFBEB), Colors.white],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2B705),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      item.qty,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2E1F0F),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE0E7FF),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              item.station != null && item.station!.isNotEmpty
+                                  ? 'POSTE : ${item.station!.toUpperCase()}'
+                                  : 'POSTE : CUISINE CHAUDE',
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF3730A3),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Prix : ${_euro(item.lineTotal)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _itemsReady[index] = !isReady;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(!isReady
+                            ? '${item.name} marqué comme PRÊT'
+                            : '${item.name} remis en préparation'),
+                        duration: const Duration(seconds: 1),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isReady
+                        ? const Color(0xFF22A45D)
+                        : const Color(0xFFF3F4F6),
+                    foregroundColor:
+                        isReady ? Colors.white : const Color(0xFF374151),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: isReady
+                            ? const Color(0xFF22A45D)
+                            : const Color(0xFFD1D5DB),
+                      ),
+                    ),
+                  ),
+                  icon: Icon(
+                    isReady
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked,
+                    size: 16,
+                  ),
+                  label: Text(
+                    isReady ? 'Article Prêt ✓' : 'Marquer Prêt',
+                    style: const TextStyle(
+                        fontSize: 11.5, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          /* Customizations and Extras */
+          if (item.customizations.isNotEmpty) ...[
+            _sectionTitle('OPTIONS & PERSONNALISATIONS DU CLIENT',
+                Icons.tune_rounded, const Color(0xFF2563EB)),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F9FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFBAE6FD)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final cust in item.customizations) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0284C7),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              cust.groupName.toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: cust.selectedOptions.map((opt) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(5),
+                                    border: Border.all(
+                                        color: const Color(0xFF38BDF8)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.check,
+                                          size: 11, color: Color(0xFF0369A1)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        opt,
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF0369A1),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          /* Removed Ingredients (Sans...) */
+          if (item.removedIngredients.isNotEmpty) ...[
+            _sectionTitle('INGRÉDIENTS À RETIRER (SANS...)',
+                Icons.remove_circle_outline_rounded, const Color(0xFFDC2626)),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFECACA), width: 1.2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '⚠️ ATTENTION : Ne pas inclure dans la préparation :',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFB91C1C),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: item.removedIngredients.map((rem) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          rem.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          /* Item notes */
+          if (item.notes != null && item.notes!.trim().isNotEmpty) ...[
+            _sectionTitle('REMARQUE ARTICLE', Icons.edit_note_rounded,
+                const Color(0xFFD97706)),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFCD34D)),
+              ),
+              child: Text(
+                item.notes!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF78350F),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          /* Technical Sheet / Recipe Composition */
+          _sectionTitle('FICHE TECHNIQUE & RECETTE EN CUISINE',
+              Icons.menu_book_rounded, const Color(0xFF059669)),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: const [
+                    Icon(Icons.inventory_2_outlined,
+                        size: 15, color: Color(0xFF059669)),
+                    SizedBox(width: 6),
+                    Text(
+                      'COMPOSITION & ÉTAPES DE MONTAGE :',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF059669),
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                for (var stepIndex = 0;
+                    stepIndex < recipeIngredients.length;
+                    stepIndex++) ...[
+                  _buildRecipeStep(
+                    stepIndex + 1,
+                    recipeIngredients[stepIndex],
+                    item.removedIngredients,
+                  ),
+                  if (stepIndex != recipeIngredients.length - 1)
+                    const SizedBox(height: 8),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 7),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            color: color,
+            letterSpacing: 0.4,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecipeStep(
+      int num, String text, List<String> removedIngredients) {
+    final lower = text.toLowerCase();
+    final isRemoved = removedIngredients.any((rem) {
+      final remClean =
+          rem.toLowerCase().replaceFirst(RegExp(r'^sans\s*'), '').trim();
+      return remClean.isNotEmpty && lower.contains(remClean);
+    });
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isRemoved ? const Color(0xFFFEF2F2) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isRemoved
+              ? const Color(0xFFFCA5A5)
+              : const Color(0xFFE5E7EB),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: isRemoved
+                  ? const Color(0xFFEF4444)
+                  : const Color(0xFF059669),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: isRemoved
+                  ? const Icon(Icons.close, size: 13, color: Colors.white)
+                  : Text(
+                      '$num',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              isRemoved ? '$text  (🚫 RETIRÉ À LA DEMANDE DU CLIENT)' : text,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isRemoved ? FontWeight.w700 : FontWeight.w500,
+                color: isRemoved
+                    ? const Color(0xFFDC2626)
+                    : const Color(0xFF1F2937),
+                decoration:
+                    isRemoved ? TextDecoration.lineThrough : TextDecoration.none,
+                decorationColor: const Color(0xFFDC2626),
+                decorationThickness: 2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

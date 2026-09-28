@@ -133,7 +133,7 @@ exports.getOrder = async (req, res) => {
       .populate('registerId', 'name type')
       .populate('operatorId', 'name')
       .populate('customerId', 'fullName phone')
-      .populate('items.productId', 'name basePrice');
+      .populate('items.productId', 'name basePrice ingredients description categoryId kdsStation');
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
     res.json({ success: true, data: order });
   } catch (err) {
