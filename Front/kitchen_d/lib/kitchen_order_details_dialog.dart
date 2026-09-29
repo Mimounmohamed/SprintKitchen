@@ -22,12 +22,14 @@ class KitchenOrderDetailsDialog extends StatefulWidget {
     required this.onClose,
     this.onAdvance,
     this.onPrint,
+    this.onItemStatusChanged,
   });
 
   final KitchenOrder order;
   final VoidCallback onClose;
   final Future<void> Function(KitchenOrder)? onAdvance;
   final VoidCallback? onPrint;
+  final void Function(KdsItem item, bool isReady)? onItemStatusChanged;
 
   @override
   State<KitchenOrderDetailsDialog> createState() =>
@@ -37,6 +39,7 @@ class KitchenOrderDetailsDialog extends StatefulWidget {
 class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
   int _selectedIndex = 0;
   bool _advancing = false;
+  bool _savingItem = false;
   final Map<int, bool> _itemsReady = {};
 
   @override
@@ -44,8 +47,7 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
     super.initState();
     // Initialize ready states from items
     for (int i = 0; i < widget.order.items.length; i++) {
-      _itemsReady[i] = widget.order.items[i].kdsStatus == 'ready' ||
-          widget.order.items[i].kdsStatus == 'served' ||
+      _itemsReady[i] = widget.order.items[i].isReady ||
           widget.order.status == OrderStatus.terminee;
     }
   }
@@ -56,7 +58,6 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
   String _fmtDate(DateTime d) => '${_two(d.day)}/${_two(d.month)}/${d.year}';
   String _fmtTime(DateTime d) =>
       '${_two(d.hour)}:${_two(d.minute)}:${_two(d.second)}';
-  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} €';
 
   _ModeStyle _modeStyle(OrderMode mode) {
     switch (mode) {
@@ -92,72 +93,6 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
       case OrderStatus.terminee:
         return const Color(0xFF22A45D);
     }
-  }
-
-  /// Derives recipe ingredients for a given item name if not present in the DB
-  List<String> _getRecipeFor(KdsItem item) {
-    if (item.ingredients.isNotEmpty) return item.ingredients;
-
-    final lower = item.name.toLowerCase();
-    if (lower.contains('burger') || lower.contains('menu b')) {
-      return [
-        'Pain burger brioché artisanal (toasté doré)',
-        'Steak haché pur bœuf 150g façon bouchère',
-        'Tranche de fromage Cheddar fondant affiné',
-        'Sauce sélectionnée (nappage fond & chapeau)',
-        'Salade iceberg croquante & rondelles d\'oignon doux',
-        if (lower.contains('menu'))
-          'Accompagnement : Portion de frites fraîches maison',
-        if (lower.contains('menu'))
-          'Boisson fraîche 33cl au choix',
-      ];
-    } else if (lower.contains('tacos')) {
-      return [
-        'Galette de blé fine chauffée sur plaque',
-        'Viande hachée assaisonnée & émincé de poulet mariné',
-        'Sauce fromagère crémeuse maison signature',
-        'Frites croustillantes intégrées au pliage',
-        'Sauce d\'assaisonnement au choix',
-      ];
-    } else if (lower.contains('frite')) {
-      return [
-        'Pommes de terre fraîches sélectionnées',
-        'Double bain de friture à 180°C pour croustillant optimal',
-        'Assaisonnement au sel de Guérande minute',
-      ];
-    } else if (lower.contains('pizza')) {
-      return [
-        'Pâte à pizza artisanale fermentée 24h et étalée main',
-        'Sauce tomate mijotée à l\'huile d\'olive et origan',
-        'Mozzarella fior di latte râpée généreuse',
-        'Garniture cuite au four à haute température',
-      ];
-    } else if (lower.contains('salade')) {
-      return [
-        'Mélange de jeunes pousses fraîches lavées',
-        'Tomates cerises fraîches & dès de concombre',
-        'Vinaigrette maison émulsionnée à part',
-      ];
-    } else if (lower.contains('coca') ||
-        lower.contains('eau') ||
-        lower.contains('boisson') ||
-        lower.contains('fanta') ||
-        lower.contains('sprite')) {
-      return [
-        'Canette réfrigérée maintenue à 4°C',
-        'Vérifier la capsule et servir avec paille / serviette',
-      ];
-    } else if (lower.contains('tiramisu') || lower.contains('dessert')) {
-      return [
-        'Dessert artisanal préparé au frais',
-        'Saupoudrage cacao / coulis selon parfum',
-      ];
-    }
-
-    return [
-      'Préparation selon fiche technique de l\'établissement',
-      'Vérifier la température de service et la cuisson',
-    ];
   }
 
   @override
@@ -605,15 +540,8 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
   }
 
   Widget _buildReceiptItemsCard() {
-    final subtotal = widget.order.subtotalHT > 0
-        ? widget.order.subtotalHT
-        : (widget.order.totalTTC / 1.10);
-    final tva = widget.order.tvaAmount > 0
-        ? widget.order.tvaAmount
-        : (widget.order.totalTTC - subtotal);
-    final total = widget.order.totalTTC > 0
-        ? widget.order.totalTTC
-        : widget.order.items.fold(0.0, (sum, it) => sum + it.lineTotal);
+    final totalItemsCount =
+        widget.order.items.fold<int>(0, (sum, it) => sum + it.quantity);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -634,8 +562,8 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
         children: [
           Row(
             children: const [
-              Expanded(
-                flex: 2,
+              SizedBox(
+                width: 48,
                 child: Text(
                   'QTÉ',
                   style: TextStyle(
@@ -647,22 +575,8 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                 ),
               ),
               Expanded(
-                flex: 6,
                 child: Text(
-                  'ARTICLE & SUPPLÉMENTS',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF6B7280),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'PRIX',
-                  textAlign: TextAlign.right,
+                  'ARTICLE & PERSONNALISATIONS',
                   style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
@@ -686,26 +600,37 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
               ),
           ],
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+            padding: EdgeInsets.symmetric(vertical: 10),
             child: Divider(height: 1, color: Color(0xFFE5E7EB)),
           ),
-          _receiptTotalRow('Sous-total HT', _euro(subtotal)),
-          const SizedBox(height: 4),
-          _receiptTotalRow(
-              'TVA (${widget.order.tvaRate.toStringAsFixed(1)}%)', _euro(tva)),
-          const SizedBox(height: 8),
-          _receiptTotalRow('TOTAL PAYÉ', _euro(total), bold: true),
-          const Padding(
-            padding: EdgeInsets.only(top: 2),
-            child: Text(
-              'TOUTES TAXES COMPRISES',
-              style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF9CA3AF),
-                letterSpacing: 0.4,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'TOTAL ARTICLES',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF4B5563),
+                  letterSpacing: 0.4,
+                ),
               ),
-            ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '$totalItemsCount article(s)',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -714,12 +639,13 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
 
   Widget _buildReceiptItemRow(KdsItem item, int index) {
     final isSelected = _selectedIndex == index;
+    final isItemReady = _itemsReady[index] ?? item.isReady;
 
     return InkWell(
       onTap: () => setState(() => _selectedIndex = index),
       borderRadius: BorderRadius.circular(6),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(6),
           color: isSelected
@@ -729,14 +655,16 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 2,
+            SizedBox(
+              width: 44,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFFF2B705)
-                      : const Color(0xFFF3F4F6),
+                  color: isItemReady
+                      ? const Color(0xFFDCFCE7)
+                      : (isSelected
+                          ? const Color(0xFFF2B705)
+                          : const Color(0xFFF3F4F6)),
                   borderRadius: BorderRadius.circular(5),
                 ),
                 child: Text(
@@ -745,80 +673,92 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: isSelected
-                        ? const Color(0xFF2E1F0F)
-                        : const Color(0xFF111827),
+                    color: isItemReady
+                        ? const Color(0xFF15803D)
+                        : (isSelected
+                            ? const Color(0xFF2E1F0F)
+                            : const Color(0xFF111827)),
                   ),
                 ),
               ),
             ),
+            const SizedBox(width: 8),
             Expanded(
-              flex: 6,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.name,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: isSelected
-                            ? const Color(0xFF92400E)
-                            : const Color(0xFF111827),
-                      ),
-                    ),
-                    if (item.subLines.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Container(
-                        padding: const EdgeInsets.only(left: 8),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            left: BorderSide(
-                                color: Color(0xFFF2B705), width: 2.5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.name,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: isItemReady
+                                ? const Color(0xFF15803D)
+                                : (isSelected
+                                    ? const Color(0xFF92400E)
+                                    : const Color(0xFF111827)),
+                            decoration: isItemReady ? TextDecoration.lineThrough : null,
+                            decorationColor: const Color(0xFF15803D),
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (final sub in item.subLines)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 2),
-                                child: Text(
-                                  '• $sub',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: sub.toLowerCase().startsWith('sans')
-                                        ? const Color(0xFFB45309)
-                                        : const Color(0xFF6B7280),
-                                    fontWeight:
-                                        sub.toLowerCase().startsWith('sans')
-                                            ? FontWeight.w600
-                                            : FontWeight.w400,
-                                  ),
-                                ),
-                              ),
-                          ],
+                      ),
+                      if (isItemReady)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'PRÊT ✓',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF15803D),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (item.subLines.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Container(
+                      padding: const EdgeInsets.only(left: 8),
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          left: BorderSide(
+                              color: Color(0xFFF2B705), width: 2.5),
                         ),
                       ),
-                    ],
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final sub in item.subLines)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Text(
+                                '• $sub',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: sub.toLowerCase().startsWith('sans')
+                                      ? const Color(0xFFB45309)
+                                      : const Color(0xFF6B7280),
+                                  fontWeight:
+                                      sub.toLowerCase().startsWith('sans')
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ],
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Text(
-                _euro(item.lineTotal),
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: isSelected
-                      ? const Color(0xFF92400E)
-                      : const Color(0xFF111827),
-                ),
+                ],
               ),
             ),
           ],
@@ -827,126 +767,80 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
     );
   }
 
-  Widget _receiptTotalRow(String label, String value, {bool bold = false}) {
-    final style = TextStyle(
-      fontSize: bold ? 18 : 12,
-      fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
-      color: bold ? const Color(0xFF1A1714) : const Color(0xFF374151),
-    );
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [Text(label, style: style), Text(value, style: style)],
-    );
-  }
-
   Widget _buildReceiptFooterButtons() {
-    return Column(
+    return Row(
       children: [
-        /* Yellow Print button */
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                      'Impression du bon cuisine #${widget.order.ticketNumber} envoyée'),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF2B705),
-              foregroundColor: const Color(0xFF2E1F0F),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+        Expanded(
+          child: SizedBox(
+            height: 44,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Réimpression du bon cuisine envoyée'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF374151),
+                side: const BorderSide(color: Color(0xFFD1D5DB), width: 1.2),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
-            ),
-            icon: const Icon(Icons.print_outlined, size: 20),
-            label: const Text(
-              'IMPRIMER LE TICKET DE CAISSE',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 12.5,
-                letterSpacing: 0.4,
+              icon: const Icon(Icons.restaurant_menu, size: 17),
+              label: const Text(
+                'Réimprimer Bon Cuisine',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Réimpression du bon cuisine envoyée'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF374151),
-                  side: const BorderSide(color: Color(0xFFD1D5DB)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Icons.restaurant_menu, size: 15),
-                label: const Text(
-                  'Réimprimer Bon Cuisine',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: SizedBox(
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: (_advancing ||
+                      widget.order.status == OrderStatus.terminee)
+                  ? null
+                  : () async {
+                      setState(() => _advancing = true);
+                      if (widget.onAdvance != null) {
+                        await widget.onAdvance!(widget.order);
+                      }
+                      if (mounted) setState(() => _advancing = false);
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: widget.order.status == OrderStatus.attente
+                    ? const Color(0xFFF2B705)
+                    : const Color(0xFF22A45D),
+                foregroundColor: widget.order.status == OrderStatus.attente
+                    ? const Color(0xFF2E1F0F)
+                    : Colors.white,
+                disabledBackgroundColor: const Color(0xFFEBE8E1),
+                disabledForegroundColor: const Color(0xFF9A948A),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: Icon(
+                widget.order.status == OrderStatus.attente
+                    ? Icons.play_arrow_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 18,
+              ),
+              label: Text(
+                widget.order.status == OrderStatus.attente
+                    ? 'Commencer'
+                    : (widget.order.status == OrderStatus.preparation
+                        ? 'Terminer ✓'
+                        : 'Terminée'),
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w800),
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: (_advancing ||
-                        widget.order.status == OrderStatus.terminee)
-                    ? null
-                    : () async {
-                        setState(() => _advancing = true);
-                        if (widget.onAdvance != null) {
-                          await widget.onAdvance!(widget.order);
-                        }
-                        if (mounted) setState(() => _advancing = false);
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.order.status == OrderStatus.attente
-                      ? const Color(0xFFF2B705)
-                      : const Color(0xFF22A45D),
-                  foregroundColor: widget.order.status == OrderStatus.attente
-                      ? const Color(0xFF2E1F0F)
-                      : Colors.white,
-                  disabledBackgroundColor: const Color(0xFFEBE8E1),
-                  disabledForegroundColor: const Color(0xFF9A948A),
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: Icon(
-                  widget.order.status == OrderStatus.attente
-                      ? Icons.play_arrow_rounded
-                      : Icons.check_circle_outline_rounded,
-                  size: 16,
-                ),
-                label: Text(
-                  widget.order.status == OrderStatus.attente
-                      ? 'Commencer'
-                      : (widget.order.status == OrderStatus.preparation
-                          ? 'Terminer ✓'
-                          : 'Terminée'),
-                  style: const TextStyle(
-                      fontSize: 11.5, fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ],
     );
@@ -978,7 +872,7 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
             ],
           ),
           const Text(
-            'Sélectionnez un article pour voir sa recette',
+            'Sélectionnez un article pour voir ses détails & options',
             style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
           ),
         ],
@@ -1066,7 +960,7 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                       Text(
                         it.station != null && it.station!.isNotEmpty
                             ? 'Poste : ${it.station!.toUpperCase()}'
-                            : _euro(it.lineTotal),
+                            : 'Standard',
                         style: TextStyle(
                           fontSize: 10,
                           color: isSelected
@@ -1091,7 +985,6 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
   }
 
   Widget _buildSelectedItemDetails(KdsItem item, int index) {
-    final recipeIngredients = _getRecipeFor(item);
     final isReady = _itemsReady[index] ?? false;
 
     return SingleChildScrollView(
@@ -1144,56 +1037,83 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                           color: Color(0xFF1F2937),
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE0E7FF),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              item.station != null && item.station!.isNotEmpty
-                                  ? 'POSTE : ${item.station!.toUpperCase()}'
-                                  : 'POSTE : CUISINE CHAUDE',
-                              style: const TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF3730A3),
-                              ),
-                            ),
+                      const SizedBox(height: 3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0E7FF),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          item.station != null && item.station!.isNotEmpty
+                              ? 'POSTE : ${item.station!.toUpperCase()}'
+                              : 'POSTE : CUISINE CHAUDE',
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF3730A3),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Prix : ${_euro(item.lineTotal)}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF6B7280),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _itemsReady[index] = !isReady;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(!isReady
-                            ? '${item.name} marqué comme PRÊT'
-                            : '${item.name} remis en préparation'),
-                        duration: const Duration(seconds: 1),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
+                  onPressed: _savingItem
+                      ? null
+                      : () async {
+                          final targetReady = !isReady;
+                          final targetStatus =
+                              targetReady ? 'ready' : 'pending';
+                          setState(() {
+                            _savingItem = true;
+                            _itemsReady[index] = targetReady;
+                            item.kdsStatus = targetStatus;
+                          });
+                          if (widget.onItemStatusChanged != null) {
+                            widget.onItemStatusChanged!(item, targetReady);
+                          }
+                          try {
+                            await KdsApi.updateItemStatus(
+                              order: widget.order,
+                              itemIndex: index,
+                              newStatus: targetStatus,
+                            );
+                            if (mounted) {
+                              setState(() => _savingItem = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(targetReady
+                                      ? '${item.name} enregistré comme PRÊT ✓'
+                                      : '${item.name} remis en préparation'),
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                  backgroundColor: targetReady
+                                      ? const Color(0xFF15803D)
+                                      : const Color(0xFF374151),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              setState(() {
+                                _savingItem = false;
+                                _itemsReady[index] = isReady;
+                                item.kdsStatus = isReady ? 'ready' : 'pending';
+                              });
+                              if (widget.onItemStatusChanged != null) {
+                                widget.onItemStatusChanged!(item, isReady);
+                              }
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Erreur d\'enregistrement : $e'),
+                                  backgroundColor: const Color(0xFFDC2626),
+                                ),
+                              );
+                            }
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isReady
                         ? const Color(0xFF22A45D)
@@ -1212,12 +1132,23 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                       ),
                     ),
                   ),
-                  icon: Icon(
-                    isReady
-                        ? Icons.check_circle_rounded
-                        : Icons.radio_button_unchecked,
-                    size: 16,
-                  ),
+                  icon: _savingItem
+                      ? SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              isReady ? Colors.white : const Color(0xFF374151),
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          isReady
+                              ? Icons.check_circle_rounded
+                              : Icons.radio_button_unchecked,
+                          size: 16,
+                        ),
                   label: Text(
                     isReady ? 'Article Prêt ✓' : 'Marquer Prêt',
                     style: const TextStyle(
@@ -1233,81 +1164,73 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
           /* Customizations and Extras */
           if (item.customizations.isNotEmpty) ...[
             _sectionTitle('OPTIONS & PERSONNALISATIONS DU CLIENT',
-                Icons.tune_rounded, const Color(0xFF2563EB)),
+                Icons.tune_rounded, const Color(0xFFB45309)),
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0F9FF),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFBAE6FD)),
+                color: const Color(0xFFFFFDF5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF2B705).withValues(alpha: 0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final cust in item.customizations) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0284C7),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              cust.groupName.toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
+              child: Container(
+                padding: const EdgeInsets.only(left: 12),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                        color: Color(0xFFF2B705), width: 3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < item.customizations.length; i++) ...[
+                      Padding(
+                        padding: EdgeInsets.only(
+                            bottom: i < item.customizations.length - 1 ? 6 : 0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '• ',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF78350F),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: cust.selectedOptions.map((opt) {
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(5),
-                                    border: Border.all(
-                                        color: const Color(0xFF38BDF8)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.check,
-                                          size: 11, color: Color(0xFF0369A1)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        opt,
-                                        style: const TextStyle(
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF0369A1),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
+                            Text(
+                              '${item.customizations[i].groupName}: ',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF6B7280),
+                              ),
                             ),
-                          ),
-                        ],
+                            Expanded(
+                              child: Text(
+                                item.customizations[i].selectedOptions.join(', '),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1F2937),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -1320,48 +1243,64 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
                 color: const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFFECACA), width: 1.2),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '⚠️ ATTENTION : Ne pas inclure dans la préparation :',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFFB91C1C),
+              child: Container(
+                padding: const EdgeInsets.only(left: 12),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                        color: Color(0xFFDC2626), width: 3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '⚠️ À RETIRER DE LA PRÉPARATION :',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFB91C1C),
+                        letterSpacing: 0.3,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: item.removedIngredients.map((rem) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDC2626),
-                          borderRadius: BorderRadius.circular(6),
+                    const SizedBox(height: 6),
+                    for (final rem in item.removedIngredients)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '• ',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFDC2626),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                rem.toLowerCase().startsWith('sans')
+                                    ? rem
+                                    : 'Sans $rem',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        child: Text(
-                          rem.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
+                      ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -1374,71 +1313,64 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFFCD34D)),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
               ),
-              child: Text(
-                item.notes!,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF78350F),
+              child: Container(
+                padding: const EdgeInsets.only(left: 12),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                        color: Color(0xFFD97706), width: 3),
+                  ),
+                ),
+                child: Text(
+                  item.notes!,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF78350F),
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
           ],
 
-          /* Technical Sheet / Recipe Composition */
-          _sectionTitle('FICHE TECHNIQUE & RECETTE EN CUISINE',
-              Icons.menu_book_rounded, const Color(0xFF059669)),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: const [
-                    Icon(Icons.inventory_2_outlined,
-                        size: 15, color: Color(0xFF059669)),
-                    SizedBox(width: 6),
-                    Text(
-                      'COMPOSITION & ÉTAPES DE MONTAGE :',
+          /* Standard item indication when no specific customizations or exclusions exist */
+          if (item.customizations.isEmpty &&
+              item.removedIngredients.isEmpty &&
+              (item.notes == null || item.notes!.trim().isEmpty))
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.check_circle_outline_rounded,
+                      size: 20, color: Color(0xFF10B981)),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Préparation standard (aucune personnalisation ni ingrédient retiré pour cet article).',
                       style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF059669),
-                        letterSpacing: 0.4,
+                        fontSize: 12.5,
+                        color: Color(0xFF4B5563),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                for (var stepIndex = 0;
-                    stepIndex < recipeIngredients.length;
-                    stepIndex++) ...[
-                  _buildRecipeStep(
-                    stepIndex + 1,
-                    recipeIngredients[stepIndex],
-                    item.removedIngredients,
                   ),
-                  if (stepIndex != recipeIngredients.length - 1)
-                    const SizedBox(height: 8),
                 ],
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -1459,73 +1391,6 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildRecipeStep(
-      int num, String text, List<String> removedIngredients) {
-    final lower = text.toLowerCase();
-    final isRemoved = removedIngredients.any((rem) {
-      final remClean =
-          rem.toLowerCase().replaceFirst(RegExp(r'^sans\s*'), '').trim();
-      return remClean.isNotEmpty && lower.contains(remClean);
-    });
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: isRemoved ? const Color(0xFFFEF2F2) : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isRemoved
-              ? const Color(0xFFFCA5A5)
-              : const Color(0xFFE5E7EB),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              color: isRemoved
-                  ? const Color(0xFFEF4444)
-                  : const Color(0xFF059669),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: isRemoved
-                  ? const Icon(Icons.close, size: 13, color: Colors.white)
-                  : Text(
-                      '$num',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              isRemoved ? '$text  (🚫 RETIRÉ À LA DEMANDE DU CLIENT)' : text,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isRemoved ? FontWeight.w700 : FontWeight.w500,
-                color: isRemoved
-                    ? const Color(0xFFDC2626)
-                    : const Color(0xFF1F2937),
-                decoration:
-                    isRemoved ? TextDecoration.lineThrough : TextDecoration.none,
-                decorationColor: const Color(0xFFDC2626),
-                decorationThickness: 2,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -79,6 +79,7 @@ class KdsCustomization {
 }
 
 class KdsItem {
+  final String? id;
   final String qty;
   final String name;
   final List<String> subLines;
@@ -86,13 +87,15 @@ class KdsItem {
   final double unitPrice;
   final double lineTotal;
   final String? station;
-  final String? kdsStatus;
+  String? kdsStatus;
   final List<String> ingredients;
   final List<KdsCustomization> customizations;
   final List<String> removedIngredients;
   final String? notes;
+  final Map<String, dynamic> rawJson;
 
-  const KdsItem({
+  KdsItem({
+    this.id,
     required this.qty,
     required this.name,
     this.subLines = const [],
@@ -105,9 +108,25 @@ class KdsItem {
     this.customizations = const [],
     this.removedIngredients = const [],
     this.notes,
+    this.rawJson = const {},
   });
 
+  bool get isReady => kdsStatus == 'ready' || kdsStatus == 'served';
+
+  Map<String, dynamic> toDbJson() {
+    final map = Map<String, dynamic>.from(rawJson);
+    if (id != null && id!.isNotEmpty) {
+      map['_id'] = id;
+    }
+    map['kdsStatus'] = kdsStatus ?? 'pending';
+    if (map['productId'] is Map && (map['productId'] as Map)['_id'] != null) {
+      map['productId'] = (map['productId'] as Map)['_id'].toString();
+    }
+    return map;
+  }
+
   factory KdsItem.fromJson(Map<String, dynamic> j) {
+    final String? itemId = j['_id']?.toString();
     final int qtyInt = (j['quantity'] as num?)?.toInt() ?? 1;
     final double uPrice = (j['unitPrice'] as num?)?.toDouble() ?? 0.0;
     final double lTotal = (j['lineTotal'] as num?)?.toDouble() ?? (uPrice * qtyInt);
@@ -176,6 +195,7 @@ class KdsItem {
     if (name.isEmpty) name = '?';
 
     return KdsItem(
+      id: itemId,
       qty: '$qtyInt\u00d7',
       name: name,
       subLines: subs,
@@ -188,6 +208,7 @@ class KdsItem {
       customizations: parsedCustoms,
       removedIngredients: removed,
       notes: itemNotes,
+      rawJson: Map<String, dynamic>.from(j),
     );
   }
 }
@@ -389,6 +410,59 @@ class KdsApi {
       throw Exception('HTTP ${res.statusCode}');
     }
   }
+
+  static Future<void> updateItemStatus({
+    required KitchenOrder order,
+    required int itemIndex,
+    required String newStatus,
+  }) async {
+    final item = order.items[itemIndex];
+    item.kdsStatus = newStatus;
+
+    // 1. Try dedicated endpoint PATCH /kds/orders/:orderId/items/:itemId/kds-status
+    if (item.id != null && item.id!.isNotEmpty) {
+      try {
+        final res = await http
+            .patch(
+              Uri.parse('$_kBaseUrl/kds/orders/${order.id}/items/${item.id}/kds-status'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'kdsStatus': newStatus}),
+            )
+            .timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) return;
+      } catch (_) {
+        // Fallback below
+      }
+    }
+
+    // 2. Fallback to PUT /orders/:id with updated items array
+    final itemsPayload = order.items.map((it) => it.toDbJson()).toList();
+    final body = <String, dynamic>{
+      'items': itemsPayload,
+    };
+
+    // If all items are ready, also set order kdsStatus to ready
+    final allReady = order.items.every((it) => it.isReady);
+    if (allReady && order.status == OrderStatus.attente) {
+      body['kdsStatus'] = 'ready';
+      body['status'] = 'a_encaisser';
+      body['kdsReadyAt'] = DateTime.now().toUtc().toIso8601String();
+      order.status = OrderStatus.terminee;
+      order.note = 'PR\u00caT';
+    }
+
+    final res = await http
+        .put(
+          Uri.parse('$_kBaseUrl/orders/${order.id}'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 6));
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}');
+    }
+  }
 }
 
 
@@ -526,8 +600,13 @@ class _KdsState extends State<KdsScreen> {
           Navigator.of(dialogCtx).pop();
           await _advance(ord);
         },
+        onItemStatusChanged: (item, isReady) {
+          if (mounted) setState(() {});
+        },
       ),
-    );
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   /* ── Body states ── */
@@ -947,15 +1026,48 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
                     ),
                   ],
                   for (final item in widget.order.items) ...[
-                    Text('${item.qty} ${item.name}', style: TextStyle(
-                        fontSize: r.fs(13.5), fontWeight: FontWeight.w700,
-                        color: muted ? C.muted : (isCrit ? C.red : C.ink))),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${item.qty} ${item.name}',
+                            style: TextStyle(
+                              fontSize: r.fs(13.5),
+                              fontWeight: FontWeight.w700,
+                              color: item.isReady
+                                  ? C.greenText
+                                  : (muted ? C.muted : (isCrit ? C.red : C.ink)),
+                              decoration: item.isReady ? TextDecoration.lineThrough : null,
+                              decorationColor: C.greenText,
+                            ),
+                          ),
+                        ),
+                        if (item.isReady)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.check_circle_rounded,
+                              size: r.fs(12),
+                              color: C.green,
+                            ),
+                          ),
+                      ],
+                    ),
                     for (final sub in item.subLines)
                       Padding(
                         padding: EdgeInsets.only(top: 1, left: r.fs(2)),
-                        child: Text('\u00b7 $sub', style: TextStyle(
-                            fontSize: r.fs(11.5), color: C.muted,
-                            fontWeight: FontWeight.w400))),
+                        child: Text(
+                          '\u00b7 $sub',
+                          style: TextStyle(
+                            fontSize: r.fs(11.5),
+                            color: item.isReady
+                                ? C.muted.withValues(alpha: 0.6)
+                                : C.muted,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
                     SizedBox(height: r.fs(7)),
                   ],
                 ],

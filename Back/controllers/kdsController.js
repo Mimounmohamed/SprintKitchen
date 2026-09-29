@@ -93,3 +93,56 @@ exports.updateKdsStatus = async (req, res) => {
     res.status(400).json({ success: false, message: err.message });
   }
 };
+
+/**
+ * PATCH /api/kds/orders/:orderId/items/:itemId/kds-status
+ * Body: { kdsStatus: 'pending' | 'in_progress' | 'ready' | 'served' }
+ */
+exports.updateKdsItemStatus = async (req, res) => {
+  try {
+    const { orderId, itemId } = req.params;
+    const { kdsStatus } = req.body;
+    const valid = ['pending', 'in_progress', 'ready', 'served'];
+    if (!valid.includes(kdsStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `kdsStatus must be one of: ${valid.join(', ')}`,
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Commande introuvable' });
+    }
+
+    const item = order.items.id(itemId) || order.items[parseInt(itemId, 10)];
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Article introuvable' });
+    }
+
+    item.kdsStatus = kdsStatus;
+
+    // Check if all items are ready -> automatically advance order if en_attente
+    const allReady = order.items.every(i => i.kdsStatus === 'ready' || i.kdsStatus === 'served');
+    if (allReady && order.status === 'en_attente') {
+      order.kdsStatus = 'ready';
+      order.kdsReadyAt = new Date();
+      order.status = 'a_encaisser';
+    }
+
+    await order.save();
+
+    res.json({
+      success: true,
+      data: {
+        orderId: order._id,
+        itemId: item._id,
+        itemKdsStatus: item.kdsStatus,
+        orderKdsStatus: order.kdsStatus,
+        orderStatus: order.status,
+      },
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
