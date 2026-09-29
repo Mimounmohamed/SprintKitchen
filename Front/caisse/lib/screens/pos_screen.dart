@@ -123,6 +123,127 @@ class _PosScreenState extends State<PosScreen> {
     });
   }
 
+  MenuItem? _findMenuItemForLine(TicketLine line) {
+    if (line.productId != null && line.productId!.isNotEmpty) {
+      for (final cat in _categories) {
+        for (final it in cat.items) {
+          if (it.id == line.productId) {
+            return it;
+          }
+        }
+      }
+    }
+    for (final cat in _categories) {
+      for (final it in cat.items) {
+        if (it.name.trim().toLowerCase() == line.name.trim().toLowerCase()) {
+          return it;
+        }
+      }
+    }
+    return null;
+  }
+
+  List<CustomizationGroup> _getDefaultCustomizationGroups() {
+    for (final cat in _categories) {
+      for (final it in cat.items) {
+        for (final g in it.customizationGroups) {
+          if (g.name.toLowerCase().contains('sauce')) {
+            return [g];
+          }
+        }
+      }
+    }
+
+    return const [
+      CustomizationGroup(
+        name: 'Choix de la sauce',
+        type: 'multi',
+        isRequired: false,
+        minChoices: 0,
+        maxChoices: 3,
+        options: [
+          CustomizationOption(label: 'Algérienne', priceModifier: 0),
+          CustomizationOption(label: 'Burger', priceModifier: 0, isDefault: true),
+          CustomizationOption(label: 'Mayonnaise', priceModifier: 0),
+          CustomizationOption(label: 'Ketchup', priceModifier: 0),
+          CustomizationOption(label: 'Samourai', priceModifier: 0),
+          CustomizationOption(label: 'Barbecue', priceModifier: 0),
+        ],
+      ),
+    ];
+  }
+
+  Future<void> _editSelectedItem() async {
+    if (_ticketLines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Le ticket est vide. Ajoutez d\'abord un article.'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    int targetIndex = _selectedLineIndex ?? (_ticketLines.length - 1);
+    if (targetIndex < 0 || targetIndex >= _ticketLines.length) {
+      targetIndex = _ticketLines.length - 1;
+    }
+
+    setState(() => _selectedLineIndex = targetIndex);
+    final line = _ticketLines[targetIndex];
+
+    MenuItem? menuItem = _findMenuItemForLine(line);
+
+    if (menuItem == null) {
+      menuItem = MenuItem(
+        id: line.productId ?? '',
+        name: line.name,
+        price: line.unitPrice,
+        categoryId: '',
+        customizationGroups: _getDefaultCustomizationGroups(),
+        ingredients: const ['Oignon', 'Tomate', 'Salade', 'Cornichon'],
+      );
+    } else {
+      final hasSauceGroup = menuItem.customizationGroups
+          .any((g) => g.name.toLowerCase().contains('sauce'));
+
+      if (!hasSauceGroup) {
+        final sauceGroups = _getDefaultCustomizationGroups();
+        menuItem = MenuItem(
+          id: menuItem.id,
+          name: menuItem.name,
+          price: menuItem.price,
+          categoryId: menuItem.categoryId,
+          description: menuItem.description,
+          available: menuItem.available,
+          customizationGroups: [
+            ...menuItem.customizationGroups,
+            ...sauceGroups,
+          ],
+          ingredients: menuItem.ingredients.isNotEmpty
+              ? menuItem.ingredients
+              : const ['Oignon', 'Tomate', 'Salade', 'Cornichon'],
+        );
+      }
+    }
+
+    final updatedLine = await showDialog<TicketLine>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (_) => CustomizationModal(
+        item: menuItem!,
+        initialLine: line,
+      ),
+    );
+
+    if (updatedLine == null) return;
+
+    setState(() {
+      _ticketLines[targetIndex] = updatedLine;
+    });
+  }
+
   void _addItemToTicket(MenuItem item) {
     setState(() {
       final existingIndex = _ticketLines.indexWhere((l) => l.name == item.name);
@@ -771,12 +892,6 @@ class _PosScreenState extends State<PosScreen> {
                     ),
                   ),
                 ),
-                const Spacer(),
-                const Icon(
-                  Icons.menu,
-                  size: 22,
-                  color: Color(0xFF4B5563),
-                ),
               ],
             ),
           ),
@@ -872,6 +987,10 @@ class _PosScreenState extends State<PosScreen> {
                         selected: index == _selectedLineIndex,
                         onTap: () =>
                             setState(() => _selectedLineIndex = index),
+                        onDoubleTap: () {
+                          setState(() => _selectedLineIndex = index);
+                          _editSelectedItem();
+                        },
                       );
                     },
                   ),
@@ -896,10 +1015,11 @@ class _PosScreenState extends State<PosScreen> {
                 ),
                 const SizedBox(width: 8),
                 _lineActionButton(
-                  icon: Icons.settings_outlined,
+                  icon: Icons.edit_outlined,
                   color: const Color(0xFF059669),
                   bg: const Color(0xFFECFDF5),
-                  onTap: () {},
+                  tooltip: "Modifier l'article (sauces, options...)",
+                  onTap: _editSelectedItem,
                 ),
                 const SizedBox(width: 8),
                 _lineActionButton(
@@ -1042,16 +1162,6 @@ class _PosScreenState extends State<PosScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _smallActionButton(
-                    label: 'Actions',
-                    icon: Icons.tune,
-                    bg: const Color(0xFFF59E0B),
-                    fg: const Color(0xFF1F2937),
-                    onTap: () {},
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _smallActionButton(
                     label: 'Reprise',
                     icon: Icons.sync,
                     bg: const Color(0xFF452B1E),
@@ -1096,23 +1206,28 @@ class _PosScreenState extends State<PosScreen> {
     required Color color,
     required Color bg,
     required VoidCallback onTap,
+    String? tooltip,
   }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          height: 38,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Center(
-            child: Icon(icon, size: 18, color: color),
-          ),
+    Widget content = InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 38,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Icon(icon, size: 18, color: color),
         ),
       ),
     );
+
+    if (tooltip != null) {
+      content = Tooltip(message: tooltip, child: content);
+    }
+
+    return Expanded(child: content);
   }
 
   Widget _orderTypeButton(OrderType type, Color color, IconData icon) {

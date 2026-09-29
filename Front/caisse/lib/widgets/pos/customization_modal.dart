@@ -7,8 +7,14 @@ import '../../theme/app_colors.dart';
 /// [TicketLine] via Navigator.pop when the user validates, or null
 /// if they cancel/dismiss.
 class CustomizationModal extends StatefulWidget {
-  const CustomizationModal({super.key, required this.item});
+  const CustomizationModal({
+    super.key,
+    required this.item,
+    this.initialLine,
+  });
+
   final MenuItem item;
+  final TicketLine? initialLine;
 
   @override
   State<CustomizationModal> createState() => _CustomizationModalState();
@@ -26,9 +32,54 @@ class _CustomizationModalState extends State<CustomizationModal> {
   @override
   void initState() {
     super.initState();
-    for (final group in widget.item.customizationGroups) {
-      _selections[group.name] =
-          group.options.where((o) => o.isDefault).toList();
+    if (widget.initialLine != null) {
+      final initial = widget.initialLine!;
+      _quantity = initial.quantity;
+
+      for (final rem in initial.removedIngredients) {
+        final clean = rem
+            .replaceFirst(RegExp(r'^sans\s+', caseSensitive: false), '')
+            .trim();
+        if (clean.isNotEmpty) {
+          _removedIngredients.add(clean);
+        }
+      }
+
+      for (final group in widget.item.customizationGroups) {
+        final applied = initial.customizations.where(
+          (c) =>
+              c.groupName.toLowerCase().trim() == group.name.toLowerCase().trim(),
+        );
+
+        if (applied.isNotEmpty) {
+          final chosenLabels = applied.first.selectedOptions
+              .map((o) => o.label.toLowerCase().trim())
+              .toSet();
+          final matched = group.options
+              .where((o) => chosenLabels.contains(o.label.toLowerCase().trim()))
+              .toList();
+          for (final sel in applied.first.selectedOptions) {
+            if (!matched.any((m) =>
+                m.label.toLowerCase().trim() == sel.label.toLowerCase().trim())) {
+              matched.add(CustomizationOption(
+                label: sel.label,
+                priceModifier: sel.priceModifier,
+              ));
+            }
+          }
+          _selections[group.name] = matched;
+        } else if (initial.customizations.isEmpty) {
+          _selections[group.name] =
+              group.options.where((o) => o.isDefault).toList();
+        } else {
+          _selections[group.name] = [];
+        }
+      }
+    } else {
+      for (final group in widget.item.customizationGroups) {
+        _selections[group.name] =
+            group.options.where((o) => o.isDefault).toList();
+      }
     }
   }
 
@@ -130,6 +181,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
         productId: widget.item.id,
         customizations: customizations,
         removedIngredients: _removedIngredients.toList(),
+        notes: widget.initialLine?.notes,
       ),
     );
   }
@@ -302,7 +354,9 @@ class _CustomizationModalState extends State<CustomizationModal> {
                   runSpacing: 6,
                   children: [
                     Text(
-                      'PERSONNALISATION — ${item.name.toUpperCase()}',
+                      widget.initialLine != null
+                          ? 'MODIFIER — ${item.name.toUpperCase()}'
+                          : 'PERSONNALISATION — ${item.name.toUpperCase()}',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
@@ -389,6 +443,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
       if (ingredientGroup != null)
         ...ingredientGroup.options.map((o) =>
             o.label.replaceFirst(RegExp(r'^Sans\s+', caseSensitive: false), '')),
+      ..._removedIngredients,
     };
 
     if (allIngredients.isEmpty) {
@@ -918,9 +973,11 @@ class _CustomizationModalState extends State<CustomizationModal> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       icon: const Icon(Icons.check, size: 20),
-      label: const Text(
-        'VALIDER & AJOUTER AU TICKET',
-        style: TextStyle(
+      label: Text(
+        widget.initialLine != null
+            ? 'VALIDER LA MODIFICATION'
+            : 'VALIDER & AJOUTER AU TICKET',
+        style: const TextStyle(
             fontWeight: FontWeight.w800, fontSize: 13.5, letterSpacing: 0.4),
       ),
     );

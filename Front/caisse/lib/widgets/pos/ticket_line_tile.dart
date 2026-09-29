@@ -8,16 +8,19 @@ class TicketLineTile extends StatelessWidget {
     required this.line,
     this.selected = false,
     this.onTap,
+    this.onDoubleTap,
   });
 
   final TicketLine line;
   final bool selected;
   final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      onDoubleTap: onDoubleTap,
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
