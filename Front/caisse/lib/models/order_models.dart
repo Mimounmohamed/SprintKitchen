@@ -1,9 +1,14 @@
+import 'pos_models.dart';
+
 /// One line of a past order (Order.items[]).
 class HistoryOrderLine {
   const HistoryOrderLine({
     required this.name,
     required this.quantity,
     required this.lineTotal,
+    this.productId,
+    this.unitPrice,
+    this.customizations = const [],
     this.options = const [],
     this.removed = const [],
     this.notes,
@@ -12,6 +17,9 @@ class HistoryOrderLine {
   final String name;
   final int quantity;
   final double lineTotal;
+  final String? productId;
+  final double? unitPrice;
+  final List<AppliedCustomization> customizations;
 
   /// Flattened labels of every selected customization option.
   final List<String> options;
@@ -20,19 +28,60 @@ class HistoryOrderLine {
   final List<String> removed;
   final String? notes;
 
-  factory HistoryOrderLine.fromJson(Map<String, dynamic> json) {
-    final options = <String>[];
-    for (final c in (json['customizations'] as List<dynamic>? ?? [])) {
-      final selected = (c as Map<String, dynamic>)['selectedOptions'];
-      for (final o in (selected as List<dynamic>? ?? [])) {
-        final label = (o as Map<String, dynamic>)['label'] as String?;
-        if (label != null && label.isNotEmpty) options.add(label);
+  TicketLine toTicketLine() {
+    double extras = 0;
+    for (final c in customizations) {
+      for (final opt in c.selectedOptions) {
+        extras += opt.priceModifier;
       }
     }
+    final basePrice = unitPrice ?? ((lineTotal / (quantity > 0 ? quantity : 1)) - extras);
+    return TicketLine(
+      name: name,
+      unitPrice: basePrice > 0 ? basePrice : 0,
+      quantity: quantity,
+      productId: productId,
+      extrasTotal: extras,
+      customizations: customizations,
+      removedIngredients: removed,
+      notes: notes,
+    );
+  }
+
+  factory HistoryOrderLine.fromJson(Map<String, dynamic> json) {
+    final options = <String>[];
+    final appliedCustomizations = <AppliedCustomization>[];
+
+    for (final c in (json['customizations'] as List<dynamic>? ?? [])) {
+      if (c is Map<String, dynamic>) {
+        final gName = c['groupName'] as String? ?? '';
+        final sOptions = <SelectedOption>[];
+        for (final o in (c['selectedOptions'] as List<dynamic>? ?? [])) {
+          if (o is Map<String, dynamic>) {
+            final label = o['label'] as String? ?? '';
+            final pm = (o['priceModifier'] as num?)?.toDouble() ?? 0;
+            if (label.isNotEmpty) {
+              options.add(label);
+              sOptions.add(SelectedOption(label: label, priceModifier: pm));
+            }
+          }
+        }
+        appliedCustomizations.add(
+          AppliedCustomization(groupName: gName, selectedOptions: sOptions),
+        );
+      }
+    }
+
+    final pId = json['productId'];
+    final productId = pId is Map ? pId['_id']?.toString() : pId?.toString();
+
     return HistoryOrderLine(
       name: json['productName'] as String? ?? '',
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       lineTotal: (json['lineTotal'] as num?)?.toDouble() ?? 0,
+      productId: productId,
+      unitPrice: (json['unitPrice'] as num?)?.toDouble(),
+      customizations: appliedCustomizations,
       options: options,
       removed: (json['removedIngredients'] as List<dynamic>? ?? [])
           .map((e) => e.toString())
@@ -62,6 +111,7 @@ class HistoryOrder {
     this.deliveryAddress,
     this.notes,
     this.lines = const [],
+    this.isEdited = false,
   });
 
   final String id;
@@ -83,6 +133,7 @@ class HistoryOrder {
   final String? deliveryAddress;
   final String? notes;
   final List<HistoryOrderLine> lines;
+  final bool isEdited;
 
   /// Formatted client and/or table display for the "CLIENT / TABLE" column.
   String? get displayClient {
@@ -148,6 +199,7 @@ class HistoryOrder {
       lines: (json['items'] as List<dynamic>? ?? [])
           .map((e) => HistoryOrderLine.fromJson(e as Map<String, dynamic>))
           .toList(),
+      isEdited: json['isEdited'] == true,
     );
   }
 }

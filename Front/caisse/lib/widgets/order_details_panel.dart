@@ -25,6 +25,7 @@ class OrderDetailsPanel extends StatelessWidget {
     this.onReprintKitchenSlip,
     this.onRefundOrCancel,
     this.onMarkTerminee,
+    this.onModifyOrder,
   });
 
   final HistoryOrder order;
@@ -33,6 +34,7 @@ class OrderDetailsPanel extends StatelessWidget {
   final VoidCallback? onReprintKitchenSlip;
   final VoidCallback? onRefundOrCancel;
   final VoidCallback? onMarkTerminee;
+  final VoidCallback? onModifyOrder;
 
   /// Recommended panel width — pass this (capped to the viewport) as the
   /// width of whatever container hosts this widget.
@@ -685,6 +687,30 @@ class OrderDetailsPanel extends StatelessWidget {
             ),
             const SizedBox(height: 10),
           ],
+          if (onModifyOrder != null && order.status != 'terminee' && order.status != 'annulee') ...[
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: onModifyOrder,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD97706),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text(
+                  'MODIFIER LA COMMANDE',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -761,6 +787,7 @@ void showOrderDetailsPanel(
   BuildContext context,
   HistoryOrder order, {
   VoidCallback? onMarkTerminee,
+  VoidCallback? onModifyOrder,
 }) {
   showGeneralDialog<void>(
     context: context,
@@ -783,6 +810,7 @@ void showOrderDetailsPanel(
               order: order,
               onClose: () => Navigator.of(ctx).pop(),
               onMarkTerminee: onMarkTerminee,
+              onModifyOrder: onModifyOrder,
             ),
           ),
         ),

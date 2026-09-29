@@ -46,12 +46,22 @@ class OrderDetailsModal extends StatefulWidget {
     required this.ticketNumber,
     required this.posteLabel,
     this.initialNotes,
+    this.initialTable,
+    this.initialClient,
+    this.initialAddress,
+    this.initialPhone,
+    this.currentTicketNumber,
   });
 
   final OrderType orderType;
   final String ticketNumber;
   final String posteLabel;
   final String? initialNotes;
+  final String? initialTable;
+  final String? initialClient;
+  final String? initialAddress;
+  final String? initialPhone;
+  final String? currentTicketNumber;
 
   @override
   State<OrderDetailsModal> createState() => _OrderDetailsModalState();
@@ -73,6 +83,18 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
     super.initState();
     if (widget.initialNotes != null) {
       _notesController.text = widget.initialNotes!;
+    }
+    if (widget.initialTable != null) {
+      _tableController.text = widget.initialTable!.replaceFirst(RegExp(r'^table\s*', caseSensitive: false), '').trim();
+    }
+    if (widget.initialClient != null) {
+      _clientController.text = widget.initialClient!;
+    }
+    if (widget.initialAddress != null) {
+      _addressController.text = widget.initialAddress!;
+    }
+    if (widget.initialPhone != null) {
+      _phoneController.text = widget.initialPhone!;
     }
     if (widget.orderType == OrderType.dineIn) {
       _loadOccupiedTables();
@@ -303,6 +325,12 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                 final occupied = _occupiedTables.cast<OccupiedTableInfo?>().firstWhere(
                   (t) {
                     if (t == null) return false;
+                    if (widget.currentTicketNumber != null &&
+                        (t.ticketNumber == widget.currentTicketNumber ||
+                         t.ticketNumber == widget.ticketNumber ||
+                         '#${t.ticketNumber}' == widget.ticketNumber)) {
+                      return false;
+                    }
                     final tClean = t.tableNumber.toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
                     return tClean == clean;
                   },

@@ -245,6 +245,12 @@ exports.updateOrder = async (req, res) => {
     Object.assign(order, req.body);
     if (req.body.items) order.recalculateTotals();
 
+    // If order was already commenced on KDS (in_progress or ready), flag it as edited
+    if (order.kdsStatus === 'in_progress' || order.kdsStatus === 'ready' || req.body.isEdited) {
+      order.isEdited = true;
+      order.editedAt = new Date();
+    }
+
     await order.save();
     res.json({ success: true, data: order });
   } catch (err) {

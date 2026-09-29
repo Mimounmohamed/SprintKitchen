@@ -99,6 +99,52 @@ class OrderService {
     return created;
   }
 
+  /// PUT /api/orders/:id
+  /// Modifies an existing order (items, tableNumber, notes, orderType, clientName, delivery).
+  Future<CreatedOrder> updateOrder({
+    required String orderId,
+    required List<TicketLine> lines,
+    required OrderType orderType,
+    required double expectedTotal,
+    String? tableNumber,
+    String? clientName,
+    String? deliveryAddress,
+    String? deliveryPhone,
+    String? notes,
+  }) async {
+    final body = <String, dynamic>{
+      'orderType': _orderTypeToApi(orderType),
+      'items': lines.map(_lineToJson).toList(),
+    };
+
+    if (notes != null) {
+      body['notes'] = notes.trim();
+    }
+    if (tableNumber != null && tableNumber.trim().isNotEmpty) {
+      body['tableNumber'] = tableNumber.trim();
+      body['buzzerNumber'] = 'Table ${tableNumber.trim()}';
+    }
+    if (clientName != null) {
+      body['clientName'] = clientName.trim();
+    }
+    final hasAddress = deliveryAddress != null && deliveryAddress.trim().isNotEmpty;
+    final hasPhone = deliveryPhone != null && deliveryPhone.trim().isNotEmpty;
+    if (hasAddress || hasPhone) {
+      body['delivery'] = {
+        if (hasAddress) 'address': deliveryAddress.trim(),
+        if (hasPhone) 'phone': deliveryPhone.trim(),
+      };
+    }
+
+    final json = await _client.put('/orders/$orderId', body);
+    final data = json['data'] as Map<String, dynamic>;
+    return CreatedOrder(
+      id: data['_id'] as String,
+      ticketNumber: data['ticketNumber'] as String? ?? '',
+      totalTTC: (data['totalTTC'] as num).toDouble(),
+    );
+  }
+
   /// GET /api/orders/occupied-tables
   /// Retrieves tables currently occupied by active (not yet terminee) orders.
   /// Includes fallback to GET /orders?limit=100 for backwards compatibility

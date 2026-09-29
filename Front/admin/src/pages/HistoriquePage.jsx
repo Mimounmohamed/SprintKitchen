@@ -19,6 +19,7 @@ import {
   Undo2,
   UtensilsCrossed,
   WifiOff,
+  Pencil,
 } from 'lucide-react';
 import { orderService, paymentService } from '../services';
 
@@ -2503,25 +2504,48 @@ export default function HistoriquePage() {
                             </button>
 
                             {isSelected && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  printThermalReceipt({ order: o, kitchenOnly: false });
-                                }}
-                                title="Imprimer le ticket"
-                                style={{
-                                  padding: 4,
-                                  border: 'none',
-                                  background: 'none',
-                                  cursor: 'pointer',
-                                  color: COLORS.stone600,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Printer size={18} />
-                              </button>
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    printThermalReceipt({ order: o, kitchenOnly: false });
+                                  }}
+                                  title="Imprimer le ticket"
+                                  style={{
+                                    padding: 4,
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    color: COLORS.stone600,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Printer size={18} />
+                                </button>
+                                {o.status !== 'terminee' && o.status !== 'annulee' && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedOrder(o);
+                                    }}
+                                    title="Modifier la commande"
+                                    style={{
+                                      padding: 4,
+                                      border: 'none',
+                                      background: 'none',
+                                      cursor: 'pointer',
+                                      color: COLORS.stone600,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}
+                                  >
+                                    <Pencil size={18} />
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>

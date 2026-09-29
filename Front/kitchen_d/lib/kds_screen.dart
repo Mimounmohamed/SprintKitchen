@@ -229,6 +229,7 @@ class KitchenOrder {
   final double totalTTC;
   final String? clientName;
   final String? registerName;
+  final bool isEdited;
 
   KitchenOrder({
     required this.id,
@@ -246,6 +247,7 @@ class KitchenOrder {
     this.totalTTC = 0.0,
     this.clientName,
     this.registerName,
+    this.isEdited = false,
   });
 
   factory KitchenOrder.fromJson(Map<String, dynamic> j) {
@@ -328,6 +330,7 @@ class KitchenOrder {
       totalTTC:     totalTTC,
       clientName:   (clientName != null && clientName.isNotEmpty) ? clientName : null,
       registerName: (registerName != null && registerName.isNotEmpty) ? registerName : null,
+      isEdited:     j['isEdited'] == true,
     );
   }
 }
@@ -936,6 +939,33 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
                       color: const Color(0xFF1D4ED8),
                       letterSpacing: 0.2,
                     ),
+                  ),
+                ),
+              ],
+              if (widget.order.isEdited) ...[
+                SizedBox(width: r.fs(6)),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: const Color(0xFFFCA5A5), width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit, size: r.fs(9.5), color: const Color(0xFFDC2626)),
+                      const SizedBox(width: 3),
+                      Text(
+                        'MODIFIÉ',
+                        style: TextStyle(
+                          fontSize: r.fs(9.5),
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFFDC2626),
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

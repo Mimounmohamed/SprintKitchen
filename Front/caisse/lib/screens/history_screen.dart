@@ -7,6 +7,7 @@ import '../services/history_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/order_details_panel.dart';
 import '../widgets/date_range_popover.dart';
+import 'pos_screen.dart';
 
 /// "Historique des ventes" — list of past orders, filtered by status tab,
 /// date range and search, with pagination.
@@ -16,9 +17,14 @@ import '../widgets/date_range_popover.dart';
 ///   MaterialPageRoute(builder: (_) => const HistoryScreen()),
 /// );
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key, this.posteLabel = 'Caisse 01'});
+  const HistoryScreen({
+    super.key,
+    this.posteLabel = 'Caisse 01',
+    this.onOrderEdit,
+  });
 
   final String posteLabel;
+  final void Function(HistoryOrder order)? onOrderEdit;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -927,6 +933,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             size: 18, color: _stone600),
                       ),
                     ),
+                    if (o.status != 'terminee' && o.status != 'annulee') ...[
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => _modifyOrder(o),
+                        borderRadius: BorderRadius.circular(6),
+                        child: const Tooltip(
+                          message: 'Modifier la commande',
+                          child: Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.edit_outlined,
+                                size: 18, color: _stone600),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -1146,11 +1167,39 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  void _modifyOrder(HistoryOrder o) {
+    if (widget.onOrderEdit != null) {
+      widget.onOrderEdit!(o);
+    } else {
+      Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => PosScreen(
+            editingOrder: o,
+            ticketNumber: o.ticketNumber,
+            posteLabel: widget.posteLabel,
+          ),
+        ),
+      ).then((res) {
+        if (res == true && mounted) {
+          _loadOrders(keepData: true);
+          _loadSummary();
+        }
+      });
+    }
+  }
+
   void _showDetails(HistoryOrder o) => showOrderDetailsPanel(
         context,
         o,
         onMarkTerminee:
             o.status == 'en_attente' ? () => _markOrderTerminee(o) : null,
+        onModifyOrder:
+            o.status != 'terminee' && o.status != 'annulee'
+                ? () {
+                    Navigator.of(context).pop();
+                    _modifyOrder(o);
+                  }
+                : null,
       );
 
   // ───────────────────────────── status bar ─────────────────────────────

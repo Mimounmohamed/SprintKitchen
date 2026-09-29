@@ -130,6 +130,9 @@ const OrderSchema = new mongoose.Schema(
     reprintCount: { type: Number, default: 0 },
     // Notes
     notes: String,
+    // Order modified after initial submission
+    isEdited: { type: Boolean, default: false },
+    editedAt: Date,
   },
   { timestamps: true }
 );
