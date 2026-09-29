@@ -11,6 +11,7 @@ import '../services/menu_service.dart';
 import '../services/order_service.dart';
 import '../widgets/pos/encaissement_modal.dart';
 import '../widgets/pos/order_details_modal.dart';
+import '../models/order_models.dart' show HistoryOrder;
 import 'history_screen.dart';
 
 /// The POS / register screen ("SprintKitchen POS - Caisse Principale").
@@ -22,10 +23,12 @@ class PosScreen extends StatefulWidget {
     super.key,
     this.ticketNumber = '000001',
     this.posteLabel = 'Caisse 01',
+    this.editingOrder,
   });
 
   final String ticketNumber;
   final String posteLabel;
+  final HistoryOrder? editingOrder;
 
   @override
   State<PosScreen> createState() => _PosScreenState();
@@ -66,10 +69,17 @@ class _PosScreenState extends State<PosScreen> {
   /// Optional kitchen note / comment for the current order.
   String? _orderNotes;
 
+  /// Order currently being modified from HistoryScreen (if any).
+  HistoryOrder? _editingOrder;
+  bool get _isEditing => _editingOrder != null;
+
   @override
   void initState() {
     super.initState();
     _ticketNumber = widget.ticketNumber;
+    if (widget.editingOrder != null) {
+      _loadOrderForEditing(widget.editingOrder!);
+    }
     _loadMenu();
   }
 
@@ -120,6 +130,127 @@ class _PosScreenState extends State<PosScreen> {
     setState(() {
       _ticketLines.add(line);
       _selectedLineIndex = _ticketLines.length - 1;
+    });
+  }
+
+  MenuItem? _findMenuItemForLine(TicketLine line) {
+    if (line.productId != null && line.productId!.isNotEmpty) {
+      for (final cat in _categories) {
+        for (final it in cat.items) {
+          if (it.id == line.productId) {
+            return it;
+          }
+        }
+      }
+    }
+    for (final cat in _categories) {
+      for (final it in cat.items) {
+        if (it.name.trim().toLowerCase() == line.name.trim().toLowerCase()) {
+          return it;
+        }
+      }
+    }
+    return null;
+  }
+
+  List<CustomizationGroup> _getDefaultCustomizationGroups() {
+    for (final cat in _categories) {
+      for (final it in cat.items) {
+        for (final g in it.customizationGroups) {
+          if (g.name.toLowerCase().contains('sauce')) {
+            return [g];
+          }
+        }
+      }
+    }
+
+    return const [
+      CustomizationGroup(
+        name: 'Choix de la sauce',
+        type: 'multi',
+        isRequired: false,
+        minChoices: 0,
+        maxChoices: 3,
+        options: [
+          CustomizationOption(label: 'Algérienne', priceModifier: 0),
+          CustomizationOption(label: 'Burger', priceModifier: 0, isDefault: true),
+          CustomizationOption(label: 'Mayonnaise', priceModifier: 0),
+          CustomizationOption(label: 'Ketchup', priceModifier: 0),
+          CustomizationOption(label: 'Samourai', priceModifier: 0),
+          CustomizationOption(label: 'Barbecue', priceModifier: 0),
+        ],
+      ),
+    ];
+  }
+
+  Future<void> _editSelectedItem() async {
+    if (_ticketLines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Le ticket est vide. Ajoutez d\'abord un article.'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    int targetIndex = _selectedLineIndex ?? (_ticketLines.length - 1);
+    if (targetIndex < 0 || targetIndex >= _ticketLines.length) {
+      targetIndex = _ticketLines.length - 1;
+    }
+
+    setState(() => _selectedLineIndex = targetIndex);
+    final line = _ticketLines[targetIndex];
+
+    MenuItem? menuItem = _findMenuItemForLine(line);
+
+    if (menuItem == null) {
+      menuItem = MenuItem(
+        id: line.productId ?? '',
+        name: line.name,
+        price: line.unitPrice,
+        categoryId: '',
+        customizationGroups: _getDefaultCustomizationGroups(),
+        ingredients: const ['Oignon', 'Tomate', 'Salade', 'Cornichon'],
+      );
+    } else {
+      final hasSauceGroup = menuItem.customizationGroups
+          .any((g) => g.name.toLowerCase().contains('sauce'));
+
+      if (!hasSauceGroup) {
+        final sauceGroups = _getDefaultCustomizationGroups();
+        menuItem = MenuItem(
+          id: menuItem.id,
+          name: menuItem.name,
+          price: menuItem.price,
+          categoryId: menuItem.categoryId,
+          description: menuItem.description,
+          available: menuItem.available,
+          customizationGroups: [
+            ...menuItem.customizationGroups,
+            ...sauceGroups,
+          ],
+          ingredients: menuItem.ingredients.isNotEmpty
+              ? menuItem.ingredients
+              : const ['Oignon', 'Tomate', 'Salade', 'Cornichon'],
+        );
+      }
+    }
+
+    final updatedLine = await showDialog<TicketLine>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (_) => CustomizationModal(
+        item: menuItem!,
+        initialLine: line,
+      ),
+    );
+
+    if (updatedLine == null) return;
+
+    setState(() {
+      _ticketLines[targetIndex] = updatedLine;
     });
   }
 
@@ -321,10 +452,14 @@ class _PosScreenState extends State<PosScreen> {
           orderType: _orderType,
           ticketNumber: _ticketNumber,
           posteLabel: widget.posteLabel,
+          initialNotes: _orderNotes,
         ),
       );
       if (details == null || !mounted) return;
       _orderDetails = details;
+      if (details.notes != null) {
+        _orderNotes = details.notes!.isEmpty ? null : details.notes;
+      }
     }
 
     final result = await showDialog<EncaissementResult>(
@@ -349,6 +484,12 @@ class _PosScreenState extends State<PosScreen> {
         final failure = await _attempt(result);
         if (failure == null) return; // success handled in _attempt
         if (!mounted) return;
+        if (failure.message.contains('occupée') || failure.message.contains('déjà liée')) {
+          _pendingOrder = null;
+          _orderDetails = null;
+          await _showTableOccupiedError(failure);
+          return;
+        }
         final retry = await _showPaymentError(failure);
         if (!retry) {
           // Cashier backed out: forget the pending order (and its details)
@@ -449,6 +590,179 @@ class _PosScreenState extends State<PosScreen> {
       ),
     );
     return retry ?? false;
+  }
+
+  Future<void> _showTableOccupiedError(ApiException e) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.table_restaurant_outlined, color: AppColors.danger),
+            SizedBox(width: 8),
+            Text('Table indisponible'),
+          ],
+        ),
+        content: Text(
+          '${e.message}\n\nVeuillez choisir une autre table avant de procéder au paiement.',
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandDark,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Changer de table'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  OrderType _orderTypeFromApi(String raw) {
+    switch (raw) {
+      case 'a_emporter':
+        return OrderType.takeaway;
+      case 'livraison':
+        return OrderType.delivery;
+      default:
+        return OrderType.dineIn;
+    }
+  }
+
+  void _loadOrderForEditing(HistoryOrder order) {
+    setState(() {
+      _editingOrder = order;
+      _ticketNumber = order.ticketNumber;
+      _orderType = _orderTypeFromApi(order.orderType);
+      _orderNotes = order.notes;
+      _orderDetails = OrderDetailsResult(
+        tableNumber: order.tableNumber,
+        clientName: order.clientName,
+        deliveryAddress: order.deliveryAddress,
+        deliveryPhone: order.deliveryPhone,
+        notes: order.notes,
+      );
+      _ticketLines.clear();
+      for (final line in order.lines) {
+        _ticketLines.add(line.toTicketLine());
+      }
+      _selectedLineIndex = _ticketLines.isNotEmpty ? 0 : null;
+    });
+  }
+
+  void _cancelEditing() {
+    setState(() {
+      _editingOrder = null;
+      _ticketLines.clear();
+      _selectedLineIndex = null;
+      _orderNotes = null;
+      _orderDetails = null;
+      _ticketNumber = widget.ticketNumber;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Mode modification quitté.')),
+    );
+  }
+
+  Future<void> _openEditOrderDetails() async {
+    final details = await showDialog<OrderDetailsResult>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (_) => OrderDetailsModal(
+        orderType: _orderType,
+        ticketNumber: _ticketNumber,
+        posteLabel: widget.posteLabel,
+        initialNotes: _orderNotes,
+        initialTable: _orderDetails?.tableNumber ?? _editingOrder?.tableNumber,
+        initialClient: _orderDetails?.clientName ?? _editingOrder?.clientName,
+        initialAddress: _orderDetails?.deliveryAddress ?? _editingOrder?.deliveryAddress,
+        initialPhone: _orderDetails?.deliveryPhone ?? _editingOrder?.deliveryPhone,
+        currentTicketNumber: _editingOrder?.ticketNumber,
+      ),
+    );
+    if (details == null || !mounted) return;
+    setState(() {
+      _orderDetails = details;
+      if (details.notes != null) {
+        _orderNotes = details.notes!.isEmpty ? null : details.notes;
+      }
+    });
+  }
+
+  Future<void> _saveOrderModifications() async {
+    if (_submitting || _editingOrder == null) return;
+    if (_ticketLines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Le ticket ne peut pas être vide.')),
+      );
+      return;
+    }
+
+    setState(() => _submitting = true);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    );
+
+    try {
+      await _orderService.updateOrder(
+        orderId: _editingOrder!.id,
+        lines: _ticketLines,
+        orderType: _orderType,
+        expectedTotal: _total,
+        tableNumber: _orderDetails?.tableNumber,
+        clientName: _orderDetails?.clientName,
+        deliveryAddress: _orderDetails?.deliveryAddress,
+        deliveryPhone: _orderDetails?.deliveryPhone,
+        notes: _orderNotes,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // loader
+
+      final updatedTicket = _editingOrder!.ticketNumber;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF059669),
+          content: Text('Commande #$updatedTicket modifiée avec succès et transmise en cuisine !'),
+        ),
+      );
+
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(true);
+      } else {
+        _cancelEditing();
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text(e.message),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text('Erreur: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   /// "0000123" -> "0000124". The server's counter is global, so with several
@@ -720,27 +1034,94 @@ class _PosScreenState extends State<PosScreen> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE5E7EB),
+                    color: _isEditing ? const Color(0xFFFEF3C7) : const Color(0xFFE5E7EB),
                     borderRadius: BorderRadius.circular(4),
+                    border: _isEditing ? Border.all(color: const Color(0xFFF59E0B)) : null,
                   ),
-                  child: const Text(
-                    'En cours',
+                  child: Text(
+                    _isEditing ? 'MODIFICATION' : 'En cours',
                     style: TextStyle(
                       fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF4B5563),
+                      fontWeight: FontWeight.w700,
+                      color: _isEditing ? const Color(0xFF92400E) : const Color(0xFF4B5563),
                     ),
                   ),
                 ),
-                const Spacer(),
-                const Icon(
-                  Icons.menu,
-                  size: 22,
-                  color: Color(0xFF4B5563),
-                ),
+                if (_isEditing) ...[
+                  const Spacer(),
+                  InkWell(
+                    onTap: _cancelEditing,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFFCA5A5)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.close, size: 12, color: Color(0xFFB91C1C)),
+                          SizedBox(width: 4),
+                          Text(
+                            'Annuler',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFB91C1C),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+          if (_isEditing) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.table_restaurant_outlined, size: 14, color: Color(0xFF64748B)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _orderDetails?.tableNumber != null && _orderDetails!.tableNumber!.isNotEmpty
+                          ? 'Table ${_orderDetails!.tableNumber}'
+                          : (_orderDetails?.clientName != null && _orderDetails!.clientName!.isNotEmpty
+                              ? _orderDetails!.clientName!
+                              : 'Sans table assignée'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: _openEditOrderDetails,
+                    borderRadius: BorderRadius.circular(4),
+                    child: const Tooltip(
+                      message: 'Modifier la table / infos',
+                      child: Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.edit, size: 14, color: Color(0xFF2563EB)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_orderNotes != null && _orderNotes!.isNotEmpty)
             InkWell(
               onTap: _openCommentDialog,
@@ -833,6 +1214,10 @@ class _PosScreenState extends State<PosScreen> {
                         selected: index == _selectedLineIndex,
                         onTap: () =>
                             setState(() => _selectedLineIndex = index),
+                        onDoubleTap: () {
+                          setState(() => _selectedLineIndex = index);
+                          _editSelectedItem();
+                        },
                       );
                     },
                   ),
@@ -857,10 +1242,11 @@ class _PosScreenState extends State<PosScreen> {
                 ),
                 const SizedBox(width: 8),
                 _lineActionButton(
-                  icon: Icons.settings_outlined,
+                  icon: Icons.edit_outlined,
                   color: const Color(0xFF059669),
                   bg: const Color(0xFFECFDF5),
-                  onTap: () {},
+                  tooltip: "Modifier l'article (sauces, options...)",
+                  onTap: _editSelectedItem,
                 ),
                 const SizedBox(width: 8),
                 _lineActionButton(
@@ -949,9 +1335,9 @@ class _PosScreenState extends State<PosScreen> {
               child: ElevatedButton(
                 onPressed: (_ticketLines.isEmpty || _submitting)
                     ? null
-                    : _openEncaissement,
+                    : (_isEditing ? _saveOrderModifications : _openEncaissement),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
+                  backgroundColor: _isEditing ? const Color(0xFFD97706) : const Color(0xFF059669),
                   disabledBackgroundColor:
                       const Color(0xFF059669).withValues(alpha: 0.5),
                   foregroundColor: Colors.white,
@@ -964,13 +1350,16 @@ class _PosScreenState extends State<PosScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.credit_card,
-                        color: Color(0xFFFBBF24), size: 24),
+                    Icon(
+                      _isEditing ? Icons.check_circle_outline : Icons.credit_card,
+                      color: const Color(0xFFFBBF24),
+                      size: 24,
+                    ),
                     const SizedBox(width: 10),
                     Text(
-                      'ENCAISSEMENT',
+                      _isEditing ? 'ENREGISTRER LA MODIFICATION' : 'ENCAISSEMENT',
                       style: GoogleFonts.bebasNeue(
-                        fontSize: 24,
+                        fontSize: 22,
                         letterSpacing: 2.0,
                         color: Colors.white,
                       ),
@@ -993,21 +1382,16 @@ class _PosScreenState extends State<PosScreen> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) =>
-                              HistoryScreen(posteLabel: widget.posteLabel),
+                          builder: (_) => HistoryScreen(
+                            posteLabel: widget.posteLabel,
+                            onOrderEdit: (o) {
+                              Navigator.of(context).pop();
+                              _loadOrderForEditing(o);
+                            },
+                          ),
                         ),
                       );
                     },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _smallActionButton(
-                    label: 'Actions',
-                    icon: Icons.tune,
-                    bg: const Color(0xFFF59E0B),
-                    fg: const Color(0xFF1F2937),
-                    onTap: () {},
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1057,23 +1441,28 @@ class _PosScreenState extends State<PosScreen> {
     required Color color,
     required Color bg,
     required VoidCallback onTap,
+    String? tooltip,
   }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          height: 38,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Center(
-            child: Icon(icon, size: 18, color: color),
-          ),
+    Widget content = InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 38,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Icon(icon, size: 18, color: color),
         ),
       ),
     );
+
+    if (tooltip != null) {
+      content = Tooltip(message: tooltip, child: content);
+    }
+
+    return Expanded(child: content);
   }
 
   Widget _orderTypeButton(OrderType type, Color color, IconData icon) {

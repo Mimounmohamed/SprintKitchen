@@ -3,10 +3,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'kitchen_order_details_dialog.dart';
 
 /* ─── Config ─────────────────────────────────────────────── */
-const _kBaseUrl =
-    'https://sprintkitchen-backend-api-dxedcmdth6avgha4.francecentral-01.azurewebsites.net/api';
+const String _kBaseUrl = String.fromEnvironment(
+  'API_URL',
+  defaultValue:
+      'https://sprintkitchen-backend-api-dxedcmdth6avgha4.francecentral-01.azurewebsites.net/api',
+);
 
 /* ─── Colors ─────────────────────────────────────────────── */
 class C {
@@ -48,35 +52,163 @@ class R {
   double fs(double base) => (base * scale).roundToDouble();
 }
 
+/* ─── Helpers ────────────────────────────────────────────── */
+bool _isToday(DateTime dt) {
+  final now = DateTime.now();
+  final local = dt.toLocal();
+  // Same calendar day
+  if (local.year == now.year && local.month == now.month && local.day == now.day) {
+    return true;
+  }
+  // Within the last 20 hours (covers late-night service crossing midnight)
+  if (now.difference(local).inHours < 20 && !local.isAfter(now)) {
+    return true;
+  }
+  return false;
+}
+
 /* ─── Models ─────────────────────────────────────────────── */
 enum OrderMode   { surPlace, emporter, livraison }
-enum OrderStatus { attente, preparation, pret }
+enum OrderStatus { attente, preparation, terminee }
 enum Urgency     { normal, warning, critical, ready }
 
+class KdsCustomization {
+  final String groupName;
+  final List<String> selectedOptions;
+  const KdsCustomization({required this.groupName, required this.selectedOptions});
+}
+
 class KdsItem {
-  final String qty, name;
+  final String? id;
+  final String qty;
+  final String name;
   final List<String> subLines;
-  const KdsItem({required this.qty, required this.name, this.subLines = const []});
+  final int quantity;
+  final double unitPrice;
+  final double lineTotal;
+  final String? station;
+  String? kdsStatus;
+  final List<String> ingredients;
+  final List<KdsCustomization> customizations;
+  final List<String> removedIngredients;
+  final String? notes;
+  final Map<String, dynamic> rawJson;
+
+  KdsItem({
+    this.id,
+    required this.qty,
+    required this.name,
+    this.subLines = const [],
+    this.quantity = 1,
+    this.unitPrice = 0.0,
+    this.lineTotal = 0.0,
+    this.station,
+    this.kdsStatus,
+    this.ingredients = const [],
+    this.customizations = const [],
+    this.removedIngredients = const [],
+    this.notes,
+    this.rawJson = const {},
+  });
+
+  bool get isReady => kdsStatus == 'ready' || kdsStatus == 'served';
+
+  Map<String, dynamic> toDbJson() {
+    final map = Map<String, dynamic>.from(rawJson);
+    if (id != null && id!.isNotEmpty) {
+      map['_id'] = id;
+    }
+    map['kdsStatus'] = kdsStatus ?? 'pending';
+    if (map['productId'] is Map && (map['productId'] as Map)['_id'] != null) {
+      map['productId'] = (map['productId'] as Map)['_id'].toString();
+    }
+    return map;
+  }
 
   factory KdsItem.fromJson(Map<String, dynamic> j) {
-    final subs = <String>[];
+    final String? itemId = j['_id']?.toString();
+    final int qtyInt = (j['quantity'] as num?)?.toInt() ?? 1;
+    final double uPrice = (j['unitPrice'] as num?)?.toDouble() ?? 0.0;
+    final double lTotal = (j['lineTotal'] as num?)?.toDouble() ?? (uPrice * qtyInt);
+    final String? station = j['kdsStation']?.toString() ??
+        (j['productId'] is Map ? (j['productId'] as Map)['kdsStation']?.toString() : null);
+    final String? itemKdsStatus = j['kdsStatus']?.toString();
+    final String? itemNotes = (j['notes'] != null && j['notes'].toString().trim().isNotEmpty)
+        ? j['notes'].toString().trim()
+        : null;
+
+    final parsedCustoms = <KdsCustomization>[];
     final customs = j['customizations'] as List? ?? [];
     for (final c in customs) {
-      final opts = (c['selectedOptions'] as List? ?? [])
-          .map((o) => o['label']?.toString() ?? '')
-          .where((s) => s.isNotEmpty)
-          .join(', ');
-      if (opts.isNotEmpty) { subs.add('${c['groupName']}: $opts'); }
+      if (c is Map) {
+        final gName = c['groupName']?.toString() ?? '';
+        final optsList = <String>[];
+        final rawOpts = c['selectedOptions'] as List? ?? [];
+        for (final o in rawOpts) {
+          if (o is Map) {
+            final lbl = o['label']?.toString() ?? '';
+            if (lbl.isNotEmpty) optsList.add(lbl);
+          } else if (o != null && o.toString().isNotEmpty) {
+            optsList.add(o.toString());
+          }
+        }
+        if (optsList.isNotEmpty) {
+          parsedCustoms.add(KdsCustomization(groupName: gName, selectedOptions: optsList));
+        }
+      }
     }
-    final removed = j['removedIngredients'] as List? ?? [];
-    for (final r in removed) { subs.add('Sans $r'); }
-    if (j['notes'] != null && (j['notes'] as String).isNotEmpty) {
-      subs.add(j['notes'] as String);
+
+    final removed = <String>[];
+    final rawRemoved = j['removedIngredients'] as List? ?? [];
+    for (final r in rawRemoved) {
+      final s = r?.toString().trim() ?? '';
+      if (s.isNotEmpty) {
+        removed.add(s);
+      }
     }
+
+    final ingredientsList = <String>[];
+    if (j['productId'] is Map && (j['productId'] as Map)['ingredients'] is List) {
+      for (final ing in (j['productId'] as Map)['ingredients'] as List) {
+        if (ing != null && ing.toString().trim().isNotEmpty) {
+          ingredientsList.add(ing.toString().trim());
+        }
+      }
+    }
+
+    final subs = <String>[];
+    for (final c in parsedCustoms) {
+      final opts = c.selectedOptions.join(', ');
+      subs.add(c.groupName.isNotEmpty ? '${c.groupName}: $opts' : opts);
+    }
+    for (final r in removed) {
+      subs.add(r.toLowerCase().startsWith('sans') ? r : 'Sans $r');
+    }
+    if (itemNotes != null && itemNotes.isNotEmpty) {
+      subs.add(itemNotes);
+    }
+
+    String name = j['productName']?.toString() ?? '';
+    if (name.isEmpty && j['productId'] is Map) {
+      name = (j['productId'] as Map)['name']?.toString() ?? '';
+    }
+    if (name.isEmpty) name = '?';
+
     return KdsItem(
-      qty:      '${j['quantity'] ?? 1}\u00d7',
-      name:     j['productName']?.toString() ?? '?',
+      id: itemId,
+      qty: '$qtyInt\u00d7',
+      name: name,
       subLines: subs,
+      quantity: qtyInt,
+      unitPrice: uPrice,
+      lineTotal: lTotal,
+      station: station,
+      kdsStatus: itemKdsStatus,
+      ingredients: ingredientsList,
+      customizations: parsedCustoms,
+      removedIngredients: removed,
+      notes: itemNotes,
+      rawJson: Map<String, dynamic>.from(j),
     );
   }
 }
@@ -89,6 +221,15 @@ class KitchenOrder {
   final List<KdsItem> items;
   OrderStatus status;
   String? note;
+  final String? comment;
+  final String? tableNumber;
+  final double subtotalHT;
+  final double tvaRate;
+  final double tvaAmount;
+  final double totalTTC;
+  final String? clientName;
+  final String? registerName;
+  final bool isEdited;
 
   KitchenOrder({
     required this.id,
@@ -98,6 +239,15 @@ class KitchenOrder {
     required this.items,
     required this.status,
     this.note,
+    this.comment,
+    this.tableNumber,
+    this.subtotalHT = 0.0,
+    this.tvaRate = 10.0,
+    this.tvaAmount = 0.0,
+    this.totalTTC = 0.0,
+    this.clientName,
+    this.registerName,
+    this.isEdited = false,
   });
 
   factory KitchenOrder.fromJson(Map<String, dynamic> j) {
@@ -110,22 +260,20 @@ class KitchenOrder {
     }
 
     final rawKds = j['kdsStatus'] as String? ?? 'pending';
+    final rawStatus = j['status'] as String? ?? '';
     OrderStatus status;
     String? note;
-    switch (rawKds) {
-      case 'in_progress':
-        status = OrderStatus.preparation;
-        break;
-      case 'ready':
-        status = OrderStatus.pret;
-        note   = 'PR\u00caT';
-        break;
-      default:
-        status = OrderStatus.attente;
-    }
-    if (j['status'] == 'a_encaisser' && status != OrderStatus.pret) {
-      status = OrderStatus.pret;
-      note   = 'PR\u00caT \u2022 EN ATTENTE CAISSE';
+
+    if (rawStatus == 'terminee' || rawKds == 'served') {
+      status = OrderStatus.terminee;
+      note   = 'TERMIN\u00c9';
+    } else if (rawKds == 'in_progress') {
+      status = OrderStatus.preparation;
+    } else if (rawKds == 'ready' || rawStatus == 'a_encaisser') {
+      status = OrderStatus.terminee;
+      note   = 'PR\u00caT';
+    } else {
+      status = OrderStatus.attente;
     }
 
     final items = (j['items'] as List? ?? [])
@@ -133,9 +281,40 @@ class KitchenOrder {
         .toList();
 
     final ts = j['kdsSentAt'] ?? j['createdAt'];
+    final rawTicket = j['ticketNumber']?.toString() ?? '?';
+    final ticketNumber = rawTicket.startsWith('#') ? rawTicket : '#$rawTicket';
+
+    final rawComment = j['notes'] ?? j['comment'] ?? j['orderNotes'];
+    final comment = rawComment?.toString().trim();
+
+    String? table = j['tableNumber']?.toString().trim();
+    if (table == null || table.isEmpty) {
+      final buzzer = j['buzzerNumber']?.toString().trim() ?? '';
+      final match = RegExp(r'^(?:table|buzzer\s*#?)\s*(.+)$', caseSensitive: false).firstMatch(buzzer);
+      if (match != null) {
+        table = match.group(1)?.trim();
+      } else if (buzzer.isNotEmpty) {
+        table = buzzer;
+      }
+    }
+
+    final double computedTotal =
+        items.fold<double>(0.0, (sum, it) => sum + it.lineTotal);
+    final double totalTTC =
+        (j['totalTTC'] as num?)?.toDouble() ?? computedTotal;
+    final double tvaRate = (j['tvaRate'] as num?)?.toDouble() ?? 10.0;
+    final double tvaAmount = (j['tvaAmount'] as num?)?.toDouble() ??
+        (totalTTC > 0 ? (totalTTC - totalTTC / (1 + tvaRate / 100)) : 0.0);
+    final double subtotalHT = (j['subtotalHT'] as num?)?.toDouble() ??
+        (totalTTC - tvaAmount);
+    final clientName = j['clientName']?.toString();
+    final registerName = j['registerId'] is Map
+        ? (j['registerId'] as Map)['name']?.toString()
+        : null;
+
     return KitchenOrder(
       id:           j['_id']?.toString() ?? '',
-      ticketNumber: '#${j['ticketNumber'] ?? '?'}',
+      ticketNumber: ticketNumber,
       mode:         mode,
       createdAt:    ts != null
           ? DateTime.tryParse(ts as String) ?? DateTime.now()
@@ -143,6 +322,15 @@ class KitchenOrder {
       items:        items,
       status:       status,
       note:         note,
+      comment:      (comment != null && comment.isNotEmpty) ? comment : null,
+      tableNumber:  (table != null && table.isNotEmpty) ? table : null,
+      subtotalHT:   subtotalHT,
+      tvaRate:      tvaRate,
+      tvaAmount:    tvaAmount,
+      totalTTC:     totalTTC,
+      clientName:   (clientName != null && clientName.isNotEmpty) ? clientName : null,
+      registerName: (registerName != null && registerName.isNotEmpty) ? registerName : null,
+      isEdited:     j['isEdited'] == true,
     );
   }
 }
@@ -151,24 +339,135 @@ class KitchenOrder {
 class KdsApi {
   static Future<List<KitchenOrder>> fetchOrders() async {
     final res = await http
-        .get(Uri.parse('$_kBaseUrl/kds/orders'))
+        .get(Uri.parse('$_kBaseUrl/orders?limit=100'))
         .timeout(const Duration(seconds: 8));
     if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
     final body = jsonDecode(res.body) as Map<String, dynamic>;
-    final data = body['data'] as List;
-    return data
-        .map((j) => KitchenOrder.fromJson(j as Map<String, dynamic>))
-        .toList();
+    final data = body['data'] as List? ?? [];
+
+    final activeOrders = data.where((j) {
+      if (j is! Map) return false;
+      final status = j['status'] as String? ?? '';
+      final kdsStatus = j['kdsStatus'] as String? ?? 'pending';
+
+      // Ignore drafts, cancelled orders, employee meals
+      if (status == 'annulee' || status == 'repas_employe' || status == 'en_cours') {
+        return false;
+      }
+
+      final ts = j['kdsSentAt'] ?? j['createdAt'];
+      final dt = ts != null
+          ? (DateTime.tryParse(ts as String) ?? DateTime.now())
+          : DateTime.now();
+
+      // If completed / served, only include if from today
+      if (status == 'terminee' || kdsStatus == 'served' || kdsStatus == 'ready' || status == 'a_encaisser') {
+        return _isToday(dt);
+      }
+
+      // Active orders (en_attente, in_progress, pending)
+      return true;
+    }).map((j) => KitchenOrder.fromJson(j as Map<String, dynamic>)).toList();
+
+    return activeOrders;
   }
 
+
+
   static Future<void> advanceOrder(String id, String kdsStatus) async {
-    await http.patch(
-      Uri.parse('$_kBaseUrl/kds/orders/$id/kds-status'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'kdsStatus': kdsStatus}),
-    ).timeout(const Duration(seconds: 6));
+    // 1. Try dedicated KDS endpoint first
+    try {
+      final res = await http
+          .patch(
+            Uri.parse('$_kBaseUrl/kds/orders/$id/kds-status'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'kdsStatus': kdsStatus}),
+          )
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode == 200) return;
+    } catch (_) {
+      // Fallback
+    }
+
+    // 2. Fallback to PUT /orders/:id
+    final body = <String, dynamic>{'kdsStatus': kdsStatus};
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    if (kdsStatus == 'ready') {
+      body['status'] = 'a_encaisser';
+      body['kdsReadyAt'] = nowIso;
+    } else if (kdsStatus == 'served') {
+      body['status'] = 'terminee';
+      body['completedAt'] = nowIso;
+    }
+
+    final res = await http
+        .put(
+          Uri.parse('$_kBaseUrl/orders/$id'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 6));
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}');
+    }
+  }
+
+  static Future<void> updateItemStatus({
+    required KitchenOrder order,
+    required int itemIndex,
+    required String newStatus,
+  }) async {
+    final item = order.items[itemIndex];
+    item.kdsStatus = newStatus;
+
+    // 1. Try dedicated endpoint PATCH /kds/orders/:orderId/items/:itemId/kds-status
+    if (item.id != null && item.id!.isNotEmpty) {
+      try {
+        final res = await http
+            .patch(
+              Uri.parse('$_kBaseUrl/kds/orders/${order.id}/items/${item.id}/kds-status'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'kdsStatus': newStatus}),
+            )
+            .timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) return;
+      } catch (_) {
+        // Fallback below
+      }
+    }
+
+    // 2. Fallback to PUT /orders/:id with updated items array
+    final itemsPayload = order.items.map((it) => it.toDbJson()).toList();
+    final body = <String, dynamic>{
+      'items': itemsPayload,
+    };
+
+    // If all items are ready, also set order kdsStatus to ready
+    final allReady = order.items.every((it) => it.isReady);
+    if (allReady && order.status == OrderStatus.attente) {
+      body['kdsStatus'] = 'ready';
+      body['status'] = 'a_encaisser';
+      body['kdsReadyAt'] = DateTime.now().toUtc().toIso8601String();
+      order.status = OrderStatus.terminee;
+      order.note = 'PR\u00caT';
+    }
+
+    final res = await http
+        .put(
+          Uri.parse('$_kBaseUrl/orders/${order.id}'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 6));
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}');
+    }
   }
 }
+
 
 /* ─── Screen ─────────────────────────────────────────────── */
 class KdsScreen extends StatefulWidget {
@@ -176,7 +475,7 @@ class KdsScreen extends StatefulWidget {
   @override State<KdsScreen> createState() => _KdsState();
 }
 
-enum _Tab { toutes, attente, preparation, pretes }
+enum _Tab { toutes, attente, preparation, terminees }
 
 class _KdsState extends State<KdsScreen> {
   List<KitchenOrder> _orders = [];
@@ -217,10 +516,24 @@ class _KdsState extends State<KdsScreen> {
 
   List<KitchenOrder> get _visible {
     switch (_tab) {
-      case _Tab.toutes:      return _orders;
-      case _Tab.attente:     return _orders.where((o) => o.status == OrderStatus.attente).toList();
-      case _Tab.preparation: return _orders.where((o) => o.status == OrderStatus.preparation).toList();
-      case _Tab.pretes:      return _orders.where((o) => o.status == OrderStatus.pret).toList();
+      case _Tab.toutes:
+        final active = _orders.where((o) => o.status != OrderStatus.terminee).toList();
+        final done = _orders.where((o) => o.status == OrderStatus.terminee).toList();
+        active.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        done.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return [...active, ...done];
+      case _Tab.attente:
+        final list = _orders.where((o) => o.status == OrderStatus.attente).toList();
+        list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        return list;
+      case _Tab.preparation:
+        final list = _orders.where((o) => o.status == OrderStatus.preparation).toList();
+        list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        return list;
+      case _Tab.terminees:
+        final list = _orders.where((o) => o.status == OrderStatus.terminee).toList();
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return list;
     }
   }
 
@@ -229,21 +542,28 @@ class _KdsState extends State<KdsScreen> {
       case _Tab.toutes:      return _orders.length;
       case _Tab.attente:     return _orders.where((o) => o.status == OrderStatus.attente).length;
       case _Tab.preparation: return _orders.where((o) => o.status == OrderStatus.preparation).length;
-      case _Tab.pretes:      return _orders.where((o) => o.status == OrderStatus.pret).length;
+      case _Tab.terminees:   return _orders.where((o) => o.status == OrderStatus.terminee).length;
     }
   }
 
   Future<void> _advance(KitchenOrder order) async {
+    if (order.status == OrderStatus.terminee) return;
+
     String nextKds;
-    if      (order.status == OrderStatus.attente)     { nextKds = 'in_progress'; }
-    else if (order.status == OrderStatus.preparation) { nextKds = 'ready'; }
-    else                                              { nextKds = 'served'; }
+    if (order.status == OrderStatus.attente) {
+      nextKds = 'in_progress';
+    } else {
+      nextKds = 'served';
+    }
 
     // Optimistic UI update
     setState(() {
-      if      (order.status == OrderStatus.attente)     { order.status = OrderStatus.preparation; }
-      else if (order.status == OrderStatus.preparation) { order.status = OrderStatus.pret; order.note = 'PR\u00caT'; }
-      else                                              { _orders.remove(order); }
+      if (order.status == OrderStatus.attente) {
+        order.status = OrderStatus.preparation;
+      } else {
+        order.status = OrderStatus.terminee;
+        order.note = 'TERMIN\u00c9';
+      }
     });
 
     try {
@@ -272,6 +592,26 @@ class _KdsState extends State<KdsScreen> {
     );
   }
 
+  void _showOrderDetails(KitchenOrder order) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogCtx) => KitchenOrderDetailsDialog(
+        order: order,
+        onClose: () => Navigator.of(dialogCtx).pop(),
+        onAdvance: (ord) async {
+          Navigator.of(dialogCtx).pop();
+          await _advance(ord);
+        },
+        onItemStatusChanged: (item, isReady) {
+          if (mounted) setState(() {});
+        },
+      ),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   /* ── Body states ── */
   Widget _buildBody(R r) {
     if (_loading) {
@@ -282,7 +622,7 @@ class _KdsState extends State<KdsScreen> {
             style: TextStyle(color: C.muted, fontSize: r.fs(14))),
       ]));
     }
-    if (_error != null) {
+    if (_error != null && _orders.isEmpty) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.wifi_off_rounded, size: 48, color: C.muted),
         const SizedBox(height: 12),
@@ -322,7 +662,13 @@ class _KdsState extends State<KdsScreen> {
         itemCount: _visible.length,
         itemBuilder: (_, i) {
           final o = _visible[i];
-          return _OrderCard(order: o, now: _now, r: gr, onAdvance: () => _advance(o));
+          return _OrderCard(
+            order: o,
+            now: _now,
+            r: gr,
+            onAdvance: () => _advance(o),
+            onDetails: () => _showOrderDetails(o),
+          );
         },
       );
     });
@@ -330,9 +676,7 @@ class _KdsState extends State<KdsScreen> {
 
   /* ── Header ── */
   Widget _buildHeader(R r) {
-    String two(int v) => v.toString().padLeft(2, '0');
-    final clock = '${two(_now.hour)}:${two(_now.minute)}:${two(_now.second)}';
-    final connected = _error == null && !_loading;
+    final connected = _error == null;
     final iconSize  = r.w < 800 ? 32.0 : 36.0;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: r.fs(18), vertical: r.w < 800 ? 8 : 11),
@@ -349,13 +693,6 @@ class _KdsState extends State<KdsScreen> {
         SizedBox(width: r.fs(8)),
         Text('SPRINTKITCHEN', style: TextStyle(fontWeight: FontWeight.w800,
             fontSize: r.fs(14), letterSpacing: 0.2, color: C.ink)),
-        SizedBox(width: r.fs(6)),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: r.fs(5), vertical: 2),
-          decoration: BoxDecoration(color: C.brown, borderRadius: BorderRadius.circular(4)),
-          child: Text('KDS', style: TextStyle(color: const Color(0xFFF5F0E6),
-              fontWeight: FontWeight.w800, fontSize: r.fs(9), letterSpacing: 0.3)),
-        ),
         Expanded(
           child: Center(
             child: Text('\u00c9CRAN CUISINE \u2013 POSTE PRINCIPAL',
@@ -363,26 +700,21 @@ class _KdsState extends State<KdsScreen> {
                   color: const Color(0xFF1C1917), fontWeight: FontWeight.w400, letterSpacing: 0.8)),
           ),
         ),
-        if (r.w >= 700) ...[
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: r.fs(10), vertical: 5),
-            decoration: BoxDecoration(
-              color: connected ? C.greenBg : C.orangeBg,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 7, height: 7, decoration: BoxDecoration(
-                  color: connected ? C.green : C.orange, shape: BoxShape.circle)),
-              SizedBox(width: r.fs(5)),
-              Text(connected ? 'Cuisine Connect\u00e9e' : 'Reconnexion\u2026',
-                style: TextStyle(fontSize: r.fs(11), fontWeight: FontWeight.w700,
-                    color: connected ? C.greenText : C.orange)),
-            ]),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: r.fs(10), vertical: 5),
+          decoration: BoxDecoration(
+            color: connected ? C.greenBg : C.orangeBg,
+            borderRadius: BorderRadius.circular(999),
           ),
-          SizedBox(width: r.fs(14)),
-        ],
-        Text(clock, style: TextStyle(fontSize: r.fs(14), fontWeight: FontWeight.w700,
-            color: C.ink, fontFeatures: const [FontFeature.tabularFigures()])),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 7, height: 7, decoration: BoxDecoration(
+                color: connected ? C.green : C.orange, shape: BoxShape.circle)),
+            SizedBox(width: r.fs(5)),
+            Text(connected ? 'Cuisine Connect\u00e9e' : 'Reconnexion\u2026',
+              style: TextStyle(fontSize: r.fs(11), fontWeight: FontWeight.w700,
+                  color: connected ? C.greenText : C.orange)),
+          ]),
+        ),
       ]),
     );
   }
@@ -392,52 +724,63 @@ class _KdsState extends State<KdsScreen> {
     _Tab.toutes:      'TOUTES',
     _Tab.attente:     'EN ATTENTE',
     _Tab.preparation: 'EN PR\u00c9PARATION',
-    _Tab.pretes:      'PR\u00caTES',
+    _Tab.terminees:   'TERMIN\u00c9ES',
   };
 
   Widget _buildTabs(R r) {
     return Container(
       color: C.bg,
       padding: EdgeInsets.fromLTRB(r.hPad, r.w < 800 ? 8 : 10, r.hPad, r.w < 800 ? 6 : 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: _Tab.values.map((t) {
-          final active = t == _tab;
-          return Padding(
-            padding: EdgeInsets.only(right: r.fs(9)),
-            child: GestureDetector(
-              onTap: () => setState(() => _tab = t),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                    horizontal: r.fs(13), vertical: r.w < 800 ? 7 : 9),
-                decoration: BoxDecoration(
-                  color: active ? const Color(0xFFFCF0CA) : C.cardBg,
-                  border: Border.all(
-                      color: active ? C.yellow : C.border, width: active ? 1.5 : 1),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_tabLabels[t]!, style: TextStyle(fontSize: r.fs(11.5),
-                      fontWeight: FontWeight.w800, letterSpacing: 0.3,
-                      color: active ? C.ink : C.muted)),
-                  SizedBox(width: r.fs(6)),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
-                    decoration: BoxDecoration(
-                      color: active ? C.yellow : const Color(0xFFEBE8E1),
-                      borderRadius: BorderRadius.circular(999),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: _Tab.values.map((t) {
+              final active = t == _tab;
+              return Padding(
+                padding: EdgeInsets.only(right: r.fs(9)),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _tab = t),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: r.fs(13), vertical: r.w < 800 ? 7 : 9),
+                      decoration: BoxDecoration(
+                        color: active ? const Color(0xFFFCF0CA) : C.cardBg,
+                        border: Border.all(
+                            color: active ? C.yellow : C.border, width: active ? 1.5 : 1),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_tabLabels[t]!, style: TextStyle(fontSize: r.fs(11.5),
+                            fontWeight: FontWeight.w800, letterSpacing: 0.3,
+                            color: active ? C.ink : C.muted)),
+                        SizedBox(width: r.fs(6)),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                          decoration: BoxDecoration(
+                            color: active ? C.yellow : const Color(0xFFEBE8E1),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text('${_count(t)}', style: TextStyle(fontSize: r.fs(10),
+                              fontWeight: FontWeight.w800, color: active ? C.brown : C.ink)),
+                        ),
+                      ]),
                     ),
-                    child: Text('${_count(t)}', style: TextStyle(fontSize: r.fs(10),
-                        fontWeight: FontWeight.w800, color: active ? C.brown : C.ink)),
                   ),
-                ]),
-              ),
-            ),
-          );
-        }).toList()),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }
+
 }
 
 /* ─── Order Card ─────────────────────────────────────────── */
@@ -446,8 +789,14 @@ class _OrderCard extends StatefulWidget {
   final DateTime now;
   final R r;
   final Future<void> Function() onAdvance;
-  const _OrderCard({required this.order, required this.now,
-    required this.r, required this.onAdvance});
+  final VoidCallback? onDetails;
+  const _OrderCard({
+    required this.order,
+    required this.now,
+    required this.r,
+    required this.onAdvance,
+    this.onDetails,
+  });
   @override State<_OrderCard> createState() => _OrderCardState();
 }
 
@@ -495,7 +844,7 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
   }
 
   Urgency get _urgency {
-    if (widget.order.status == OrderStatus.pret) return Urgency.ready;
+    if (widget.order.status == OrderStatus.terminee) return Urgency.ready;
     final m = _elapsed.inMinutes;
     if (m >= 15) return Urgency.critical;
     if (m >= 10) return Urgency.warning;
@@ -503,6 +852,7 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
   }
 
   Color get _borderColor {
+    if (widget.order.status == OrderStatus.terminee) return C.border;
     switch (_urgency) {
       case Urgency.critical: return C.red;
       case Urgency.warning:  return C.orange;
@@ -511,9 +861,12 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
     }
   }
 
-  Color get _cardBg => _urgency == Urgency.critical ? C.redBg : C.cardBg;
+  Color get _cardBg => widget.order.status == OrderStatus.terminee
+      ? C.cardBg
+      : (_urgency == Urgency.critical ? C.redBg : C.cardBg);
 
   Color get _timerColor {
+    if (widget.order.status == OrderStatus.terminee) return C.greenText;
     switch (_urgency) {
       case Urgency.critical: return C.red;
       case Urgency.warning:  return C.orange;
@@ -533,16 +886,16 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
   ({String label, Color bg, Color fg}) get _btn {
     switch (widget.order.status) {
       case OrderStatus.attente:     return (label: 'COMMENCER',        bg: C.yellow, fg: C.brown);
-      case OrderStatus.preparation: return (label: 'PR\u00caT \u2713', bg: C.green,  fg: Colors.white);
-      case OrderStatus.pret:        return (label: 'TERMIN\u00c9',     bg: C.gray,   fg: Colors.white);
+      case OrderStatus.preparation: return (label: 'TERMINER \u2713',  bg: C.green,  fg: Colors.white);
+      case OrderStatus.terminee:    return (label: 'TERMIN\u00c9 \u2713', bg: const Color(0xFFEBE8E1), fg: C.muted);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final r      = widget.r;
-    final muted  = widget.order.status == OrderStatus.pret;
-    final isCrit = _urgency == Urgency.critical;
+    final muted  = widget.order.status == OrderStatus.terminee;
+    final isCrit = _urgency == Urgency.critical && widget.order.status != OrderStatus.terminee;
     final b      = _badge;
     final btn    = _btn;
     final pad    = r.w < 800 ? 10.0 : 13.0;
@@ -560,10 +913,64 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
       ),
       padding: EdgeInsets.fromLTRB(pad, pad, pad, pad),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        /* ID + badge */
+        /* ID + table badge + badge */
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(widget.order.ticketNumber, style: TextStyle(fontSize: r.fs(13.5),
-              fontWeight: FontWeight.w800, color: isCrit ? C.red : C.ink)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(widget.order.ticketNumber, style: TextStyle(fontSize: r.fs(13.5),
+                  fontWeight: FontWeight.w800, color: isCrit ? C.red : C.ink)),
+              if (widget.order.tableNumber != null && widget.order.tableNumber!.isNotEmpty) ...[
+                SizedBox(width: r.fs(6)),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: const Color(0xFFBFDBFE), width: 0.8),
+                  ),
+                  child: Text(
+                    widget.order.tableNumber!.toUpperCase().startsWith('TABLE')
+                        ? widget.order.tableNumber!.toUpperCase()
+                        : 'TABLE ${widget.order.tableNumber}',
+                    style: TextStyle(
+                      fontSize: r.fs(9.5),
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1D4ED8),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ],
+              if (widget.order.isEdited) ...[
+                SizedBox(width: r.fs(6)),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: const Color(0xFFFCA5A5), width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit, size: r.fs(9.5), color: const Color(0xFFDC2626)),
+                      const SizedBox(width: 3),
+                      Text(
+                        'MODIFIÉ',
+                        style: TextStyle(
+                          fontSize: r.fs(9.5),
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFFDC2626),
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
           Container(
             padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
             decoration: BoxDecoration(color: b.bg, borderRadius: BorderRadius.circular(5)),
@@ -574,7 +981,13 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
         SizedBox(height: r.fs(4)),
         /* Timer */
         Row(children: [
-          Icon(Icons.access_time_rounded, size: r.fs(12), color: _timerColor),
+          Icon(
+            widget.order.status == OrderStatus.terminee
+                ? Icons.check_circle_outline_rounded
+                : Icons.access_time_rounded,
+            size: r.fs(12),
+            color: _timerColor,
+          ),
           SizedBox(width: r.fs(4)),
           Text(widget.order.note ?? _elapsedLabel,
             style: TextStyle(fontSize: r.fs(11.5), fontWeight: FontWeight.w700,
@@ -594,16 +1007,97 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.order.comment != null && widget.order.comment!.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      margin: EdgeInsets.only(bottom: r.fs(8)),
+                      padding: EdgeInsets.symmetric(horizontal: r.fs(8), vertical: r.fs(6)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFFCD34D), width: 1),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: r.fs(13),
+                            color: const Color(0xFFD97706),
+                          ),
+                          SizedBox(width: r.fs(6)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'COMMENTAIRE :',
+                                  style: TextStyle(
+                                    fontSize: r.fs(9),
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFFB45309),
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                SizedBox(height: r.fs(2)),
+                                Text(
+                                  widget.order.comment!,
+                                  style: TextStyle(
+                                    fontSize: r.fs(11.5),
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF78350F),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   for (final item in widget.order.items) ...[
-                    Text('${item.qty} ${item.name}', style: TextStyle(
-                        fontSize: r.fs(13.5), fontWeight: FontWeight.w700,
-                        color: muted ? C.muted : (isCrit ? C.red : C.ink))),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${item.qty} ${item.name}',
+                            style: TextStyle(
+                              fontSize: r.fs(13.5),
+                              fontWeight: FontWeight.w700,
+                              color: item.isReady
+                                  ? C.greenText
+                                  : (muted ? C.muted : (isCrit ? C.red : C.ink)),
+                              decoration: item.isReady ? TextDecoration.lineThrough : null,
+                              decorationColor: C.greenText,
+                            ),
+                          ),
+                        ),
+                        if (item.isReady)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.check_circle_rounded,
+                              size: r.fs(12),
+                              color: C.green,
+                            ),
+                          ),
+                      ],
+                    ),
                     for (final sub in item.subLines)
                       Padding(
                         padding: EdgeInsets.only(top: 1, left: r.fs(2)),
-                        child: Text('\u00b7 $sub', style: TextStyle(
-                            fontSize: r.fs(11.5), color: C.muted,
-                            fontWeight: FontWeight.w400))),
+                        child: Text(
+                          '\u00b7 $sub',
+                          style: TextStyle(
+                            fontSize: r.fs(11.5),
+                            color: item.isReady
+                                ? C.muted.withValues(alpha: 0.6)
+                                : C.muted,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
                     SizedBox(height: r.fs(7)),
                   ],
                 ],
@@ -653,27 +1147,66 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
           ]),
         ),
         SizedBox(height: r.fs(6)),
-        /* Button */
+        /* Action buttons row */
         SizedBox(
           width: double.infinity,
           height: r.w < 800 ? 32 : 38,
-          child: ElevatedButton(
-            onPressed: _advancing ? null : () async {
-              setState(() => _advancing = true);
-              await widget.onAdvance();
-              if (mounted) setState(() => _advancing = false);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: btn.bg, foregroundColor: btn.fg,
-              elevation: 0, padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              shadowColor: Colors.transparent,
-            ),
-            child: Text(btn.label, style: TextStyle(fontSize: r.fs(11.5),
-                fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+          child: Row(
+            children: [
+              /* Main action button (Commencer / Terminer / Terminé) - 85% */
+              Expanded(
+                flex: 85,
+                child: ElevatedButton(
+                  onPressed: (_advancing || widget.order.status == OrderStatus.terminee)
+                      ? null
+                      : () async {
+                          setState(() => _advancing = true);
+                          await widget.onAdvance();
+                          if (mounted) setState(() => _advancing = false);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: btn.bg,
+                    foregroundColor: btn.fg,
+                    disabledBackgroundColor: const Color(0xFFEBE8E1),
+                    disabledForegroundColor: C.muted,
+                    elevation: 0,
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shadowColor: Colors.transparent,
+                  ),
+                  child: Text(btn.label, style: TextStyle(fontSize: r.fs(11.5),
+                      fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                ),
+              ),
+              SizedBox(width: r.fs(5)),
+              /* Order details button - 15% */
+              Expanded(
+                flex: 15,
+                child: Tooltip(
+                  message: 'Détails de la commande',
+                  child: OutlinedButton(
+                    onPressed: widget.onDetails,
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: C.ink,
+                      side: const BorderSide(color: C.border, width: 1.2),
+                      elevation: 0,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Icon(
+                      Icons.receipt_long_rounded,
+                      size: r.fs(15),
+                      color: C.ink,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ]),
     );
   }
 }
+

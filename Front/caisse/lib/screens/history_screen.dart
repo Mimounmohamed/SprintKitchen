@@ -7,6 +7,7 @@ import '../services/history_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/order_details_panel.dart';
 import '../widgets/date_range_popover.dart';
+import 'pos_screen.dart';
 
 /// "Historique des ventes" — list of past orders, filtered by status tab,
 /// date range and search, with pagination.
@@ -16,9 +17,14 @@ import '../widgets/date_range_popover.dart';
 ///   MaterialPageRoute(builder: (_) => const HistoryScreen()),
 /// );
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key, this.posteLabel = 'Caisse 01'});
+  const HistoryScreen({
+    super.key,
+    this.posteLabel = 'Caisse 01',
+    this.onOrderEdit,
+  });
 
   final String posteLabel;
+  final void Function(HistoryOrder order)? onOrderEdit;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -45,7 +51,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // Table palette (Figma): stone neutrals + brand brown.
   static const Color _ink = Color(0xFF1C1917); //        cells text
-  static const Color _stone700 = Color(0xFF44403C);
   static const Color _stone600 = Color(0xFF57534E); //   headers, time
   static const Color _stone500 = Color(0xFF78716C);
   static const Color _ticketBrown = Color(0xFF583926); // #ticket number
@@ -54,7 +59,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _Tab('en_attente', 'EN ATTENTE', 'commandes en attente'),
     _Tab('a_encaisser', 'À ENCAISSER', 'commandes à encaisser'),
     _Tab('terminee', 'TERMINÉES', 'commandes terminées'),
-    _Tab('repas_employe', 'REPAS EMPL.', 'repas employés'),
   ];
 
   static const _months = [
@@ -62,8 +66,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.',
   ];
 
-  // Column flex: DATE, HEURE, NUMÉRO, MONTANT, CAISSE, CLIENT, MODE, ACTIONS
-  static const _flex = [2, 2, 2, 2, 2, 3, 2, 3];
+  // Column flex: DATE, HEURE, NUMÉRO, MONTANT, CLIENT / TABLE, MODE, ACTIONS
+  static const _flex = [2, 2, 2, 2, 4, 2, 3];
 
   final HistoryService _service = HistoryService();
   final LayerLink _calendarLink = LayerLink();
@@ -797,10 +801,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             align: Alignment.centerRight,
           ),
-          _cell(4, h('CAISSE')),
-          _cell(5, h('CLIENT')),
-          _cell(6, h('MODE')),
-          _cell(7, h('ACTIONS'), align: Alignment.center),
+          _cell(4, h('CLIENT / TABLE')),
+          _cell(5, h('MODE')),
+          _cell(6, h('ACTIONS'), align: Alignment.center),
         ],
       ),
     );
@@ -899,37 +902,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             _cell(
               4,
-              o.registerName == null
-                  ? Text('—',
-                      style: _os(14, FontWeight.w400, const Color(0xFFA8A29E)))
-                  : Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F5F4),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        o.registerName!,
-                        style: _os(12, FontWeight.w500, _stone700,
-                            lineHeight: 16),
-                      ),
-                    ),
-            ),
-            _cell(
-              5,
               Text(
                 client ?? 'Client Passant',
                 overflow: TextOverflow.ellipsis,
                 style: client == null
                     ? _os(14, FontWeight.w400, _stone500,
                         lineHeight: 20, fontStyle: FontStyle.italic)
-                    : _os(14, FontWeight.w400, _ink, lineHeight: 20),
+                    : _os(14, FontWeight.w500, _ink, lineHeight: 20),
               ),
             ),
-            _cell(6, _modeChip(mode)),
+            _cell(5, _modeChip(mode)),
             _cell(
-              7,
+              6,
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -949,6 +933,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             size: 18, color: _stone600),
                       ),
                     ),
+                    if (o.status != 'terminee' && o.status != 'annulee') ...[
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => _modifyOrder(o),
+                        borderRadius: BorderRadius.circular(6),
+                        child: const Tooltip(
+                          message: 'Modifier la commande',
+                          child: Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.edit_outlined,
+                                size: 18, color: _stone600),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -1168,11 +1167,39 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  void _modifyOrder(HistoryOrder o) {
+    if (widget.onOrderEdit != null) {
+      widget.onOrderEdit!(o);
+    } else {
+      Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => PosScreen(
+            editingOrder: o,
+            ticketNumber: o.ticketNumber,
+            posteLabel: widget.posteLabel,
+          ),
+        ),
+      ).then((res) {
+        if (res == true && mounted) {
+          _loadOrders(keepData: true);
+          _loadSummary();
+        }
+      });
+    }
+  }
+
   void _showDetails(HistoryOrder o) => showOrderDetailsPanel(
         context,
         o,
         onMarkTerminee:
             o.status == 'en_attente' ? () => _markOrderTerminee(o) : null,
+        onModifyOrder:
+            o.status != 'terminee' && o.status != 'annulee'
+                ? () {
+                    Navigator.of(context).pop();
+                    _modifyOrder(o);
+                  }
+                : null,
       );
 
   // ───────────────────────────── status bar ─────────────────────────────

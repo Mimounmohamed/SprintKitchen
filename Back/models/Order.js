@@ -98,6 +98,7 @@ const OrderSchema = new mongoose.Schema(
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
     clientName: String,       // "Thomas B.", "Julie V."
     buzzerNumber: String,     // "Buzzer #14 (Comptoir)"
+    tableNumber: { type: String, trim: true },
     // Delivery info (only for livraison)
     delivery: DeliveryDetailsSchema,
     // Order lines
@@ -129,6 +130,9 @@ const OrderSchema = new mongoose.Schema(
     reprintCount: { type: Number, default: 0 },
     // Notes
     notes: String,
+    // Order modified after initial submission
+    isEdited: { type: Boolean, default: false },
+    editedAt: Date,
   },
   { timestamps: true }
 );
@@ -169,5 +173,6 @@ OrderSchema.methods.recalculateTotals = function () {
 OrderSchema.index({ storeId: 1, createdAt: -1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ registerId: 1, status: 1 });
+OrderSchema.index({ storeId: 1, tableNumber: 1, status: 1 });
 
 module.exports = mongoose.model('Order', OrderSchema);

@@ -5,6 +5,17 @@ const Store = require('../models/Store');
 // Escape user input before using it inside a RegExp (a lone "(" would crash).
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Normalize table identifier (e.g. "Table 5" -> "5", "  5 " -> "5")
+const normalizeTableNumber = (val) => {
+  if (!val) return null;
+  const s = String(val).trim();
+  if (!s) return null;
+  const match = s.match(/^table\s*(.+)$/i);
+  if (match) return match[1].trim();
+  if (/^buzzer/i.test(s)) return null;
+  return s;
+};
+
 // Builds a createdAt range from ?from & ?to.
 // - Date-only values ("2026-09-07") mean the whole day (UTC).
 // - Full ISO timestamps are used exactly as sent, so the client can send
@@ -122,7 +133,7 @@ exports.getOrder = async (req, res) => {
       .populate('registerId', 'name type')
       .populate('operatorId', 'name')
       .populate('customerId', 'fullName phone')
-      .populate('items.productId', 'name basePrice');
+      .populate('items.productId', 'name basePrice ingredients description categoryId kdsStation');
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
     res.json({ success: true, data: order });
   } catch (err) {
@@ -148,6 +159,37 @@ exports.createOrder = async (req, res) => {
       data.storeId = store._id;
     }
 
+    // Check table occupancy if order is linked to a table
+    const rawTable = data.tableNumber || (data.orderType === 'sur_place' ? data.buzzerNumber : null);
+    const table = normalizeTableNumber(rawTable);
+    if (table) {
+      data.tableNumber = table;
+      if (!data.buzzerNumber) {
+        data.buzzerNumber = `Table ${table}`;
+      }
+
+      const occupiedOrder = await Order.findOne({
+        storeId: data.storeId,
+        status: { $nin: ['terminee', 'annulee'] },
+        kdsStatus: { $ne: 'served' },
+        $or: [
+          { tableNumber: table },
+          { buzzerNumber: `Table ${table}` },
+          { buzzerNumber: table },
+          { buzzerNumber: new RegExp(`^Table\\s*${escapeRegex(table)}$`, 'i') },
+        ],
+      });
+
+      if (occupiedOrder) {
+        return res.status(400).json({
+          success: false,
+          message: `La table ${table} est déjà liée à une commande active (#${occupiedOrder.ticketNumber || occupiedOrder._id}). Elle ne peut pas être réutilisée tant que cette commande n'est pas marquée terminée.`,
+          occupiedTable: table,
+          activeTicketNumber: occupiedOrder.ticketNumber,
+        });
+      }
+    }
+
     const order = new Order(data);
     order.recalculateTotals();
     await order.save();
@@ -164,8 +206,50 @@ exports.updateOrder = async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
+    // Validate table if updating tableNumber or buzzerNumber
+    const rawTable = req.body.tableNumber !== undefined
+      ? req.body.tableNumber
+      : (req.body.buzzerNumber !== undefined ? req.body.buzzerNumber : null);
+
+    if (rawTable !== null) {
+      const table = normalizeTableNumber(rawTable);
+      if (table) {
+        const targetStatus = req.body.status || order.status;
+        if (!['terminee', 'annulee'].includes(targetStatus)) {
+          const occupiedOrder = await Order.findOne({
+            _id: { $ne: order._id },
+            storeId: order.storeId,
+            status: { $nin: ['terminee', 'annulee'] },
+            kdsStatus: { $ne: 'served' },
+            $or: [
+              { tableNumber: table },
+              { buzzerNumber: `Table ${table}` },
+              { buzzerNumber: table },
+              { buzzerNumber: new RegExp(`^Table\\s*${escapeRegex(table)}$`, 'i') },
+            ],
+          });
+
+          if (occupiedOrder) {
+            return res.status(400).json({
+              success: false,
+              message: `La table ${table} est déjà liée à une commande active (#${occupiedOrder.ticketNumber || occupiedOrder._id}). Elle ne peut pas être réutilisée tant que cette commande n'est pas marquée terminée.`,
+              occupiedTable: table,
+              activeTicketNumber: occupiedOrder.ticketNumber,
+            });
+          }
+        }
+        req.body.tableNumber = table;
+      }
+    }
+
     Object.assign(order, req.body);
     if (req.body.items) order.recalculateTotals();
+
+    // If order was already commenced on KDS (in_progress or ready), flag it as edited
+    if (order.kdsStatus === 'in_progress' || order.kdsStatus === 'ready' || req.body.isEdited) {
+      order.isEdited = true;
+      order.editedAt = new Date();
+    }
 
     await order.save();
     res.json({ success: true, data: order });
@@ -247,6 +331,48 @@ exports.getDailyStats = async (req, res) => {
     ]);
 
     res.json({ success: true, data: stats[0] || { totalOrders: 0, totalRevenue: 0 } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// @desc  Get list of currently occupied tables (active orders not yet terminee)
+// @route GET /api/orders/occupied-tables
+exports.getOccupiedTables = async (req, res) => {
+  try {
+    const filter = {
+      status: { $nin: ['terminee', 'annulee'] },
+      kdsStatus: { $ne: 'served' },
+    };
+    if (req.query.storeId) filter.storeId = req.query.storeId;
+
+    const orders = await Order.find(filter)
+      .select('ticketNumber tableNumber buzzerNumber createdAt totalTTC clientName status kdsStatus')
+      .sort({ createdAt: -1 });
+
+    const occupied = [];
+    const seenTables = new Set();
+
+    for (const o of orders) {
+      const tbl = normalizeTableNumber(o.tableNumber || o.buzzerNumber);
+      if (tbl && !seenTables.has(tbl.toLowerCase())) {
+        seenTables.add(tbl.toLowerCase());
+        occupied.push({
+          tableNumber: tbl,
+          ticketNumber: o.ticketNumber || '',
+          orderId: o._id,
+          createdAt: o.createdAt,
+          clientName: o.clientName || '',
+          status: o.status,
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: occupied,
+      tables: occupied.map((o) => o.tableNumber),
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

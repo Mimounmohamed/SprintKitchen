@@ -13,10 +13,13 @@ import {
   MessageSquare,
   Clock,
   User,
+  Phone,
+  MapPin,
   X,
   Undo2,
   UtensilsCrossed,
   WifiOff,
+  Pencil,
 } from 'lucide-react';
 import { orderService, paymentService } from '../services';
 
@@ -61,7 +64,6 @@ const TABS = [
   { status: 'en_attente', label: 'EN ATTENTE', countLabel: 'commandes en attente' },
   { status: 'a_encaisser', label: 'À ENCAISSER', countLabel: 'commandes à encaisser' },
   { status: 'terminee', label: 'TERMINÉES', countLabel: 'commandes terminées' },
-  { status: 'repas_employe', label: 'REPAS EMPL.', countLabel: 'repas employés' },
   { status: 'annulee', label: 'ANNULÉES', countLabel: 'commandes annulées' },
 ];
 
@@ -133,6 +135,26 @@ function getStatusStyle(status) {
     default:
       return { label: status, bg: '#6B7280', fg: '#FFFFFF' };
   }
+}
+
+function getClientOrTable(ord) {
+  if (!ord) return 'Client Passant';
+  const rawClient = ord.clientName || ord.delivery?.fullName || null;
+  const rawTable = ord.tableNumber || ord.buzzerNumber || null;
+  let table = null;
+  if (rawTable) {
+    const cleaned = String(rawTable).replace(/^(buzzer\s*#?|table\s*)/i, '').trim();
+    if (cleaned) {
+      table = `Table ${cleaned}`;
+    }
+  }
+
+  if (rawClient && table) {
+    return `${rawClient} (${table})`;
+  }
+  if (table) return table;
+  if (rawClient) return rawClient;
+  return 'Client Passant';
 }
 
 /* ── Print Utilities ───────────────────────────────────────────────────────────── */
@@ -231,7 +253,11 @@ function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
           <div>${dateStr}</div>
           <div style="font-size:11px;margin-top:2px">Mode : ${mode.label} • ${ord.registerId?.name || 'Caisse 01'}</div>
           ${ord.clientName ? `<div style="font-size:11px">Client : ${ord.clientName}</div>` : ''}
-          ${ord.buzzerNumber ? `<div style="font-size:12px;font-weight:bold">Buzzer #${ord.buzzerNumber}</div>` : ''}
+          ${(() => {
+            const rawTable = ord.tableNumber || ord.buzzerNumber || null;
+            const cleanTable = rawTable ? String(rawTable).replace(/^(buzzer\s*#?|table\s*)/i, '').trim() : null;
+            return cleanTable ? `<div style="font-size:12px;font-weight:bold">Table ${cleanTable}</div>` : '';
+          })()}
         </div>
         ${notesHtml}
         <hr/>
@@ -364,7 +390,16 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
   const ord = detail || order;
   const mode = getModeStyle(ord.orderType);
   const statusStyle = getStatusStyle(ord.status);
-  const client = ord.buzzerNumber ? `Buzzer #${ord.buzzerNumber}` : ord.clientName || 'Client Passant';
+  const clientName = ord.clientName || ord.delivery?.fullName || 'Client Passant';
+  const rawTable = ord.tableNumber || ord.buzzerNumber || null;
+  const cleanTable = rawTable ? String(rawTable).replace(/^(buzzer\s*#?|table\s*)/i, '').trim() : null;
+  const tableDisplay = cleanTable ? `Table ${cleanTable}` : '—';
+  const phoneDisplay = ord.delivery?.phone || '—';
+  const addressParts = [
+    ord.delivery?.address,
+    [ord.delivery?.postalCode, ord.delivery?.city].filter(Boolean).join(' ')
+  ].filter(Boolean);
+  const addressDisplay = addressParts.length > 0 ? addressParts.join(', ') : '—';
   const tvaPercent = ord.subtotalHT > 0 ? ((ord.tvaAmount || 0) / ord.subtotalHT) * 100 : 10;
   const paymentLabel = payment ? PAYMENT_LABELS[payment.method] || payment.method : null;
 
@@ -505,52 +540,6 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
                         marginBottom: 6,
                       }}
                     >
-                      CAISSE &amp; OPÉRATEUR
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: COLORS.ink }}>
-                      <span
-                        style={{
-                          width: 7,
-                          height: 7,
-                          borderRadius: '50%',
-                          background: COLORS.success,
-                          display: 'inline-block',
-                        }}
-                      />
-                      {ord.registerId?.name || 'Caisse 01'} (Admin)
-                    </div>
-                  </div>
-
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: '0.4px',
-                        color: COLORS.stone400,
-                        textTransform: 'uppercase',
-                        marginBottom: 6,
-                      }}
-                    >
-                      CLIENT / LOCALISATION
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: COLORS.ink }}>
-                      <User size={13} color={COLORS.stone400} />
-                      {client}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: '0.4px',
-                        color: COLORS.stone400,
-                        textTransform: 'uppercase',
-                        marginBottom: 6,
-                      }}
-                    >
                       MODE DE CONSOMMATION
                     </div>
                     <span
@@ -570,20 +559,84 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
                       {mode.label}
                     </span>
                   </div>
-                </div>
 
-                <div
-                  style={{
-                    marginTop: 14,
-                    paddingTop: 12,
-                    borderTop: '1px solid #F3F4F6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <span style={{ fontSize: 12, color: COLORS.stone400 }}>Canal de prise de commande :</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Caisse Tactile Comptoir</span>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.4px',
+                        color: COLORS.stone400,
+                        textTransform: 'uppercase',
+                        marginBottom: 6,
+                      }}
+                    >
+                      NOM DU CLIENT
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: COLORS.ink }}>
+                      <User size={13} color={COLORS.stone400} />
+                      {clientName}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.4px',
+                        color: COLORS.stone400,
+                        textTransform: 'uppercase',
+                        marginBottom: 6,
+                      }}
+                    >
+                      TABLE
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: COLORS.ink }}>
+                      <UtensilsCrossed size={13} color={COLORS.stone400} />
+                      {tableDisplay}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.4px',
+                        color: COLORS.stone400,
+                        textTransform: 'uppercase',
+                        marginBottom: 6,
+                      }}
+                    >
+                      TÉLÉPHONE
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: COLORS.ink }}>
+                      <Phone size={13} color={COLORS.stone400} />
+                      {phoneDisplay}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.4px',
+                        color: COLORS.stone400,
+                        textTransform: 'uppercase',
+                        marginBottom: 6,
+                      }}
+                    >
+                      ADRESSE DE LIVRAISON
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: COLORS.ink }}>
+                      <MapPin size={13} color={COLORS.stone400} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {addressDisplay}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -2282,8 +2335,7 @@ export default function HistoriquePage() {
                     <th style={{ padding: '0 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>HEURE</th>
                     <th style={{ padding: '0 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>NUMÉRO</th>
                     <th style={{ padding: '0 24px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>MONTANT</th>
-                    <th style={{ padding: '0 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>CAISSE</th>
-                    <th style={{ padding: '0 20px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>CLIENT</th>
+                    <th style={{ padding: '0 20px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>CLIENT / TABLE</th>
                     <th style={{ padding: '0 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>MODE</th>
                     <th style={{ padding: '0 20px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>ACTIONS</th>
                   </tr>
@@ -2293,7 +2345,7 @@ export default function HistoriquePage() {
                     const isSelected = o._id === selectedId;
                     const isNewest = page === 1 && index === 0;
                     const mode = getModeStyle(o.orderType);
-                    const client = o.buzzerNumber ? `Buzzer #${o.buzzerNumber}` : o.clientName;
+                    const clientDisplay = getClientOrTable(o);
                     const isRowOdd = index % 2 === 1;
 
                     const rowBg = isSelected ? COLORS.selectedRowBg : isRowOdd ? COLORS.surface : COLORS.stone50;
@@ -2365,41 +2417,21 @@ export default function HistoriquePage() {
                           {fmtPrice(o.totalTTC)}
                         </td>
 
-                        {/* CAISSE */}
-                        <td style={{ padding: '0 16px' }}>
-                          {o.registerId?.name ? (
-                            <span
-                              style={{
-                                background: COLORS.stone100,
-                                borderRadius: 6,
-                                padding: '4px 10px',
-                                fontSize: 12,
-                                fontWeight: 500,
-                                color: COLORS.stone700,
-                              }}
-                            >
-                              {o.registerId.name}
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: 14, color: COLORS.stone400 }}>—</span>
-                          )}
-                        </td>
-
-                        {/* CLIENT */}
+                        {/* CLIENT / TABLE */}
                         <td
                           style={{
                             padding: '0 20px',
                             fontSize: 14,
-                            fontWeight: 400,
-                            color: client ? COLORS.ink : COLORS.stone500,
-                            fontStyle: client ? 'normal' : 'italic',
-                            maxWidth: 180,
+                            fontWeight: clientDisplay === 'Client Passant' ? 400 : 500,
+                            color: clientDisplay === 'Client Passant' ? COLORS.stone500 : COLORS.ink,
+                            fontStyle: clientDisplay === 'Client Passant' ? 'italic' : 'normal',
+                            maxWidth: 220,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {client || 'Client Passant'}
+                          {clientDisplay}
                         </td>
 
                         {/* MODE */}
@@ -2472,25 +2504,48 @@ export default function HistoriquePage() {
                             </button>
 
                             {isSelected && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  printThermalReceipt({ order: o, kitchenOnly: false });
-                                }}
-                                title="Imprimer le ticket"
-                                style={{
-                                  padding: 4,
-                                  border: 'none',
-                                  background: 'none',
-                                  cursor: 'pointer',
-                                  color: COLORS.stone600,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Printer size={18} />
-                              </button>
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    printThermalReceipt({ order: o, kitchenOnly: false });
+                                  }}
+                                  title="Imprimer le ticket"
+                                  style={{
+                                    padding: 4,
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    color: COLORS.stone600,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Printer size={18} />
+                                </button>
+                                {o.status !== 'terminee' && o.status !== 'annulee' && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedOrder(o);
+                                    }}
+                                    title="Modifier la commande"
+                                    style={{
+                                      padding: 4,
+                                      border: 'none',
+                                      background: 'none',
+                                      cursor: 'pointer',
+                                      color: COLORS.stone600,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}
+                                  >
+                                    <Pencil size={18} />
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>

@@ -1,9 +1,14 @@
+import 'pos_models.dart';
+
 /// One line of a past order (Order.items[]).
 class HistoryOrderLine {
   const HistoryOrderLine({
     required this.name,
     required this.quantity,
     required this.lineTotal,
+    this.productId,
+    this.unitPrice,
+    this.customizations = const [],
     this.options = const [],
     this.removed = const [],
     this.notes,
@@ -12,6 +17,9 @@ class HistoryOrderLine {
   final String name;
   final int quantity;
   final double lineTotal;
+  final String? productId;
+  final double? unitPrice;
+  final List<AppliedCustomization> customizations;
 
   /// Flattened labels of every selected customization option.
   final List<String> options;
@@ -20,19 +28,60 @@ class HistoryOrderLine {
   final List<String> removed;
   final String? notes;
 
-  factory HistoryOrderLine.fromJson(Map<String, dynamic> json) {
-    final options = <String>[];
-    for (final c in (json['customizations'] as List<dynamic>? ?? [])) {
-      final selected = (c as Map<String, dynamic>)['selectedOptions'];
-      for (final o in (selected as List<dynamic>? ?? [])) {
-        final label = (o as Map<String, dynamic>)['label'] as String?;
-        if (label != null && label.isNotEmpty) options.add(label);
+  TicketLine toTicketLine() {
+    double extras = 0;
+    for (final c in customizations) {
+      for (final opt in c.selectedOptions) {
+        extras += opt.priceModifier;
       }
     }
+    final basePrice = unitPrice ?? ((lineTotal / (quantity > 0 ? quantity : 1)) - extras);
+    return TicketLine(
+      name: name,
+      unitPrice: basePrice > 0 ? basePrice : 0,
+      quantity: quantity,
+      productId: productId,
+      extrasTotal: extras,
+      customizations: customizations,
+      removedIngredients: removed,
+      notes: notes,
+    );
+  }
+
+  factory HistoryOrderLine.fromJson(Map<String, dynamic> json) {
+    final options = <String>[];
+    final appliedCustomizations = <AppliedCustomization>[];
+
+    for (final c in (json['customizations'] as List<dynamic>? ?? [])) {
+      if (c is Map<String, dynamic>) {
+        final gName = c['groupName'] as String? ?? '';
+        final sOptions = <SelectedOption>[];
+        for (final o in (c['selectedOptions'] as List<dynamic>? ?? [])) {
+          if (o is Map<String, dynamic>) {
+            final label = o['label'] as String? ?? '';
+            final pm = (o['priceModifier'] as num?)?.toDouble() ?? 0;
+            if (label.isNotEmpty) {
+              options.add(label);
+              sOptions.add(SelectedOption(label: label, priceModifier: pm));
+            }
+          }
+        }
+        appliedCustomizations.add(
+          AppliedCustomization(groupName: gName, selectedOptions: sOptions),
+        );
+      }
+    }
+
+    final pId = json['productId'];
+    final productId = pId is Map ? pId['_id']?.toString() : pId?.toString();
+
     return HistoryOrderLine(
       name: json['productName'] as String? ?? '',
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       lineTotal: (json['lineTotal'] as num?)?.toDouble() ?? 0,
+      productId: productId,
+      unitPrice: (json['unitPrice'] as num?)?.toDouble(),
+      customizations: appliedCustomizations,
       options: options,
       removed: (json['removedIngredients'] as List<dynamic>? ?? [])
           .map((e) => e.toString())
@@ -55,10 +104,14 @@ class HistoryOrder {
     required this.tvaAmount,
     this.registerName,
     this.clientName,
+    this.tableNumber,
     this.buzzerNumber,
     this.deliveryName,
+    this.deliveryPhone,
+    this.deliveryAddress,
     this.notes,
     this.lines = const [],
+    this.isEdited = false,
   });
 
   final String id;
@@ -73,16 +126,41 @@ class HistoryOrder {
   final double tvaAmount;
   final String? registerName;
   final String? clientName;
+  final String? tableNumber;
   final String? buzzerNumber;
   final String? deliveryName;
+  final String? deliveryPhone;
+  final String? deliveryAddress;
   final String? notes;
   final List<HistoryOrderLine> lines;
+  final bool isEdited;
 
-  /// First non-empty of client name / buzzer / delivery name, else null
-  /// (the table then shows "Client Passant").
+  /// Formatted client and/or table display for the "CLIENT / TABLE" column.
   String? get displayClient {
-    for (final v in [clientName, buzzerNumber, deliveryName]) {
-      if (v != null && v.trim().isNotEmpty) return v;
+    final cName = (clientName != null && clientName!.trim().isNotEmpty) ? clientName!.trim() : null;
+    final dName = (deliveryName != null && deliveryName!.trim().isNotEmpty) ? deliveryName!.trim() : null;
+    final name = cName ?? dName;
+
+    String? tNum;
+    final rawTable = (tableNumber != null && tableNumber!.trim().isNotEmpty)
+        ? tableNumber!.trim()
+        : (buzzerNumber != null && buzzerNumber!.trim().isNotEmpty ? buzzerNumber!.trim() : null);
+
+    if (rawTable != null) {
+      final cleaned = rawTable
+          .replaceAll(RegExp(r'^(buzzer\s*#?|table\s*)', caseSensitive: false), '')
+          .trim();
+      if (cleaned.isNotEmpty) {
+        tNum = 'Table $cleaned';
+      }
+    }
+
+    if (name != null && tNum != null) {
+      return '$name ($tNum)';
+    } else if (tNum != null) {
+      return tNum;
+    } else if (name != null) {
+      return name;
     }
     return null;
   }
@@ -90,6 +168,16 @@ class HistoryOrder {
   factory HistoryOrder.fromJson(Map<String, dynamic> json) {
     final register = json['registerId'];
     final delivery = json['delivery'];
+
+    String? dAddress;
+    if (delivery is Map) {
+      final addr = delivery['address']?.toString() ?? '';
+      final city = delivery['city']?.toString() ?? '';
+      final zip = delivery['postalCode']?.toString() ?? '';
+      final parts = [addr, if (zip.isNotEmpty || city.isNotEmpty) '$zip $city'.trim()].where((p) => p.isNotEmpty);
+      if (parts.isNotEmpty) dAddress = parts.join(', ');
+    }
+
     return HistoryOrder(
       id: json['_id'] as String,
       ticketNumber: json['ticketNumber'] as String? ?? '',
@@ -102,12 +190,16 @@ class HistoryOrder {
       // registerId is populated ({_id, name, type}) by GET /api/orders.
       registerName: register is Map ? register['name'] as String? : null,
       clientName: json['clientName'] as String?,
+      tableNumber: json['tableNumber']?.toString(),
       buzzerNumber: json['buzzerNumber'] as String?,
-      deliveryName: delivery is Map ? delivery['fullName'] as String? : null,
+      deliveryName: delivery is Map ? (delivery['fullName'] ?? delivery['name']) as String? : null,
+      deliveryPhone: delivery is Map ? delivery['phone']?.toString() : null,
+      deliveryAddress: dAddress,
       notes: json['notes'] as String?,
       lines: (json['items'] as List<dynamic>? ?? [])
           .map((e) => HistoryOrderLine.fromJson(e as Map<String, dynamic>))
           .toList(),
+      isEdited: json['isEdited'] == true,
     );
   }
 }
@@ -151,6 +243,27 @@ class OrdersSummary {
     return OrdersSummary(
       counts: raw.map((k, v) => MapEntry(k, (v as num).toInt())),
       totalTerminee: (data['totalTerminee'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+/// Information about a table currently occupied by an active order.
+class OccupiedTableInfo {
+  const OccupiedTableInfo({
+    required this.tableNumber,
+    required this.ticketNumber,
+    this.orderId,
+  });
+
+  final String tableNumber;
+  final String ticketNumber;
+  final String? orderId;
+
+  factory OccupiedTableInfo.fromJson(Map<String, dynamic> json) {
+    return OccupiedTableInfo(
+      tableNumber: json['tableNumber']?.toString() ?? '',
+      ticketNumber: json['ticketNumber']?.toString() ?? '',
+      orderId: json['orderId']?.toString(),
     );
   }
 }
