@@ -200,7 +200,18 @@ class OrderDetailsPanel extends StatelessWidget {
   // ───────────────────────────── info card ─────────────────────────────
 
   Widget _buildInfoCard(_ModeStyle mode) {
-    final client = order.displayClient ?? 'Client Passant';
+    final clientName = order.clientName ?? order.deliveryName ?? 'Client Passant';
+    String tableDisplay = '—';
+    final rawTable = (order.tableNumber != null && order.tableNumber!.isNotEmpty)
+        ? order.tableNumber!
+        : (order.buzzerNumber != null && order.buzzerNumber!.isNotEmpty ? order.buzzerNumber! : null);
+
+    if (rawTable != null) {
+      final cleaned = rawTable
+          .replaceAll(RegExp(r'^(buzzer\s*#?|table\s*)', caseSensitive: false), '')
+          .trim();
+      tableDisplay = cleaned.isNotEmpty ? 'Table $cleaned' : 'Table';
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -220,31 +231,6 @@ class OrderDetailsPanel extends StatelessWidget {
                   Icons.schedule,
                   'DATE & HEURE',
                   '${_fmtDate(order.createdAt)} à ${_fmtTime(order.createdAt)}',
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _infoCell(
-                  Icons.point_of_sale_outlined,
-                  'CAISSE & OPÉRATEUR',
-                  order.registerName ?? '—',
-                  dotColor: AppColors.success,
-                ),
-              ),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Divider(height: 1, color: Color(0xFFF3F4F6)),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _infoCell(
-                  Icons.person_outline,
-                  'CLIENT / LOCALISATION',
-                  client,
                 ),
               ),
               const SizedBox(width: 16),
@@ -273,18 +259,49 @@ class OrderDetailsPanel extends StatelessWidget {
             child: Divider(height: 1, color: Color(0xFFF3F4F6)),
           ),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Canal de prise de commande :',
-                style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+              Expanded(
+                child: _infoCell(
+                  Icons.person_outline,
+                  'NOM DU CLIENT',
+                  clientName,
+                ),
               ),
-              const Text(
-                'Caisse Tactile Comptoir',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF374151),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _infoCell(
+                  Icons.table_restaurant_outlined,
+                  'TABLE',
+                  tableDisplay,
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(height: 1, color: Color(0xFFF3F4F6)),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _infoCell(
+                  Icons.phone_outlined,
+                  'TÉLÉPHONE',
+                  (order.deliveryPhone != null && order.deliveryPhone!.isNotEmpty)
+                      ? order.deliveryPhone!
+                      : '—',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _infoCell(
+                  Icons.location_on_outlined,
+                  'ADRESSE DE LIVRAISON',
+                  (order.deliveryAddress != null && order.deliveryAddress!.isNotEmpty)
+                      ? order.deliveryAddress!
+                      : '—',
                 ),
               ),
             ],

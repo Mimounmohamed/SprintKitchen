@@ -45,7 +45,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // Table palette (Figma): stone neutrals + brand brown.
   static const Color _ink = Color(0xFF1C1917); //        cells text
-  static const Color _stone700 = Color(0xFF44403C);
   static const Color _stone600 = Color(0xFF57534E); //   headers, time
   static const Color _stone500 = Color(0xFF78716C);
   static const Color _ticketBrown = Color(0xFF583926); // #ticket number
@@ -61,8 +60,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.',
   ];
 
-  // Column flex: DATE, HEURE, NUMÉRO, MONTANT, CAISSE, CLIENT, MODE, ACTIONS
-  static const _flex = [2, 2, 2, 2, 2, 3, 2, 3];
+  // Column flex: DATE, HEURE, NUMÉRO, MONTANT, CLIENT / TABLE, MODE, ACTIONS
+  static const _flex = [2, 2, 2, 2, 4, 2, 3];
 
   final HistoryService _service = HistoryService();
   final LayerLink _calendarLink = LayerLink();
@@ -796,10 +795,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             align: Alignment.centerRight,
           ),
-          _cell(4, h('CAISSE')),
-          _cell(5, h('CLIENT')),
-          _cell(6, h('MODE')),
-          _cell(7, h('ACTIONS'), align: Alignment.center),
+          _cell(4, h('CLIENT / TABLE')),
+          _cell(5, h('MODE')),
+          _cell(6, h('ACTIONS'), align: Alignment.center),
         ],
       ),
     );
@@ -898,37 +896,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             _cell(
               4,
-              o.registerName == null
-                  ? Text('—',
-                      style: _os(14, FontWeight.w400, const Color(0xFFA8A29E)))
-                  : Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F5F4),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        o.registerName!,
-                        style: _os(12, FontWeight.w500, _stone700,
-                            lineHeight: 16),
-                      ),
-                    ),
-            ),
-            _cell(
-              5,
               Text(
                 client ?? 'Client Passant',
                 overflow: TextOverflow.ellipsis,
                 style: client == null
                     ? _os(14, FontWeight.w400, _stone500,
                         lineHeight: 20, fontStyle: FontStyle.italic)
-                    : _os(14, FontWeight.w400, _ink, lineHeight: 20),
+                    : _os(14, FontWeight.w500, _ink, lineHeight: 20),
               ),
             ),
-            _cell(6, _modeChip(mode)),
+            _cell(5, _modeChip(mode)),
             _cell(
-              7,
+              6,
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

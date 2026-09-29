@@ -55,8 +55,11 @@ class HistoryOrder {
     required this.tvaAmount,
     this.registerName,
     this.clientName,
+    this.tableNumber,
     this.buzzerNumber,
     this.deliveryName,
+    this.deliveryPhone,
+    this.deliveryAddress,
     this.notes,
     this.lines = const [],
   });
@@ -73,16 +76,40 @@ class HistoryOrder {
   final double tvaAmount;
   final String? registerName;
   final String? clientName;
+  final String? tableNumber;
   final String? buzzerNumber;
   final String? deliveryName;
+  final String? deliveryPhone;
+  final String? deliveryAddress;
   final String? notes;
   final List<HistoryOrderLine> lines;
 
-  /// First non-empty of client name / buzzer / delivery name, else null
-  /// (the table then shows "Client Passant").
+  /// Formatted client and/or table display for the "CLIENT / TABLE" column.
   String? get displayClient {
-    for (final v in [clientName, buzzerNumber, deliveryName]) {
-      if (v != null && v.trim().isNotEmpty) return v;
+    final cName = (clientName != null && clientName!.trim().isNotEmpty) ? clientName!.trim() : null;
+    final dName = (deliveryName != null && deliveryName!.trim().isNotEmpty) ? deliveryName!.trim() : null;
+    final name = cName ?? dName;
+
+    String? tNum;
+    final rawTable = (tableNumber != null && tableNumber!.trim().isNotEmpty)
+        ? tableNumber!.trim()
+        : (buzzerNumber != null && buzzerNumber!.trim().isNotEmpty ? buzzerNumber!.trim() : null);
+
+    if (rawTable != null) {
+      final cleaned = rawTable
+          .replaceAll(RegExp(r'^(buzzer\s*#?|table\s*)', caseSensitive: false), '')
+          .trim();
+      if (cleaned.isNotEmpty) {
+        tNum = 'Table $cleaned';
+      }
+    }
+
+    if (name != null && tNum != null) {
+      return '$name ($tNum)';
+    } else if (tNum != null) {
+      return tNum;
+    } else if (name != null) {
+      return name;
     }
     return null;
   }
@@ -90,6 +117,16 @@ class HistoryOrder {
   factory HistoryOrder.fromJson(Map<String, dynamic> json) {
     final register = json['registerId'];
     final delivery = json['delivery'];
+
+    String? dAddress;
+    if (delivery is Map) {
+      final addr = delivery['address']?.toString() ?? '';
+      final city = delivery['city']?.toString() ?? '';
+      final zip = delivery['postalCode']?.toString() ?? '';
+      final parts = [addr, if (zip.isNotEmpty || city.isNotEmpty) '$zip $city'.trim()].where((p) => p.isNotEmpty);
+      if (parts.isNotEmpty) dAddress = parts.join(', ');
+    }
+
     return HistoryOrder(
       id: json['_id'] as String,
       ticketNumber: json['ticketNumber'] as String? ?? '',
@@ -102,8 +139,11 @@ class HistoryOrder {
       // registerId is populated ({_id, name, type}) by GET /api/orders.
       registerName: register is Map ? register['name'] as String? : null,
       clientName: json['clientName'] as String?,
+      tableNumber: json['tableNumber']?.toString(),
       buzzerNumber: json['buzzerNumber'] as String?,
-      deliveryName: delivery is Map ? delivery['fullName'] as String? : null,
+      deliveryName: delivery is Map ? (delivery['fullName'] ?? delivery['name']) as String? : null,
+      deliveryPhone: delivery is Map ? delivery['phone']?.toString() : null,
+      deliveryAddress: dAddress,
       notes: json['notes'] as String?,
       lines: (json['items'] as List<dynamic>? ?? [])
           .map((e) => HistoryOrderLine.fromJson(e as Map<String, dynamic>))

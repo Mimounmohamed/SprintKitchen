@@ -288,10 +288,10 @@ class KitchenOrder {
     String? table = j['tableNumber']?.toString().trim();
     if (table == null || table.isEmpty) {
       final buzzer = j['buzzerNumber']?.toString().trim() ?? '';
-      final match = RegExp(r'^Table\s*(.+)$', caseSensitive: false).firstMatch(buzzer);
+      final match = RegExp(r'^(?:table|buzzer\s*#?)\s*(.+)$', caseSensitive: false).firstMatch(buzzer);
       if (match != null) {
         table = match.group(1)?.trim();
-      } else if (buzzer.isNotEmpty && !buzzer.toLowerCase().startsWith('buzzer')) {
+      } else if (buzzer.isNotEmpty) {
         table = buzzer;
       }
     }
