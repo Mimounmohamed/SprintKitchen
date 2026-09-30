@@ -1,0 +1,94 @@
+import 'package:flutter/material.dart';
+import '../../models/pos_models.dart';
+import '../../theme/app_colors.dart';
+
+class TicketLineTile extends StatelessWidget {
+  const TicketLineTile({
+    super.key,
+    required this.line,
+    this.selected = false,
+    this.onTap,
+    this.onDoubleTap,
+  });
+
+  final TicketLine line;
+  final bool selected;
+  final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      onDoubleTap: onDoubleTap,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFEF9E7) : Colors.transparent,
+          border: Border(
+            left: BorderSide(
+              color: selected ? const Color(0xFFF59E0B) : Colors.transparent,
+              width: 4,
+            ),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    line.name,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (line.subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      line.subtitle!,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Text(
+                '${line.quantity}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                '${line.total.toStringAsFixed(2).replaceAll('.', ',')} €',
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
