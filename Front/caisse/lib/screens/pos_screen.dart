@@ -1384,10 +1384,6 @@ class _PosScreenState extends State<PosScreen> {
                         MaterialPageRoute(
                           builder: (_) => HistoryScreen(
                             posteLabel: widget.posteLabel,
-                            onOrderEdit: (o) {
-                              Navigator.of(context).pop();
-                              _loadOrderForEditing(o);
-                            },
                           ),
                         ),
                       );

@@ -6,8 +6,8 @@ import '../models/order_models.dart';
 import '../services/history_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/order_details_panel.dart';
+import '../widgets/order_edit_panel.dart';
 import '../widgets/date_range_popover.dart';
-import 'pos_screen.dart';
 
 /// "Historique des ventes" — list of past orders, filtered by status tab,
 /// date range and search, with pagination.
@@ -1168,24 +1168,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _modifyOrder(HistoryOrder o) {
-    if (widget.onOrderEdit != null) {
-      widget.onOrderEdit!(o);
-    } else {
-      Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => PosScreen(
-            editingOrder: o,
-            ticketNumber: o.ticketNumber,
-            posteLabel: widget.posteLabel,
-          ),
-        ),
-      ).then((res) {
-        if (res == true && mounted) {
+    showOrderEditPanel(
+      context,
+      o,
+      posteLabel: widget.posteLabel,
+      onOrderUpdated: () {
+        if (mounted) {
           _loadOrders(keepData: true);
           _loadSummary();
         }
-      });
-    }
+      },
+    );
   }
 
   void _showDetails(HistoryOrder o) => showOrderDetailsPanel(
