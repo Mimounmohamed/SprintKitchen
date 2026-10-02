@@ -192,7 +192,7 @@ class KitchenPrinterService {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        '⚠️ ATTENTION : COMMANDE MODIFIÉE',
+                        '[ ! ] ATTENTION : COMMANDE MODIFIÉE',
                         style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
                       ),
                       pw.SizedBox(height: 3),
@@ -201,8 +201,8 @@ class KitchenPrinterService {
                           padding: const pw.EdgeInsets.only(bottom: 2),
                           child: pw.Text(
                             m.details != null && m.details!.isNotEmpty
-                                ? '• ${m.text} (${m.details})'
-                                : '• ${m.text}',
+                                ? '- ${m.text} (${m.details})'
+                                : '- ${m.text}',
                             style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
                           ),
                         ),
@@ -275,7 +275,7 @@ class KitchenPrinterService {
                             pw.Padding(
                               padding: const pw.EdgeInsets.only(left: 32, bottom: 1),
                               child: pw.Text(
-                                '👉 ${c.selectedOptions.join(", ")}',
+                                '+ ${c.selectedOptions.join(", ")}',
                                 style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                               ),
                             ),
@@ -288,7 +288,7 @@ class KitchenPrinterService {
                           pw.Padding(
                             padding: const pw.EdgeInsets.only(left: 32, bottom: 1),
                             child: pw.Text(
-                              '⛔ SANS : ${rem.replaceFirst(RegExp(r"^sans\s+", caseSensitive: false), "").toUpperCase()}',
+                              '[ SANS : ${rem.replaceFirst(RegExp(r"^sans\s+", caseSensitive: false), "").toUpperCase()} ]',
                               style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
                             ),
                           ),
@@ -300,7 +300,7 @@ class KitchenPrinterService {
                         pw.Padding(
                           padding: const pw.EdgeInsets.only(left: 32),
                           child: pw.Text(
-                            '📝 Note : "${it.notes!.trim()}"',
+                            'Note : "${it.notes!.trim()}"',
                             style: pw.TextStyle(fontSize: 8.5, fontStyle: pw.FontStyle.italic),
                           ),
                         ),

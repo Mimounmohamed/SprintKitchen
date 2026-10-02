@@ -743,7 +743,7 @@ class ReceiptPrinterService {
                       pw.Row(
                         children: [
                           pw.Text(
-                            '⚠️ ATTENTION : COMMANDE MODIFIÉE',
+                            '[ ! ] ATTENTION : COMMANDE MODIFIÉE',
                             style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
                           ),
                         ],
@@ -753,7 +753,7 @@ class ReceiptPrinterService {
                         pw.Padding(
                           padding: const pw.EdgeInsets.only(bottom: 2),
                           child: pw.Text(
-                            '• $m',
+                            '- $m',
                             style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
                           ),
                         ),
@@ -820,20 +820,20 @@ class ReceiptPrinterService {
                           pw.Padding(
                             padding: const pw.EdgeInsets.only(left: 32, bottom: 1),
                             child: pw.Text(
-                              '👉 ${opt.replaceAll(RegExp(r'\s*\(\+?[0-9]+(?:[\.,][0-9]+)?\s*€\)', caseSensitive: false), '').trim()}',
+                              '+ ${opt.replaceAll(RegExp(r'\s*\(\+?[0-9]+(?:[\.,][0-9]+)?\s*€\)', caseSensitive: false), '').trim()}',
                               style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                             ),
                           ),
                       ],
 
-                      // Removed ingredients (Highlighted with alert symbol)
+                      // Removed ingredients
                       if (it.removed.isNotEmpty) ...[
                         pw.SizedBox(height: 2),
                         for (final rem in it.removed)
                           pw.Padding(
                             padding: const pw.EdgeInsets.only(left: 32, bottom: 1),
                             child: pw.Text(
-                              '⛔ SANS : ${rem.replaceFirst(RegExp(r'^sans\s+', caseSensitive: false), "").toUpperCase()}',
+                              '[ SANS : ${rem.replaceFirst(RegExp(r'^sans\s+', caseSensitive: false), "").toUpperCase()} ]',
                               style: pw.TextStyle(
                                 fontSize: 9,
                                 fontWeight: pw.FontWeight.bold,
@@ -848,7 +848,7 @@ class ReceiptPrinterService {
                         pw.Padding(
                           padding: const pw.EdgeInsets.only(left: 32),
                           child: pw.Text(
-                            '📝 Note : "${it.notes!.trim()}"',
+                            'Note : "${it.notes!.trim()}"',
                             style: pw.TextStyle(fontSize: 8.5, fontStyle: pw.FontStyle.italic),
                           ),
                         ),

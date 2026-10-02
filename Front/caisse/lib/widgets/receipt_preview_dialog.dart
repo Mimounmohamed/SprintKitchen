@@ -365,6 +365,49 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
                 loadingWidget: const Center(
                   child: CircularProgressIndicator(color: AppColors.brandDark),
                 ),
+                onError: (context, error) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFEF2F2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.print_disabled_outlined, size: 40, color: Color(0xFFDC2626)),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Aperçu visuel non disponible dans ce navigateur',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Le ticket est prêt. Vous pouvez l\'imprimer directement sur votre imprimante de caisse.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton.icon(
+                            onPressed: _directPrint,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.brandDark,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: const Icon(Icons.print, size: 18),
+                            label: const Text('Lancer l\'impression directe', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
 
