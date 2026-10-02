@@ -853,6 +853,10 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
 
   Color get _borderColor {
     if (widget.order.status == OrderStatus.terminee) return C.border;
+    if (widget.order.isEdited) {
+      if (_urgency == Urgency.critical) return C.red;
+      return const Color(0xFFF87171);
+    }
     switch (_urgency) {
       case Urgency.critical: return C.red;
       case Urgency.warning:  return C.orange;
@@ -907,7 +911,8 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
         color: bg,
         borderRadius: BorderRadius.circular(r.w < 800 ? 10 : 12),
         border: Border.all(
-            color: _borderColor, width: _urgency == Urgency.normal ? 1 : 1.8),
+            color: _borderColor,
+            width: (widget.order.isEdited || _urgency != Urgency.normal) ? 1.8 : 1),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 6, offset: const Offset(0, 2))],
       ),
@@ -1007,6 +1012,54 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.order.isEdited) ...[
+                    Container(
+                      width: double.infinity,
+                      margin: EdgeInsets.only(bottom: r.fs(8)),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: r.fs(8), vertical: r.fs(5)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: const Color(0xFFF87171), width: 1.2),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.edit_note_rounded,
+                            size: r.fs(16),
+                            color: const Color(0xFFDC2626),
+                          ),
+                          SizedBox(width: r.fs(5)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'COMMANDE MODIFIÉE',
+                                  style: TextStyle(
+                                    fontSize: r.fs(10),
+                                    fontWeight: FontWeight.w900,
+                                    color: const Color(0xFFDC2626),
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                Text(
+                                  'Vérifier les articles et options',
+                                  style: TextStyle(
+                                    fontSize: r.fs(8.5),
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF991B1B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (widget.order.comment != null && widget.order.comment!.isNotEmpty) ...[
                     Container(
                       width: double.infinity,

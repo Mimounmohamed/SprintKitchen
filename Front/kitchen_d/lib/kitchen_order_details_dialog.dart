@@ -143,6 +143,10 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (widget.order.isEdited) ...[
+                              _buildEditedBanner(),
+                              const SizedBox(height: 14),
+                            ],
                             _buildInfoCard(mode),
                             const SizedBox(height: 14),
                             if (widget.order.comment != null &&
@@ -340,6 +344,49 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
   }
 
   // ────────────────────────── LEFT: RECEIPT CARDS ──────────────────────────
+
+  Widget _buildEditedBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFF87171), width: 1.2),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.edit_note_rounded, size: 22, color: Color(0xFFDC2626)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'COMMANDE MODIFIÉE EN CAISSE',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFFDC2626),
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Des articles, sauces ou remarques ont été modifiés après l\'envoi en cuisine. Veuillez vérifier attentivement la liste ci-dessous.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF991B1B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildInfoCard(_ModeStyle mode) {
     final client = widget.order.tableNumber != null &&

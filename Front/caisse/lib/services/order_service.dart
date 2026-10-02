@@ -115,6 +115,7 @@ class OrderService {
     final body = <String, dynamic>{
       'orderType': _orderTypeToApi(orderType),
       'items': lines.map(_lineToJson).toList(),
+      'isEdited': true,
     };
 
     if (notes != null) {
