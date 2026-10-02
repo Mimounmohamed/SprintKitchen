@@ -191,6 +191,9 @@ exports.createOrder = async (req, res) => {
     }
 
     const order = new Order(data);
+    if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+      order.initialItems = data.items;
+    }
     order.recalculateTotals();
     await order.save();
     res.status(201).json({ success: true, data: order });
@@ -198,6 +201,282 @@ exports.createOrder = async (req, res) => {
     res.status(400).json({ success: false, message: err.message });
   }
 };
+
+// Helper to extract options/sauces/removes as a comparable string
+function formatItemSummary(item) {
+  const parts = [];
+  if (item.customizations && item.customizations.length > 0) {
+    for (const c of item.customizations) {
+      if (c.selectedOptions && c.selectedOptions.length > 0) {
+        const opts = c.selectedOptions.map((o) => o.label || o).join(', ');
+        if (opts) parts.push(opts);
+      }
+    }
+  }
+  if (item.removedIngredients && item.removedIngredients.length > 0) {
+    for (const r of item.removedIngredients) {
+      const clean = String(r).replace(/^sans\s+/i, '').trim();
+      if (clean) parts.push(`Sans ${clean}`);
+    }
+  }
+  if (item.notes && String(item.notes).trim()) {
+    parts.push(String(item.notes).trim());
+  }
+  return parts.join(' • ');
+}
+
+// Clean text to extract product name for matching modifications across edits
+function cleanProductNameFromText(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/^(?:Modifié|Supprimé|Ajouté)\s*:\s*/i, '')
+    .replace(/^\d+×\s*/, '')
+    .replace(/\s*:\s*Quantité modifiée.*$/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+// Helper to compare modifications on a matched line
+function checkItemModifications(oldIt, newIt, changes) {
+  const oldSumm = formatItemSummary(oldIt);
+  const newSumm = formatItemSummary(newIt);
+  const detailsList = [];
+
+  if (oldIt.quantity !== newIt.quantity) {
+    detailsList.push(`Quantité : ${oldIt.quantity}× ➔ ${newIt.quantity}×`);
+  }
+  if (oldSumm !== newSumm) {
+    detailsList.push(`Nouvelles options : ${newSumm || 'Aucune'}`);
+  }
+
+  if (detailsList.length > 0) {
+    changes.push({
+      action: 'modified',
+      text: `Modifié : ${oldIt.productName}`,
+      details: detailsList.join(' • '),
+    });
+  }
+}
+
+// Computes specific changes made between oldOrder and newBody (items, table, notes)
+function computeOrderChanges(oldOrder, newBody) {
+  const changes = [];
+  const oldItems = oldOrder.items || [];
+  const newItems = newBody.items || [];
+
+  if (newBody.items && Array.isArray(newBody.items)) {
+    const matchedNewIndices = new Set();
+    const matchedOldIndices = new Set();
+
+    // 1. Try matching by _id / id
+    for (let i = 0; i < oldItems.length; i++) {
+      const oldIt = oldItems[i];
+      const oldId = oldIt._id ? String(oldIt._id) : (oldIt.id ? String(oldIt.id) : null);
+      if (!oldId) continue;
+
+      for (let j = 0; j < newItems.length; j++) {
+        if (matchedNewIndices.has(j)) continue;
+        const newIt = newItems[j];
+        const newId = newIt._id ? String(newIt._id) : (newIt.id ? String(newIt.id) : null);
+        if (newId && newId === oldId) {
+          matchedOldIndices.add(i);
+          matchedNewIndices.add(j);
+          checkItemModifications(oldIt, newIt, changes);
+          break;
+        }
+      }
+    }
+
+    // 2. Try exact matches (same productName and identical options summary)
+    for (let i = 0; i < oldItems.length; i++) {
+      if (matchedOldIndices.has(i)) continue;
+      const oldIt = oldItems[i];
+      const oldSumm = formatItemSummary(oldIt);
+
+      for (let j = 0; j < newItems.length; j++) {
+        if (matchedNewIndices.has(j)) continue;
+        const newIt = newItems[j];
+        const newSumm = formatItemSummary(newIt);
+
+        if (oldIt.productName === newIt.productName && oldSumm === newSumm) {
+          matchedOldIndices.add(i);
+          matchedNewIndices.add(j);
+          if (oldIt.quantity !== newIt.quantity) {
+            changes.push({
+              action: 'modified',
+              text: `${oldIt.productName} : Quantité modifiée (${oldIt.quantity}× ➔ ${newIt.quantity}×)`,
+              details: oldSumm || null,
+            });
+          }
+          break;
+        }
+      }
+    }
+
+    // 3. Match remaining items by productName
+    for (let i = 0; i < oldItems.length; i++) {
+      if (matchedOldIndices.has(i)) continue;
+      const oldIt = oldItems[i];
+
+      for (let j = 0; j < newItems.length; j++) {
+        if (matchedNewIndices.has(j)) continue;
+        const newIt = newItems[j];
+
+        if (oldIt.productName === newIt.productName) {
+          matchedOldIndices.add(i);
+          matchedNewIndices.add(j);
+          checkItemModifications(oldIt, newIt, changes);
+          break;
+        }
+      }
+    }
+
+    // 4. Any old items not matched were DELETED
+    for (let i = 0; i < oldItems.length; i++) {
+      if (!matchedOldIndices.has(i)) {
+        const it = oldItems[i];
+        const summ = formatItemSummary(it);
+        changes.push({
+          action: 'deleted',
+          text: `Supprimé : ${it.quantity}× ${it.productName}`,
+          details: summ || null,
+        });
+      }
+    }
+
+    // 5. Any new items not matched were ADDED
+    for (let j = 0; j < newItems.length; j++) {
+      if (!matchedNewIndices.has(j)) {
+        const it = newItems[j];
+        const summ = formatItemSummary(it);
+        changes.push({
+          action: 'added',
+          text: `Ajouté : ${it.quantity}× ${it.productName}`,
+          details: summ || null,
+        });
+      }
+    }
+  }
+
+  // Table check
+  const newTable = newBody.tableNumber !== undefined ? newBody.tableNumber : null;
+  const oldTable = oldOrder.tableNumber;
+  if (newTable !== null && String(newTable).trim() !== String(oldTable || '').trim()) {
+    changes.push({
+      action: 'table',
+      text: `Table : ${oldTable && String(oldTable).trim() ? 'Table ' + oldTable : 'Non assignée'} ➔ ${newTable && String(newTable).trim() ? 'Table ' + newTable : 'Non assignée'}`,
+    });
+  }
+
+  // Note check
+  if (newBody.notes !== undefined && (newBody.notes || '').trim() !== (oldOrder.notes || '').trim()) {
+    const noteText = (newBody.notes || '').trim();
+    changes.push({
+      action: 'note',
+      text: noteText ? `Note cuisine : "${noteText}"` : 'Note cuisine supprimée',
+    });
+  }
+
+  return changes;
+}
+
+// Merges existing order modifications with new incoming changes without losing previous modifications
+function mergeModifications(existingList, incomingList) {
+  const existing = (existingList || []).map((item) => ({
+    action: item.action || 'modified',
+    text: item.text,
+    details: item.details || null,
+  }));
+  const incoming = incomingList || [];
+
+  if (existing.length === 0) return incoming;
+  if (incoming.length === 0) return existing;
+
+  const result = [...existing];
+
+  for (const inc of incoming) {
+    if (!inc || !inc.text) continue;
+
+    const incAction = inc.action || 'modified';
+    const incText = inc.text;
+    const incDetails = inc.details || null;
+
+    // Check for exact duplicates
+    const isDup = result.some(
+      (e) => e.action === incAction && e.text === incText && (e.details || null) === incDetails
+    );
+    if (isDup) continue;
+
+    // Table action: update existing table change if present
+    if (incAction === 'table') {
+      const tableIdx = result.findIndex((e) => e.action === 'table');
+      if (tableIdx !== -1) {
+        const oldMatch = result[tableIdx].text.match(/Table\s*:\s*([^➔]+)➔/i);
+        const newMatch = incText.match(/➔\s*(.+)$/);
+        if (oldMatch && newMatch) {
+          result[tableIdx] = {
+            action: 'table',
+            text: `Table : ${oldMatch[1].trim()} ➔ ${newMatch[1].trim()}`,
+          };
+        } else {
+          result[tableIdx] = inc;
+        }
+      } else {
+        result.push(inc);
+      }
+      continue;
+    }
+
+    // Note action: update existing note change if present
+    if (incAction === 'note') {
+      const noteIdx = result.findIndex((e) => e.action === 'note');
+      if (noteIdx !== -1) {
+        result[noteIdx] = inc;
+      } else {
+        result.push(inc);
+      }
+      continue;
+    }
+
+    // Item actions
+    const incProd = cleanProductNameFromText(incText);
+    if (incProd) {
+      // If deleted, check if this item was previously marked as 'added'
+      const addedIdx = result.findIndex(
+        (e) => e.action === 'added' && cleanProductNameFromText(e.text) === incProd
+      );
+      if (incAction === 'deleted' && addedIdx !== -1) {
+        result[addedIdx] = {
+          action: 'deleted',
+          text: `Supprimé : ${incProd} (Annulé)`,
+          details: incDetails || result[addedIdx].details || null,
+        };
+        continue;
+      }
+
+      // If modified, check if this item was already modified
+      const modIdx = result.findIndex(
+        (e) => e.action === 'modified' && cleanProductNameFromText(e.text) === incProd
+      );
+      if (incAction === 'modified' && modIdx !== -1) {
+        result[modIdx] = inc;
+        continue;
+      }
+
+      // If deleted, check if this item was previously modified
+      if (incAction === 'deleted' && modIdx !== -1) {
+        result.splice(modIdx, 1);
+        result.push(inc);
+        continue;
+      }
+    }
+
+    // Default: append modification
+    result.push(inc);
+  }
+
+  return result;
+}
 
 // @desc  Update order (add items, change status, etc.)
 // @route PUT /api/orders/:id
@@ -242,12 +521,38 @@ exports.updateOrder = async (req, res) => {
       }
     }
 
+    // Compute changes before assigning req.body to order
+    const sessionChanges = computeOrderChanges(order, req.body);
+
+    const incomingSummary = (req.body.modificationSummary && Array.isArray(req.body.modificationSummary) && req.body.modificationSummary.length > 0)
+      ? req.body.modificationSummary
+      : null;
+
+    const existingSummary = (order.modificationSummary && order.modificationSummary.length > 0)
+      ? order.modificationSummary.map(m => (m.toObject ? m.toObject() : m))
+      : [];
+
+    let finalSummary = [];
+    if (incomingSummary) {
+      finalSummary = mergeModifications(existingSummary, incomingSummary);
+    } else if (sessionChanges.length > 0) {
+      finalSummary = mergeModifications(existingSummary, sessionChanges);
+    } else {
+      finalSummary = existingSummary;
+    }
+
+    // Preserve initialItems snapshot if not present
+    if (!order.initialItems || order.initialItems.length === 0) {
+      order.initialItems = order.items.slice();
+    }
+
     Object.assign(order, req.body);
     if (req.body.items) order.recalculateTotals();
 
     // Flag order as edited whenever updated from POS/history
     order.isEdited = true;
     order.editedAt = new Date();
+    order.modificationSummary = finalSummary;
 
     await order.save();
     res.json({ success: true, data: order });

@@ -118,6 +118,7 @@ class OrderDetailsPanel extends StatelessWidget {
               children: [
                 _buildInfoCard(mode),
                 const SizedBox(height: 16),
+                _buildModificationsCard(),
                 _buildKitchenNotesCard(),
                 _buildItemsCard(tvaPercent),
               ],
@@ -308,6 +309,108 @@ class OrderDetailsPanel extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModificationsCard() {
+    if (!order.isEdited || order.modificationSummary.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF87171), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.edit_note_rounded, size: 20, color: Color(0xFFDC2626)),
+              SizedBox(width: 8),
+              Text(
+                'MODIFICATIONS EFFECTUÉES',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFFDC2626),
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final m in order.modificationSummary) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    m.action == 'deleted'
+                        ? Icons.remove_circle
+                        : (m.action == 'added'
+                            ? Icons.add_circle
+                            : (m.action == 'table'
+                                ? Icons.table_restaurant
+                                : (m.action == 'note'
+                                    ? Icons.chat_bubble
+                                    : Icons.change_circle))),
+                    size: 15,
+                    color: m.action == 'deleted'
+                        ? const Color(0xFFDC2626)
+                        : (m.action == 'added'
+                            ? const Color(0xFF16A34A)
+                            : (m.action == 'table'
+                                ? const Color(0xFF2563EB)
+                                : (m.action == 'note'
+                                    ? const Color(0xFF7C3AED)
+                                    : const Color(0xFFD97706)))),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m.text,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: m.action == 'deleted'
+                                ? const Color(0xFFDC2626)
+                                : (m.action == 'added'
+                                    ? const Color(0xFF15803D)
+                                    : const Color(0xFF1F2937)),
+                            decoration: m.action == 'deleted'
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        if (m.details != null && m.details!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            m.details!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF4B5563),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

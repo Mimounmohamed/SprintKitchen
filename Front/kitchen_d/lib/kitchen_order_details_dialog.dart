@@ -348,41 +348,119 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
   Widget _buildEditedBanner() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFFEF2F2),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFF87171), width: 1.2),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.edit_note_rounded, size: 22, color: Color(0xFFDC2626)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'COMMANDE MODIFIÉE EN CAISSE',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFFDC2626),
-                    letterSpacing: 0.4,
-                  ),
+          Row(
+            children: const [
+              Icon(Icons.edit_note_rounded, size: 22, color: Color(0xFFDC2626)),
+              SizedBox(width: 8),
+              Text(
+                'DÉTAIL DES MODIFICATIONS (Caisse)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFFDC2626),
+                  letterSpacing: 0.4,
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Des articles, sauces ou remarques ont été modifiés après l\'envoi en cuisine. Veuillez vérifier attentivement la liste ci-dessous.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF991B1B),
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Voici les changements effectués sur cette commande après son envoi initial :',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF7F1D1D),
             ),
           ),
+          if (widget.order.modificationSummary.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final m in widget.order.modificationSummary) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: m.action == 'deleted'
+                        ? const Color(0xFFFECACA)
+                        : (m.action == 'added'
+                            ? const Color(0xFFBBF7D0)
+                            : const Color(0xFFE5E7EB)),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      m.action == 'deleted'
+                          ? Icons.remove_circle
+                          : (m.action == 'added'
+                              ? Icons.add_circle
+                              : (m.action == 'table'
+                                  ? Icons.table_restaurant
+                                  : (m.action == 'note'
+                                      ? Icons.chat_bubble
+                                      : Icons.change_circle))),
+                      size: 16,
+                      color: m.action == 'deleted'
+                          ? const Color(0xFFDC2626)
+                          : (m.action == 'added'
+                              ? const Color(0xFF16A34A)
+                              : (m.action == 'table'
+                                  ? const Color(0xFF2563EB)
+                                  : (m.action == 'note'
+                                      ? const Color(0xFF7C3AED)
+                                      : const Color(0xFFD97706)))),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            m.text,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: m.action == 'deleted'
+                                  ? const Color(0xFFDC2626)
+                                  : (m.action == 'added'
+                                      ? const Color(0xFF15803D)
+                                      : const Color(0xFF1F2937)),
+                              decoration: m.action == 'deleted'
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                          if (m.details != null && m.details!.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              m.details!,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF4B5563),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );

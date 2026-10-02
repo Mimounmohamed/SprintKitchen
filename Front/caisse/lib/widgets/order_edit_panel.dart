@@ -65,7 +65,11 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
   @override
   void initState() {
     super.initState();
-    _lines = widget.order.lines.map((l) => l.toTicketLine()).toList();
+    _lines = widget.order.lines.asMap().entries.map((entry) {
+      final line = entry.value.toTicketLine();
+      final lineId = entry.value.id ?? 'line_${entry.key}';
+      return line.copyWith(id: lineId);
+    }).toList();
     _orderType = _orderTypeFromApi(widget.order.orderType);
     _tableNumber = widget.order.tableNumber ?? widget.order.buzzerNumber;
     _clientName = widget.order.clientName ?? widget.order.deliveryName;
@@ -275,8 +279,11 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     );
 
     if (newLine != null && mounted) {
+      final lineWithId = newLine.copyWith(
+        id: 'new_${DateTime.now().microsecondsSinceEpoch}_${_lines.length}',
+      );
       setState(() {
-        _lines.add(newLine);
+        _lines.add(lineWithId);
       });
     }
   }
@@ -444,7 +451,298 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     }
   }
 
-  // ────────────────────────── Save modifications ──────────────────────────
+  String _formatHistoryOptions(HistoryOrderLine it) {
+    final parts = <String>[];
+    if (it.options.isNotEmpty) parts.addAll(it.options);
+    for (final r in it.removed) {
+      final clean = r.replaceFirst(RegExp(r'^sans\s+', caseSensitive: false), '').trim();
+      if (clean.isNotEmpty) parts.add('Sans $clean');
+    }
+    if (it.notes != null && it.notes!.trim().isNotEmpty) parts.add(it.notes!.trim());
+    return parts.join(' • ');
+  }
+
+  String _formatTicketLineOptions(TicketLine l) {
+    final parts = <String>[];
+    for (final c in l.customizations) {
+      for (final o in c.selectedOptions) {
+        parts.add(o.label);
+      }
+    }
+    for (final r in l.removedIngredients) {
+      final clean = r.replaceFirst(RegExp(r'^sans\s+', caseSensitive: false), '').trim();
+      if (clean.isNotEmpty) parts.add('Sans $clean');
+    }
+    if (l.notes != null && l.notes!.trim().isNotEmpty) parts.add(l.notes!.trim());
+    return parts.join(' • ');
+  }
+
+  void _checkItemDifferences(
+    HistoryOrderLine oldIt,
+    TicketLine newIt,
+    List<Map<String, dynamic>> changes,
+  ) {
+    final oldSumm = _formatHistoryOptions(oldIt);
+    final newSumm = _formatTicketLineOptions(newIt);
+    final detailsList = <String>[];
+
+    if (oldIt.quantity != newIt.quantity) {
+      detailsList.add('Quantité : ${oldIt.quantity}× ➔ ${newIt.quantity}×');
+    }
+    if (oldSumm != newSumm) {
+      detailsList.add('Nouvelles options : ${newSumm.isNotEmpty ? newSumm : "Aucune"}');
+    }
+
+    if (detailsList.isNotEmpty) {
+      changes.add({
+        'action': 'modified',
+        'text': 'Modifié : ${oldIt.name}',
+        'details': detailsList.join(' • '),
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> _computeChanges() {
+    final changes = <Map<String, dynamic>>[];
+    final initialLines = widget.order.lines;
+
+    final matchedInitialIndices = <int>{};
+    final matchedCurrentIndices = <int>{};
+
+    // 1. First, match lines that have the exact same non-empty ID
+    for (var i = 0; i < initialLines.length; i++) {
+      final oldIt = initialLines[i];
+      final oldId = oldIt.id;
+      if (oldId == null || oldId.isEmpty) continue;
+
+      for (var j = 0; j < _lines.length; j++) {
+        if (matchedCurrentIndices.contains(j)) continue;
+        final newIt = _lines[j];
+        if (newIt.id != null && newIt.id == oldId) {
+          matchedInitialIndices.add(i);
+          matchedCurrentIndices.add(j);
+          _checkItemDifferences(oldIt, newIt, changes);
+          break;
+        }
+      }
+    }
+
+    // 2. Exact match fallback for remaining lines (same name and identical options)
+    for (var i = 0; i < initialLines.length; i++) {
+      if (matchedInitialIndices.contains(i)) continue;
+      final oldIt = initialLines[i];
+      final oldSumm = _formatHistoryOptions(oldIt);
+
+      for (var j = 0; j < _lines.length; j++) {
+        if (matchedCurrentIndices.contains(j)) continue;
+        final newIt = _lines[j];
+        final newSumm = _formatTicketLineOptions(newIt);
+
+        if (oldIt.name.trim().toLowerCase() == newIt.name.trim().toLowerCase() && oldSumm == newSumm) {
+          matchedInitialIndices.add(i);
+          matchedCurrentIndices.add(j);
+          if (oldIt.quantity != newIt.quantity) {
+            changes.add({
+              'action': 'modified',
+              'text': '${oldIt.name} : Quantité modifiée (${oldIt.quantity}× ➔ ${newIt.quantity}×)',
+              if (oldSumm.isNotEmpty) 'details': oldSumm,
+            });
+          }
+          break;
+        }
+      }
+    }
+
+    // 3. Fallback matching remaining lines by product name
+    for (var i = 0; i < initialLines.length; i++) {
+      if (matchedInitialIndices.contains(i)) continue;
+      final oldIt = initialLines[i];
+
+      for (var j = 0; j < _lines.length; j++) {
+        if (matchedCurrentIndices.contains(j)) continue;
+        final newIt = _lines[j];
+
+        if (oldIt.name.trim().toLowerCase() == newIt.name.trim().toLowerCase()) {
+          matchedInitialIndices.add(i);
+          matchedCurrentIndices.add(j);
+          _checkItemDifferences(oldIt, newIt, changes);
+          break;
+        }
+      }
+    }
+
+    // 4. Any initial items not matched were DELETED
+    for (var i = 0; i < initialLines.length; i++) {
+      if (!matchedInitialIndices.contains(i)) {
+        final it = initialLines[i];
+        final summ = _formatHistoryOptions(it);
+        changes.add({
+          'action': 'deleted',
+          'text': 'Supprimé : ${it.quantity}× ${it.name}',
+          if (summ.isNotEmpty) 'details': summ,
+        });
+      }
+    }
+
+    // 5. Any current items not matched were ADDED
+    for (var j = 0; j < _lines.length; j++) {
+      if (!matchedCurrentIndices.contains(j)) {
+        final it = _lines[j];
+        final summ = _formatTicketLineOptions(it);
+        changes.add({
+          'action': 'added',
+          'text': 'Ajouté : ${it.quantity}× ${it.name}',
+          if (summ.isNotEmpty) 'details': summ,
+        });
+      }
+    }
+
+    // 6. Table check
+    final oldTable = widget.order.tableNumber ?? widget.order.buzzerNumber;
+    final currentTable = _tableNumber;
+    if (currentTable != null && currentTable.trim() != (oldTable ?? '').trim()) {
+      changes.add({
+        'action': 'table',
+        'text': 'Table : ${oldTable != null && oldTable.trim().isNotEmpty ? oldTable.trim() : "Non assignée"} ➔ ${currentTable.trim()}',
+      });
+    }
+
+    // 7. Notes check
+    final oldNote = (widget.order.notes ?? '').trim();
+    final newNote = (_notes ?? '').trim();
+    if (newNote != oldNote) {
+      changes.add({
+        'action': 'note',
+        'text': newNote.isNotEmpty ? 'Note cuisine : "$newNote"' : 'Note cuisine supprimée',
+      });
+    }
+
+    return changes;
+  }
+
+  List<Map<String, dynamic>> _mergeModifications(
+    List<OrderModification> existing,
+    List<Map<String, dynamic>> newChanges,
+  ) {
+    if (newChanges.isEmpty) {
+      return existing
+          .map((e) => <String, dynamic>{
+                'action': e.action,
+                'text': e.text,
+                if (e.details != null && e.details!.isNotEmpty)
+                  'details': e.details,
+              })
+          .toList();
+    }
+
+    final result = existing
+        .map((e) => <String, dynamic>{
+              'action': e.action,
+              'text': e.text,
+              if (e.details != null && e.details!.isNotEmpty)
+                'details': e.details,
+            })
+        .toList();
+
+    String cleanItemName(String text) {
+      return text
+          .replaceFirst(
+              RegExp(r'^(?:Modifié|Supprimé|Ajouté)\s*:\s*',
+                  caseSensitive: false),
+              '')
+          .replaceFirst(RegExp(r'^\d+×\s*'), '')
+          .replaceFirst(
+              RegExp(r'\s*:\s*Quantité modifiée.*$', caseSensitive: false), '')
+          .trim()
+          .toLowerCase();
+    }
+
+    for (final inc in newChanges) {
+      final incText = inc['text']?.toString() ?? '';
+      final incAction = inc['action']?.toString() ?? 'modified';
+      final incDetails = inc['details']?.toString();
+
+      if (incText.isEmpty) continue;
+
+      // Duplicate check
+      final isDup = result.any((e) =>
+          e['action'] == incAction &&
+          e['text'] == incText &&
+          (e['details'] ?? '') == (incDetails ?? ''));
+      if (isDup) continue;
+
+      // Table action: replace existing table change with new one
+      if (incAction == 'table') {
+        final tableIdx = result.indexWhere((e) => e['action'] == 'table');
+        if (tableIdx != -1) {
+          final oldMatch = RegExp(r'Table\s*:\s*([^➔]+)➔', caseSensitive: false)
+              .firstMatch(result[tableIdx]['text']?.toString() ?? '');
+          final newMatch = RegExp(r'➔\s*(.+)$').firstMatch(incText);
+          if (oldMatch != null && newMatch != null) {
+            result[tableIdx] = {
+              'action': 'table',
+              'text':
+                  'Table : ${oldMatch.group(1)!.trim()} ➔ ${newMatch.group(1)!.trim()}',
+            };
+          } else {
+            result[tableIdx] = inc;
+          }
+        } else {
+          result.add(inc);
+        }
+        continue;
+      }
+
+      // Note action: replace existing note change with new one
+      if (incAction == 'note') {
+        final noteIdx = result.indexWhere((e) => e['action'] == 'note');
+        if (noteIdx != -1) {
+          result[noteIdx] = inc;
+        } else {
+          result.add(inc);
+        }
+        continue;
+      }
+
+      // Item actions: check by product name
+      final incProd = cleanItemName(incText);
+      if (incProd.isNotEmpty) {
+        // If deleted, check if this item was previously marked as added
+        final addedIdx = result.indexWhere((e) =>
+            e['action'] == 'added' &&
+            cleanItemName(e['text']?.toString() ?? '') == incProd);
+        if (incAction == 'deleted' && addedIdx != -1) {
+          result[addedIdx] = {
+            'action': 'deleted',
+            'text': 'Supprimé : $incProd (Annulé)',
+            if (incDetails != null || result[addedIdx]['details'] != null)
+              'details': incDetails ?? result[addedIdx]['details'],
+          };
+          continue;
+        }
+
+        // If modified, check if this item was already modified
+        final modIdx = result.indexWhere((e) =>
+            e['action'] == 'modified' &&
+            cleanItemName(e['text']?.toString() ?? '') == incProd);
+        if (incAction == 'modified' && modIdx != -1) {
+          result[modIdx] = inc;
+          continue;
+        }
+
+        // If deleted, check if this item was previously modified
+        if (incAction == 'deleted' && modIdx != -1) {
+          result.removeAt(modIdx);
+          result.add(inc);
+          continue;
+        }
+      }
+
+      result.add(inc);
+    }
+
+    return result;
+  }
 
   Future<void> _saveModifications() async {
     if (_saving) return;
@@ -462,6 +760,12 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     setState(() => _saving = true);
 
     try {
+      final sessionDiff = _computeChanges();
+      final mergedSummary = _mergeModifications(
+        widget.order.modificationSummary,
+        sessionDiff,
+      );
+
       await _orderService.updateOrder(
         orderId: widget.order.id,
         lines: _lines,
@@ -472,6 +776,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
         deliveryAddress: _deliveryAddress,
         deliveryPhone: _deliveryPhone,
         notes: _notes,
+        modificationSummary: mergedSummary,
       );
 
       if (!mounted) return;

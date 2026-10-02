@@ -213,6 +213,43 @@ class KdsItem {
   }
 }
 
+class OrderModification {
+  final String action; // 'deleted', 'added', 'modified', 'table', 'note', 'general'
+  final String text;
+  final String? details;
+
+  const OrderModification({
+    required this.action,
+    required this.text,
+    this.details,
+  });
+
+  factory OrderModification.fromJson(dynamic j) {
+    if (j is String) {
+      final s = j.trim();
+      String act = 'modified';
+      if (s.toLowerCase().startsWith('supprim') || s.contains('❌')) {
+        act = 'deleted';
+      } else if (s.toLowerCase().startsWith('ajout') || s.contains('➕')) {
+        act = 'added';
+      } else if (s.toLowerCase().startsWith('table')) {
+        act = 'table';
+      } else if (s.toLowerCase().startsWith('note')) {
+        act = 'note';
+      }
+      return OrderModification(action: act, text: s);
+    }
+    if (j is Map) {
+      return OrderModification(
+        action: j['action']?.toString() ?? 'modified',
+        text: j['text']?.toString() ?? '',
+        details: j['details']?.toString(),
+      );
+    }
+    return const OrderModification(action: 'modified', text: '');
+  }
+}
+
 class KitchenOrder {
   final String id;
   final String ticketNumber;
@@ -230,6 +267,7 @@ class KitchenOrder {
   final String? clientName;
   final String? registerName;
   final bool isEdited;
+  final List<OrderModification> modificationSummary;
 
   KitchenOrder({
     required this.id,
@@ -248,6 +286,7 @@ class KitchenOrder {
     this.clientName,
     this.registerName,
     this.isEdited = false,
+    this.modificationSummary = const [],
   });
 
   factory KitchenOrder.fromJson(Map<String, dynamic> j) {
@@ -330,7 +369,10 @@ class KitchenOrder {
       totalTTC:     totalTTC,
       clientName:   (clientName != null && clientName.isNotEmpty) ? clientName : null,
       registerName: (registerName != null && registerName.isNotEmpty) ? registerName : null,
-      isEdited:     j['isEdited'] == true,
+      isEdited:     j['isEdited'] == true || (j['modificationSummary'] is List && (j['modificationSummary'] as List).isNotEmpty),
+      modificationSummary: (j['modificationSummary'] as List<dynamic>? ?? [])
+          .map((m) => OrderModification.fromJson(m))
+          .toList(),
     );
   }
 }
@@ -1016,46 +1058,112 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
                     Container(
                       width: double.infinity,
                       margin: EdgeInsets.only(bottom: r.fs(8)),
-                      padding: EdgeInsets.symmetric(
-                          horizontal: r.fs(8), vertical: r.fs(5)),
+                      padding: EdgeInsets.all(r.fs(7)),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFEF2F2),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
                             color: const Color(0xFFF87171), width: 1.2),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.edit_note_rounded,
-                            size: r.fs(16),
-                            color: const Color(0xFFDC2626),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.edit_note_rounded,
+                                size: r.fs(15),
+                                color: const Color(0xFFDC2626),
+                              ),
+                              SizedBox(width: r.fs(4)),
+                              Text(
+                                'MODIFICATIONS :',
+                                style: TextStyle(
+                                  fontSize: r.fs(9.5),
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFFDC2626),
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
                           ),
-                          SizedBox(width: r.fs(5)),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'COMMANDE MODIFIÉE',
-                                  style: TextStyle(
-                                    fontSize: r.fs(10),
-                                    fontWeight: FontWeight.w900,
-                                    color: const Color(0xFFDC2626),
-                                    letterSpacing: 0.3,
-                                  ),
+                          if (widget.order.modificationSummary.isNotEmpty) ...[
+                            SizedBox(height: r.fs(4)),
+                            for (final m in widget.order.modificationSummary) ...[
+                              Padding(
+                                padding: EdgeInsets.only(bottom: r.fs(3)),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      m.action == 'deleted'
+                                          ? Icons.remove_circle
+                                          : (m.action == 'added'
+                                              ? Icons.add_circle
+                                              : (m.action == 'table'
+                                                  ? Icons.table_restaurant
+                                                  : (m.action == 'note'
+                                                      ? Icons.chat_bubble
+                                                      : Icons.change_circle))),
+                                      size: r.fs(11),
+                                      color: m.action == 'deleted'
+                                          ? const Color(0xFFDC2626)
+                                          : (m.action == 'added'
+                                              ? const Color(0xFF16A34A)
+                                              : (m.action == 'table'
+                                                  ? const Color(0xFF2563EB)
+                                                  : (m.action == 'note'
+                                                      ? const Color(0xFF7C3AED)
+                                                      : const Color(0xFFD97706)))),
+                                    ),
+                                    SizedBox(width: r.fs(4)),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            m.text,
+                                            style: TextStyle(
+                                              fontSize: r.fs(9),
+                                              fontWeight: FontWeight.w800,
+                                              color: m.action == 'deleted'
+                                                  ? const Color(0xFFB91C1C)
+                                                  : (m.action == 'added'
+                                                      ? const Color(0xFF15803D)
+                                                      : const Color(0xFF1F2937)),
+                                              decoration: m.action == 'deleted'
+                                                  ? TextDecoration.lineThrough
+                                                  : null,
+                                            ),
+                                          ),
+                                          if (m.details != null && m.details!.isNotEmpty) ...[
+                                            Text(
+                                              m.details!,
+                                              style: TextStyle(
+                                                fontSize: r.fs(8.5),
+                                                fontWeight: FontWeight.w600,
+                                                color: const Color(0xFF4B5563),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  'Vérifier les articles et options',
-                                  style: TextStyle(
-                                    fontSize: r.fs(8.5),
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF991B1B),
-                                  ),
-                                ),
-                              ],
+                              ),
+                            ],
+                          ] else ...[
+                            SizedBox(height: r.fs(2)),
+                            Text(
+                              'Vérifier les articles et options ci-dessous',
+                              style: TextStyle(
+                                fontSize: r.fs(8.5),
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF991B1B),
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),

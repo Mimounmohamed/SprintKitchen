@@ -173,6 +173,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
 
     Navigator.of(context).pop(
       TicketLine(
+        id: widget.initialLine?.id,
         name: widget.item.name,
         subtitle: subtitleParts.isEmpty ? null : subtitleParts.join(', '),
         unitPrice: widget.item.price,
