@@ -960,88 +960,129 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
       ),
       padding: EdgeInsets.fromLTRB(pad, pad, pad, pad),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        /* ID + table badge + badge */
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(widget.order.ticketNumber, style: TextStyle(fontSize: r.fs(13.5),
-                  fontWeight: FontWeight.w800, color: isCrit ? C.red : C.ink)),
-              if (widget.order.tableNumber != null && widget.order.tableNumber!.isNotEmpty) ...[
-                SizedBox(width: r.fs(6)),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: const Color(0xFFBFDBFE), width: 0.8),
-                  ),
-                  child: Text(
-                    widget.order.tableNumber!.toUpperCase().startsWith('TABLE')
-                        ? widget.order.tableNumber!.toUpperCase()
-                        : 'TABLE ${widget.order.tableNumber}',
+        /* ID + table badge ────── Mode badge */
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Text(
+                    widget.order.ticketNumber,
                     style: TextStyle(
-                      fontSize: r.fs(9.5),
+                      fontSize: r.fs(13.5),
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1D4ED8),
-                      letterSpacing: 0.2,
+                      color: isCrit ? C.red : C.ink,
                     ),
                   ),
-                ),
-              ],
-              if (widget.order.isEdited) ...[
-                SizedBox(width: r.fs(6)),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: const Color(0xFFFCA5A5), width: 0.8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.edit, size: r.fs(9.5), color: const Color(0xFFDC2626)),
-                      const SizedBox(width: 3),
-                      Text(
-                        'MODIFIÉ',
-                        style: TextStyle(
-                          fontSize: r.fs(9.5),
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFFDC2626),
-                          letterSpacing: 0.3,
+                  if (widget.order.tableNumber != null && widget.order.tableNumber!.isNotEmpty) ...[
+                    SizedBox(width: r.fs(6)),
+                    Flexible(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(color: const Color(0xFFBFDBFE), width: 0.8),
+                        ),
+                        child: Text(
+                          widget.order.tableNumber!.toUpperCase().startsWith('TABLE')
+                              ? widget.order.tableNumber!.toUpperCase()
+                              : 'TABLE ${widget.order.tableNumber}',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: r.fs(9.5),
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1D4ED8),
+                            letterSpacing: 0.2,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+              decoration: BoxDecoration(color: b.bg, borderRadius: BorderRadius.circular(5)),
+              child: Text(
+                b.label,
+                style: TextStyle(
+                  fontSize: r.fs(9.5),
+                  fontWeight: FontWeight.w800,
+                  color: b.fg,
+                  letterSpacing: 0.1,
                 ),
-              ],
-            ],
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
-            decoration: BoxDecoration(color: b.bg, borderRadius: BorderRadius.circular(5)),
-            child: Text(b.label, style: TextStyle(fontSize: r.fs(9.5),
-                fontWeight: FontWeight.w800, color: b.fg, letterSpacing: 0.1)),
-          ),
-        ]),
+              ),
+            ),
+          ],
+        ),
         SizedBox(height: r.fs(4)),
-        /* Timer */
-        Row(children: [
-          Icon(
-            widget.order.status == OrderStatus.terminee
-                ? Icons.check_circle_outline_rounded
-                : Icons.access_time_rounded,
-            size: r.fs(12),
-            color: _timerColor,
-          ),
-          SizedBox(width: r.fs(4)),
-          Text(widget.order.note ?? _elapsedLabel,
-            style: TextStyle(fontSize: r.fs(11.5), fontWeight: FontWeight.w700,
-              color: _timerColor,
-              fontFeatures: widget.order.note == null
-                  ? const [FontFeature.tabularFigures()] : null)),
-        ]),
+        /* Timer ────── MODIFIÉ badge */
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Icon(
+                    widget.order.status == OrderStatus.terminee
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.access_time_rounded,
+                    size: r.fs(12),
+                    color: _timerColor,
+                  ),
+                  SizedBox(width: r.fs(4)),
+                  Flexible(
+                    child: Text(
+                      widget.order.note ?? _elapsedLabel,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: r.fs(11.5),
+                        fontWeight: FontWeight.w700,
+                        color: _timerColor,
+                        fontFeatures: widget.order.note == null
+                            ? const [FontFeature.tabularFigures()]
+                            : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (widget.order.isEdited) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: const Color(0xFFFCA5A5), width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit, size: r.fs(9.5), color: const Color(0xFFDC2626)),
+                    const SizedBox(width: 3),
+                    Text(
+                      'MODIFIÉ',
+                      style: TextStyle(
+                        fontSize: r.fs(9.5),
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFFDC2626),
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
         SizedBox(height: r.fs(8)),
         Divider(color: C.border, height: 1, thickness: 1),
         SizedBox(height: r.fs(8)),
