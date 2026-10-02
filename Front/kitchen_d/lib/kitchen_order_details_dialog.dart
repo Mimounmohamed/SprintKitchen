@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'kds_screen.dart';
+import 'services/kitchen_printer_service.dart';
+import 'widgets/kitchen_receipt_preview_dialog.dart';
 
 /* ─── Mode styling helper ─────────────────────────────────────────── */
 class _ModeStyle {
@@ -926,13 +928,21 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
           child: SizedBox(
             height: 44,
             child: OutlinedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Réimpression du bon cuisine envoyée'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+              onPressed: () async {
+                final ok = await KitchenPrinterService.directPrintKitchenSlip(widget.order);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(ok ? 'Bon cuisine imprimé directement.' : 'Impression lancée.'),
+                      backgroundColor: const Color(0xFF059669),
+                      action: SnackBarAction(
+                        label: 'APERÇU',
+                        textColor: Colors.white,
+                        onPressed: () => KitchenReceiptPreviewDialog.show(context, widget.order),
+                      ),
+                    ),
+                  );
+                }
               },
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF374151),
@@ -940,11 +950,29 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
-              icon: const Icon(Icons.restaurant_menu, size: 17),
+              icon: const Icon(Icons.print_outlined, size: 17),
               label: const Text(
-                'Réimprimer Bon Cuisine',
+                'Imprimer Bon Cuisine',
                 style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
               ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Tooltip(
+          message: 'Voir l\'aperçu du bon',
+          child: InkWell(
+            onTap: () => KitchenReceiptPreviewDialog.show(context, widget.order),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFD1D5DB), width: 1.2),
+              ),
+              child: const Icon(Icons.visibility_outlined, size: 20, color: Color(0xFF4B5563)),
             ),
           ),
         ),
