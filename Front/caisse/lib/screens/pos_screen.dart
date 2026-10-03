@@ -604,7 +604,7 @@ class _PosScreenState extends State<PosScreen> {
       SnackBar(
         content: Text(
           (result.method == PaymentMethod.especes
-              ? 'Paiement espèces enregistré — rendu ${result.change.toStringAsFixed(2).replaceAll('.', ',')} €'
+              ? 'Paiement espèces enregistré — rendu ${result.change.toStringAsFixed(2).replaceAll('.', ',')} DA'
               : 'Paiement carte enregistré') + printNotice,
         ),
         backgroundColor: const Color(0xFF059669),
@@ -1346,7 +1346,7 @@ class _PosScreenState extends State<PosScreen> {
                     ),
                   ),
                   Text(
-                    '${_total.toStringAsFixed(2).replaceAll('.', ',')} €',
+                    '${_total.toStringAsFixed(2).replaceAll('.', ',')} DA',
                     style: GoogleFonts.bebasNeue(
                       color: const Color(0xFF1F2937),
                       fontSize: 28,

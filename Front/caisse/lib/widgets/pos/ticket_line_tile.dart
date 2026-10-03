@@ -77,7 +77,7 @@ class TicketLineTile extends StatelessWidget {
             Expanded(
               flex: 2,
               child: Text(
-                '${line.total.toStringAsFixed(2).replaceAll('.', ',')} €',
+                '${line.total.toStringAsFixed(2).replaceAll('.', ',')} DA',
                 textAlign: TextAlign.right,
                 style: const TextStyle(
                   fontSize: 13,

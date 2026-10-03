@@ -280,7 +280,7 @@ class KitchenOrder {
     this.comment,
     this.tableNumber,
     this.subtotalHT = 0.0,
-    this.tvaRate = 10.0,
+    this.tvaRate = 0.0,
     this.tvaAmount = 0.0,
     this.totalTTC = 0.0,
     this.clientName,
@@ -341,11 +341,9 @@ class KitchenOrder {
         items.fold<double>(0.0, (sum, it) => sum + it.lineTotal);
     final double totalTTC =
         (j['totalTTC'] as num?)?.toDouble() ?? computedTotal;
-    final double tvaRate = (j['tvaRate'] as num?)?.toDouble() ?? 10.0;
-    final double tvaAmount = (j['tvaAmount'] as num?)?.toDouble() ??
-        (totalTTC > 0 ? (totalTTC - totalTTC / (1 + tvaRate / 100)) : 0.0);
-    final double subtotalHT = (j['subtotalHT'] as num?)?.toDouble() ??
-        (totalTTC - tvaAmount);
+    final double tvaRate = (j['tvaRate'] as num?)?.toDouble() ?? 0.0;
+    final double tvaAmount = (j['tvaAmount'] as num?)?.toDouble() ?? 0.0;
+    final double subtotalHT = (j['subtotalHT'] as num?)?.toDouble() ?? totalTTC;
     final clientName = j['clientName']?.toString();
     final registerName = j['registerId'] is Map
         ? (j['registerId'] as Map)['name']?.toString()

@@ -237,7 +237,7 @@ export default function SprintKitchenAdminHub() {
           pill={<Pill small bg="#F1F0EC" color={C.muted}>Clôture Z</Pill>}
           eyebrow="Rapports &amp; Stats" title="Rapports &amp; Statistiques"
           description="Analysez les ventes et exportez vos données."
-          checklist={<><ChecklistItem>Marges &amp; TVA</ChecklistItem><ChecklistItem>Export .CSV</ChecklistItem></>}
+          checklist={<><ChecklistItem>Marges &amp; Ventes</ChecklistItem><ChecklistItem>Export .CSV</ChecklistItem></>}
           cta="VOIR LES STATISTIQUES" ctaIcon={<ChevronRight size={15}/>} ctaStyle="secondary"
           onClick={() => navigate("/statistiques")}
         />
@@ -335,7 +335,7 @@ export default function SprintKitchenAdminHub() {
             pill={<Pill small bg="#F1F0EC" color={C.muted}>CLÔTURE Z &amp; FINANCES</Pill>}
             eyebrow="Rapports &amp; Stats" title="Rapports &amp; Statistiques"
             description="Analysez les ventes journalières, visualisez les produits les plus vendus et exportez vos données comptables."
-            checklist={<><ChecklistItem>Chiffre d'affaires et marges</ChecklistItem><ChecklistItem>Export TVA et rapports Z</ChecklistItem></>}
+            checklist={<><ChecklistItem>Chiffre d'affaires et marges</ChecklistItem><ChecklistItem>Export et rapports Z</ChecklistItem></>}
             cta="VOIR LES STATISTIQUES" ctaIcon={<ChevronRight size={16}/>} ctaStyle="secondary"
             onClick={() => navigate("/statistiques")}
           />

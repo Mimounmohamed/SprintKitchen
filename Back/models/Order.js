@@ -122,7 +122,7 @@ const OrderSchema = new mongoose.Schema(
     initialItems: [OrderItemSchema],
     // Financials
     subtotalHT: { type: Number, default: 0 },
-    tvaRate: { type: Number, default: 10 },
+    tvaRate: { type: Number, default: 0 },
     tvaAmount: { type: Number, default: 0 },
     totalTTC: { type: Number, default: 0 },
     // Discount
@@ -181,11 +181,9 @@ OrderSchema.methods.recalculateTotals = function () {
       this.totalTTC = Math.max(0, this.totalTTC - this.discount.value);
     }
   }
-  this.tvaAmount = parseFloat(
-    (this.totalTTC - this.totalTTC / (1 + this.tvaRate / 100)).toFixed(2)
-  );
-  this.subtotalHT = parseFloat((this.totalTTC - this.tvaAmount).toFixed(2));
   this.totalTTC = parseFloat(this.totalTTC.toFixed(2));
+  this.tvaAmount = 0;
+  this.subtotalHT = this.totalTTC;
 };
 
 OrderSchema.index({ storeId: 1, createdAt: -1 });

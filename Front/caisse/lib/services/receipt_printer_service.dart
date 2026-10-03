@@ -20,9 +20,9 @@ class PrintableReceiptData {
     this.serverName,
     this.notes,
     required this.items,
-    required this.subtotalHT,
-    this.tvaRate = 10.0,
-    required this.tvaAmount,
+    this.subtotalHT = 0.0,
+    this.tvaRate = 0.0,
+    this.tvaAmount = 0.0,
     required this.totalTTC,
     this.paymentMethod,
     this.amountReceived,
@@ -33,7 +33,7 @@ class PrintableReceiptData {
     this.storeSubtitle = 'RESTAURANT & FAST-FOOD',
     this.storeAddress = '14 Rue de la République, 75001 Paris',
     this.storePhone = '01 23 45 67 89',
-    this.storeSiret = 'SIRET 894 123 456 00012 • TVA FR 12 894123456',
+    this.storeSiret = 'SIRET 894 123 456 00012',
     this.footerMessage = 'Merci de votre visite et à très bientôt !',
   });
 
@@ -94,7 +94,7 @@ class PrintableReceiptData {
       for (final c in l.customizations) {
         for (final opt in c.selectedOptions) {
           if (opt.priceModifier > 0) {
-            opts.add('${opt.label} (+${opt.priceModifier.toStringAsFixed(2)} €)');
+            opts.add('${opt.label} (+${opt.priceModifier.toStringAsFixed(2)} DA)');
           } else {
             opts.add(opt.label);
           }
@@ -166,7 +166,7 @@ class PrintableReceiptData {
       for (final c in l.customizations) {
         for (final opt in c.selectedOptions) {
           if (opt.priceModifier > 0) {
-            opts.add('${opt.label} (+${opt.priceModifier.toStringAsFixed(2)} €)');
+            opts.add('${opt.label} (+${opt.priceModifier.toStringAsFixed(2)} DA)');
           } else {
             opts.add(opt.label);
           }
@@ -185,8 +185,8 @@ class PrintableReceiptData {
     }).toList();
 
     final total = lines.fold<double>(0.0, (sum, it) => sum + it.total);
-    final subHT = total / 1.10;
-    final tva = total - subHT;
+    final subHT = total;
+    final tva = 0.0;
 
     String typeStr = 'sur_place';
     if (orderType == OrderType.takeaway) typeStr = 'a_emporter';
@@ -240,7 +240,7 @@ class ReceiptPrinterService {
   static const String _keySelectedPrinter = 'sp_selected_printer';
   static const String _keyKitchenPrinter = 'sp_kitchen_printer';
 
-  static String _euro(num val) => '${val.toStringAsFixed(2).replaceAll('.', ',')} €';
+  static String _euro(num val) => '${val.toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   static String _fmtDate(DateTime d) {
     String two(int n) => n.toString().padLeft(2, '0');
@@ -501,26 +501,7 @@ class ReceiptPrinterService {
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('Sous-total H.T. :', style: const pw.TextStyle(fontSize: 8)),
-                  pw.Text(_euro(data.subtotalHT), style: const pw.TextStyle(fontSize: 8)),
-                ],
-              ),
-              pw.SizedBox(height: 2),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('T.V.A. (${data.tvaRate.toStringAsFixed(0)}%) :', style: const pw.TextStyle(fontSize: 8)),
-                  pw.Text(_euro(data.tvaAmount), style: const pw.TextStyle(fontSize: 8)),
-                ],
-              ),
-              pw.SizedBox(height: 3),
-              _dividerSolid(width: 1.2),
-              pw.SizedBox(height: 3),
-
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('TOTAL T.T.C.', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('TOTAL :', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
                   pw.Text(_euro(data.totalTTC), style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
                 ],
               ),
@@ -820,7 +801,7 @@ class ReceiptPrinterService {
                           pw.Padding(
                             padding: const pw.EdgeInsets.only(left: 32, bottom: 1),
                             child: pw.Text(
-                              '+ ${opt.replaceAll(RegExp(r'\s*\(\+?[0-9]+(?:[\.,][0-9]+)?\s*€\)', caseSensitive: false), '').trim()}',
+                              '+ ${opt.replaceAll(RegExp(r'\s*\(\+?[0-9]+(?:[\.,][0-9]+)?\s*(?:€|DA)\)', caseSensitive: false), '').trim()}',
                               style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                             ),
                           ),

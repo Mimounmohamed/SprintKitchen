@@ -92,8 +92,8 @@ class OrderService {
     // Safety net: never charge an amount the server computed differently.
     if ((created.totalTTC - expectedTotal).abs() > 0.01) {
       throw ApiException(
-        'Écart de total (caisse ${expectedTotal.toStringAsFixed(2)} € / '
-        'serveur ${created.totalTTC.toStringAsFixed(2)} €).',
+        'Écart de total (caisse ${expectedTotal.toStringAsFixed(2)} DA / '
+        'serveur ${created.totalTTC.toStringAsFixed(2)} DA).',
       );
     }
     return created;

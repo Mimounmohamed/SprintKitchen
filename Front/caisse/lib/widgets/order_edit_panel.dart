@@ -110,7 +110,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
   String _fmtDate(DateTime d) => '${_two(d.day)}/${_two(d.month)}/${d.year}';
   String _fmtTime(DateTime d) =>
       '${_two(d.hour)}:${_two(d.minute)}:${_two(d.second)}';
-  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} €';
+  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   _ModeStyle _modeStyle(String type) {
     switch (type) {
@@ -127,8 +127,6 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
   }
 
   double get _totalTTC => _lines.fold(0.0, (sum, l) => sum + l.total);
-  double get _subtotalHT => _totalTTC / 1.10;
-  double get _tvaAmount => _totalTTC - _subtotalHT;
 
   // ────────────────────────── In-place customization ──────────────────────────
 
@@ -1287,10 +1285,6 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
             padding: EdgeInsets.symmetric(vertical: 14),
             child: Divider(height: 1, color: Color(0xFFE5E7EB)),
           ),
-          _totalRow('Sous-total HT', _euro(_subtotalHT)),
-          const SizedBox(height: 4),
-          _totalRow('TVA (10%)', _euro(_tvaAmount)),
-          const SizedBox(height: 10),
           _totalRow('NOUVEAU TOTAL', _euro(_totalTTC), bold: true),
           if ((_totalTTC - widget.order.totalTTC).abs() > 0.01) ...[
             const SizedBox(height: 6),

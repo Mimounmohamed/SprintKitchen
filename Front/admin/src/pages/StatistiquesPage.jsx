@@ -324,7 +324,6 @@ export default function StatistiquesPage() {
   const ca = rz.totalTTC || 0;
   const tickets = rz.ticketCount || 0;
   const panier = rz.avgBasket || 0;
-  const tva = rz.totalTVA || 0;
 
   const salesByHour = summary?.salesByHour || [];
   const topProducts = summary?.topProducts || [];
@@ -534,31 +533,17 @@ export default function StatistiquesPage() {
               />
             </div>
 
-            {/* TVA summary row */}
-            {tva > 0 && (
+            {/* Annulations row */}
+            {rz.annulees && rz.annulees.count > 0 && (
               <div style={{ marginBottom: 16 }}>
                 <Card>
                   <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
                     <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: C.muted, textTransform: "uppercase", marginBottom: 3 }}>Total HT</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{fmtDA(rz.totalHT)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: C.muted, textTransform: "uppercase", marginBottom: 3 }}>TVA Collectée</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{fmtDA(tva)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: C.muted, textTransform: "uppercase", marginBottom: 3 }}>Total TTC</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{fmtDA(ca)}</div>
-                    </div>
-                    {rz.annulees && rz.annulees.count > 0 && (
-                      <div>
-                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: C.muted, textTransform: "uppercase", marginBottom: 3 }}>Annulations</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: C.red }}>
-                          {rz.annulees.count} ticket{rz.annulees.count > 1 ? "s" : ""} ({fmtDA(rz.annulees.amount)})
-                        </div>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: C.muted, textTransform: "uppercase", marginBottom: 3 }}>Annulations</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.red }}>
+                        {rz.annulees.count} ticket{rz.annulees.count > 1 ? "s" : ""} ({fmtDA(rz.annulees.amount)})
                       </div>
-                    )}
+                    </div>
                   </div>
                 </Card>
               </div>

@@ -131,7 +131,7 @@ async function seedDB() {
       country: 'France',
     },
     phone: '+33 1 00 00 00 00',
-    tvaRate: 10,
+    tvaRate: 0,
     services: [
       { name: 'Déjeuner', startTime: '11:00', endTime: '15:00', isActive: true },
       { name: 'Dîner',    startTime: '18:00', endTime: '23:00', isActive: true },
