@@ -164,23 +164,8 @@ class _PosScreenState extends State<PosScreen> {
       }
     }
 
-    return const [
-      CustomizationGroup(
-        name: 'Choix de la sauce',
-        type: 'multi',
-        isRequired: false,
-        minChoices: 0,
-        maxChoices: 3,
-        options: [
-          CustomizationOption(label: 'Algérienne', priceModifier: 0),
-          CustomizationOption(label: 'Burger', priceModifier: 0, isDefault: true),
-          CustomizationOption(label: 'Mayonnaise', priceModifier: 0),
-          CustomizationOption(label: 'Ketchup', priceModifier: 0),
-          CustomizationOption(label: 'Samourai', priceModifier: 0),
-          CustomizationOption(label: 'Barbecue', priceModifier: 0),
-        ],
-      ),
-    ];
+    // No hardcoded fallback: sauces only come from the "Sauces" category.
+    return const [];
   }
 
   Future<void> _editSelectedItem() async {
