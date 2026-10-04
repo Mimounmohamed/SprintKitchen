@@ -413,6 +413,8 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
         _orderNotes = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        showCloseIcon: true,
+        closeIconColor: Colors.white,
         backgroundColor: const Color(0xFF059669),
         content: Text('Commande${savedTable != null ? ' table $savedTable' : ''} envoyée en cuisine !'),
       ));

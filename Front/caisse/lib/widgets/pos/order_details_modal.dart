@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/order_models.dart' show OccupiedTableInfo;
 import '../../models/pos_models.dart';
@@ -149,12 +150,21 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
     }
   }
 
+  String _formatTableTwoDigits(String raw) {
+    final clean = raw.toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
+    final n = int.tryParse(clean);
+    if (n != null) {
+      return n.toString().padLeft(2, '0');
+    }
+    return clean;
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     Navigator.of(context).pop(
       OrderDetailsResult(
         tableNumber: widget.orderType == OrderType.dineIn
-            ? _tableController.text.trim()
+            ? _formatTableTwoDigits(_tableController.text.trim())
             : null,
         clientName: widget.orderType == OrderType.takeaway
             ? _clientController.text.trim()
@@ -313,15 +323,21 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
             const SizedBox(height: 8),
             _field(
               controller: _tableController,
-              hint: 'ex. 5',
+              hint: 'ex. 05',
               icon: Icons.table_restaurant_outlined,
-              keyboardType: TextInputType.text,
+              keyboardType: TextInputType.number,
               autofocus: true,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(2),
+              ],
+              maxLength: 2,
               validator: (v) {
                 if (v == null || v.trim().isEmpty) {
                   return 'Le numéro de table est requis';
                 }
-                final clean = v.trim().toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
+                final clean = v.trim();
+                final cleanNum = int.tryParse(clean);
                 final occupied = _occupiedTables.cast<OccupiedTableInfo?>().firstWhere(
                   (t) {
                     if (t == null) return false;
@@ -332,12 +348,16 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                       return false;
                     }
                     final tClean = t.tableNumber.toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
-                    return tClean == clean;
+                    final tNum = int.tryParse(tClean);
+                    if (cleanNum != null && tNum != null) {
+                      return cleanNum == tNum;
+                    }
+                    return tClean == clean.toLowerCase();
                   },
                   orElse: () => null,
                 );
                 if (occupied != null) {
-                  return 'Table occupée (Commande active #${occupied.ticketNumber})';
+                  return 'Table $clean déjà occupée';
                 }
                 return null;
               },
@@ -388,25 +408,37 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 6,
-                      runSpacing: 4,
-                      children: _occupiedTables.map((t) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(5),
-                            border: Border.all(color: const Color(0xFFFCA5A5)),
-                          ),
-                          child: Text(
-                            'Table ${t.tableNumber} (#${t.ticketNumber})',
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFB91C1C),
+                      runSpacing: 6,
+                      children: () {
+                        final sorted = List<OccupiedTableInfo>.from(_occupiedTables)
+                          ..sort((a, b) {
+                            final cleanA = a.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
+                            final cleanB = b.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
+                            final numA = int.tryParse(cleanA) ?? 0;
+                            final numB = int.tryParse(cleanB) ?? 0;
+                            return numA.compareTo(numB);
+                          });
+                        return sorted.map((t) {
+                          final twoDigits = _formatTableTwoDigits(t.tableNumber);
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFFCA5A5)),
                             ),
-                          ),
-                        );
-                      }).toList(),
+                            child: Text(
+                              twoDigits,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFFB91C1C),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          );
+                        }).toList();
+                      }(),
                     ),
                   ],
                 ),
@@ -500,12 +532,19 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
     required IconData icon,
     TextInputType? keyboardType,
     bool autofocus = false,
+    List<TextInputFormatter>? inputFormatters,
+    int? maxLength,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       autofocus: autofocus,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      maxLength: maxLength,
+      buildCounter: maxLength != null
+          ? (context, {required currentLength, required isFocused, maxLength}) => null
+          : null,
       validator: validator,
       style: GoogleFonts.openSans(fontSize: 14, color: AppColors.textPrimary),
       decoration: InputDecoration(

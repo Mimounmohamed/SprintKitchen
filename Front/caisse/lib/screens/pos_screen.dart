@@ -587,6 +587,8 @@ class _PosScreenState extends State<PosScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        showCloseIcon: true,
+        closeIconColor: Colors.white,
         content: Text(
           (result.method == PaymentMethod.especes
               ? 'Paiement espèces enregistré — rendu ${result.change.toStringAsFixed(2).replaceAll('.', ',')} DA'

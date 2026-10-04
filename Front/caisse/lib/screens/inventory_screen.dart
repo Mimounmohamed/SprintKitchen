@@ -3,11 +3,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/inventory_models.dart';
 import '../services/inventory_service.dart';
 import '../theme/app_colors.dart';
-import '../widgets/inventory/family_modal.dart';
 import '../widgets/inventory/ingredient_modal.dart';
 
 /// "Disponibilité des articles" — availability toggling for ingredients,
-/// grouped by family, with add/edit/delete for both.
+/// grouped by family. Cashier can only add ingredients and mark them unavailable / available.
 ///
 /// Open it from the Hub with:
 /// Navigator.of(context).push(
@@ -23,8 +22,6 @@ class InventoryScreen extends StatefulWidget {
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
-  // Tints the shared AppColors palette doesn't have, matching the web
-  // admin's local C object exactly.
   static const Color _greenBg = Color(0xFFE8F8EF);
   static const Color _greenText = Color(0xFF1A7A45);
   static const Color _epuiseBg = Color(0xFFFDF7F6);
@@ -182,33 +179,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     _loadFamilyStats();
   }
 
-  Future<void> _openFamilyModal({IngredientFamily? family, required bool mobile}) async {
-    final result = await showFamilyModal(context, family: family, mobile: mobile);
-    if (result == null) return;
-
-    if (result.deletedId != null) {
-      setState(() {
-        _families = _families.where((f) => f.id != result.deletedId).toList();
-        if (_activeFamily == family?.slug) {
-          _activeFamily = _families.isNotEmpty ? _families.first.slug : null;
-        }
-      });
-      if (_activeFamily != null) _loadIngredients();
-    } else if (result.family != null) {
-      final saved = result.family!;
-      setState(() {
-        if (result.isNew) {
-          _families = [..._families, saved]
-            ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
-          _activeFamily = saved.slug;
-        } else {
-          _families = _families.map((f) => f.id == saved.id ? saved : f).toList();
-        }
-      });
-      if (result.isNew) _loadIngredients();
-    }
-  }
-
   // ─────────────────────────── computed ───────────────────────────
 
   List<Ingredient> get _filtered {
@@ -260,10 +230,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Widget _buildHeader(bool mobile) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: mobile ? 14 : 28, vertical: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
       ),
       child: Row(
         children: [
@@ -271,21 +241,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
             onTap: () => Navigator.of(context).maybePop(),
             borderRadius: BorderRadius.circular(8),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: const Color(0xFFD1D5DB)),
               ),
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.arrow_back, size: 13, color: AppColors.ink),
-                  const SizedBox(width: 7),
+                  Icon(Icons.arrow_back, size: 14, color: Color(0xFF374151)),
+                  SizedBox(width: 8),
                   Text(
                     "Retour à l'accueil",
-                    style: GoogleFonts.inter(
-                        fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink),
+                    style: TextStyle(
+                      color: Color(0xFF374151),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -296,39 +269,51 @@ class _InventoryScreenState extends State<InventoryScreen> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: AppColors.brown,
+              color: const Color(0xFF583926),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Center(child: Text('🍔', style: TextStyle(fontSize: 14))),
-          ),
-          if (!mobile) ...[
-            const SizedBox(width: 9),
-            Text(
-              'SPRINTKITCHEN',
-              style: GoogleFonts.inter(
-                  fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.3, color: AppColors.ink),
+            child: const Center(
+              child: Icon(Icons.restaurant_rounded,
+                  color: Color(0xFFFACC15), size: 17),
             ),
-          ],
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'SPRINTKITCHEN',
+            style: GoogleFonts.bebasNeue(
+              fontSize: 22,
+              letterSpacing: 1.2,
+              color: const Color(0xFF111827),
+            ),
+          ),
           const Spacer(),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: AppColors.border),
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(color: AppColors.green, shape: BoxShape.circle),
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10B981),
+                    shape: BoxShape.circle,
+                  ),
                 ),
-                const SizedBox(width: 6),
-                Text(widget.posteLabel,
-                    style: GoogleFonts.inter(
-                        fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                const SizedBox(width: 8),
+                Text(
+                  widget.posteLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
               ],
             ),
           ),
@@ -339,85 +324,155 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Widget _buildTitleBar(bool mobile) {
     return Container(
-      padding: EdgeInsets.fromLTRB(mobile ? 16 : 28, mobile ? 14 : 18, mobile ? 16 : 28, mobile ? 12 : 14),
-      color: AppColors.background,
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(mobile ? 16 : 32, 20, mobile ? 16 : 32, 18),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+      ),
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
         crossAxisAlignment: WrapCrossAlignment.center,
         spacing: 16,
-        runSpacing: 12,
+        runSpacing: 14,
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'DISPONIBILITÉ DES ARTICLES',
-                  style: GoogleFonts.bebasNeue(
-                      fontSize: mobile ? 28 : 34, letterSpacing: 0.6, color: AppColors.ink, height: 1),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Activez ou désactivez les ingrédients en stock sur la caisse POS et les bornes en temps réel.',
-                  style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.muted),
-                ),
-              ],
-            ),
-          ),
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'DISPONIBILITÉ DES ARTICLES',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.6,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('•',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                  ),
+                  Text(
+                    'SYNCHRONISÉ POS & BORNES',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: Color(0xFF059669),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'DISPONIBILITÉ DES ARTICLES',
+                style: GoogleFonts.bebasNeue(
+                  fontSize: mobile ? 28 : 34,
+                  letterSpacing: 0.5,
+                  color: const Color(0xFF111827),
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Activez ou désactivez les ingrédients en stock sur la caisse POS et les bornes en temps réel.',
+                style: TextStyle(fontSize: 12.5, color: Color(0xFF6B7280)),
+              ),
+            ],
+          ),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 10,
+            runSpacing: 8,
+            children: [
               Container(
-                width: mobile ? 220 : 300,
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 3),
+                width: mobile ? 200 : 260,
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  border: Border.all(color: AppColors.border),
+                  color: const Color(0xFFF9FAFB),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.search, size: 15, color: AppColors.muted),
+                    const Icon(Icons.search, size: 16, color: Color(0xFF9CA3AF)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
                         controller: _searchController,
                         onChanged: (_) => setState(() {}),
-                        style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.ink),
-                        decoration: InputDecoration(
+                        style: const TextStyle(fontSize: 12.5, color: Color(0xFF1F2937)),
+                        decoration: const InputDecoration(
                           isDense: true,
                           border: InputBorder.none,
                           hintText: 'Rechercher un ingrédient…',
-                          hintStyle: GoogleFonts.inter(fontSize: 12.5, color: AppColors.muted),
+                          hintStyle: TextStyle(fontSize: 12.5, color: Color(0xFF9CA3AF)),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
               InkWell(
                 onTap: _refreshAll,
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    border: Border.all(color: AppColors.border),
+                    color: const Color(0xFFF9FAFB),
+                    border: Border.all(color: const Color(0xFFD1D5DB)),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.refresh, size: 14, color: AppColors.ink),
+                      const Icon(Icons.refresh, size: 14, color: Color(0xFF374151)),
                       if (!mobile) ...[
                         const SizedBox(width: 7),
-                        Text('Actualiser',
-                            style: GoogleFonts.inter(
-                                fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                        const Text(
+                          'Actualiser',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
                       ],
+                    ],
+                  ),
+                ),
+              ),
+              InkWell(
+                onTap: () => _openIngredientModal(mobile: mobile),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFACC15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFEAB308)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 16, color: Color(0xFF1F2937)),
+                      SizedBox(width: 6),
+                      Text(
+                        'Ajouter un ingrédient',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -430,14 +485,33 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Widget _buildBody(bool mobile) {
+    if (_familiesError != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 36, color: Color(0xFFEF4444)),
+            const SizedBox(height: 10),
+            Text('Erreur de chargement: $_familiesError',
+                style: const TextStyle(color: Color(0xFF6B7280))),
+            const SizedBox(height: 14),
+            ElevatedButton(
+              onPressed: _refreshAll,
+              child: const Text('Réessayer'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(mobile ? 14 : 28, 12, mobile ? 14 : 28, 24),
+      padding: EdgeInsets.fromLTRB(mobile ? 16 : 32, 20, mobile ? 16 : 32, 24),
       child: mobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildMobileFamilyTabs(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 _buildRightPanel(mobile: true),
               ],
             )
@@ -445,7 +519,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildSidebar(),
-                const SizedBox(width: 16),
+                const SizedBox(width: 20),
                 Expanded(child: _buildRightPanel(mobile: false)),
               ],
             ),
@@ -456,10 +530,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Widget _buildSidebar() {
     return Container(
-      width: 240,
+      width: 250,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -468,24 +542,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 13, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
+              border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
             ),
-            child: Text(
+            child: const Text(
               "FAMILLES D'INGRÉDIENTS",
-              style: GoogleFonts.inter(
-                  fontSize: 9.5, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.muted),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: Color(0xFF6B7280),
+              ),
             ),
           ),
           if (_loadingFamilies)
             const Padding(
-              padding: EdgeInsets.all(20),
+              padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
             )
           else
             ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 480),
+              constraints: const BoxConstraints(maxHeight: 520),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Column(
@@ -493,29 +571,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ),
               ),
             ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.border)),
-            ),
-            child: InkWell(
-              onTap: () => _openFamilyModal(mobile: false),
-              borderRadius: BorderRadius.circular(7),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
-                child: Row(
-                  children: [
-                    const Text('+', style: TextStyle(fontSize: 15, color: AppColors.muted)),
-                    const SizedBox(width: 5),
-                    Text('Nouvelle famille',
-                        style: GoogleFonts.inter(
-                            fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.muted)),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -528,72 +583,87 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return InkWell(
       onTap: () => _selectFamily(fam.slug),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
         child: active
             ? Container(
-                margin: const EdgeInsets.symmetric(vertical: 1),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(color: AppColors.brown, borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF583926),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Row(
                   children: [
                     Text(fam.emoji, style: const TextStyle(fontSize: 14)),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(fam.name,
-                          style: GoogleFonts.inter(
-                              fontSize: 12.5, fontWeight: FontWeight.w700, color: const Color(0xFFF5F0E6))),
+                      child: Text(
+                        fam.name,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFF5F0E6),
+                        ),
+                      ),
                     ),
                     if (stat.epuise > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration:
-                            BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(4)),
-                        child: Text('${stat.total} articles',
-                            style: GoogleFonts.inter(
-                                fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD9720C),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${stat.epuise} épuisé',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                    _editPencil(() => _openFamilyModal(family: fam, mobile: false)),
                   ],
                 ),
               )
             : Padding(
-                padding: const EdgeInsets.symmetric(vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: Row(
                   children: [
                     Text(fam.emoji, style: const TextStyle(fontSize: 13)),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(fam.name,
-                          style: GoogleFonts.inter(
-                              fontSize: 12.5, fontWeight: FontWeight.w500, color: AppColors.ink)),
+                      child: Text(
+                        fam.name,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
                     ),
                     if (stat.epuise > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration:
-                            BoxDecoration(color: _orangeChipBg, borderRadius: BorderRadius.circular(4)),
-                        child: Text('${stat.epuise} épuisé',
-                            style: GoogleFonts.inter(
-                                fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.orange)),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF0E0),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${stat.epuise} épuisé',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFD9720C),
+                          ),
+                        ),
                       )
                     else if (stat.total > 0)
-                      Text('Tous dispo',
-                          style: GoogleFonts.inter(fontSize: 11, color: AppColors.muted)),
-                    _editPencil(() => _openFamilyModal(family: fam, mobile: false)),
+                      const Text(
+                        'Tous dispo',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                      ),
                   ],
                 ),
               ),
-      ),
-    );
-  }
-
-  Widget _editPencil(VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.only(left: 6),
-        child: Icon(Icons.edit_outlined, size: 14, color: AppColors.muted.withValues(alpha: 0.85)),
       ),
     );
   }
@@ -602,7 +672,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Widget _buildMobileFamilyTabs() {
     return SizedBox(
-      height: 34,
+      height: 36,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _families.length,
@@ -617,9 +687,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: active ? AppColors.brown : AppColors.surface,
+                color: active ? const Color(0xFF583926) : AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
-                border: active ? null : Border.all(color: AppColors.border),
+                border: active ? null : Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -628,21 +698,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   const SizedBox(width: 5),
                   Text(
                     fam.name.split(' ').first,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: active ? const Color(0xFFF5F0E6) : AppColors.ink,
+                      color: active ? const Color(0xFFF5F0E6) : const Color(0xFF1F2937),
                     ),
                   ),
                   if (stat.epuise > 0) ...[
                     const SizedBox(width: 5),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                      decoration:
-                          BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(3)),
-                      child: Text('${stat.epuise}',
-                          style: GoogleFonts.inter(
-                              fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD9720C),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(
+                        '${stat.epuise}',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -664,7 +741,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.antiAlias,
@@ -674,13 +751,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
+              border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
             ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 10,
-              runSpacing: 8,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -691,21 +765,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     Text(
                       _activeFamilyObj?.name ?? '—',
                       style: GoogleFonts.bebasNeue(
-                          fontSize: mobile ? 20 : 24, letterSpacing: 0.5, color: AppColors.ink),
+                          fontSize: mobile ? 20 : 24, letterSpacing: 0.5, color: const Color(0xFF111827)),
                     ),
                     if (!_loadingIngredients && filtered.isNotEmpty)
                       RichText(
                         text: TextSpan(
-                          style: GoogleFonts.inter(fontSize: 12, color: AppColors.muted),
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                           children: [
                             TextSpan(
                               text: '$dispoCount disponibles',
-                              style: const TextStyle(color: AppColors.green, fontWeight: FontWeight.w600),
+                              style: const TextStyle(color: Color(0xFF059669), fontWeight: FontWeight.w600),
                             ),
                             if (epuiseCount > 0)
                               TextSpan(
                                 text: ' · $epuiseCount épuisés',
-                                style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w600),
+                                style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w600),
                               ),
                           ],
                         ),
@@ -715,17 +789,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 if (!mobile)
                   InkWell(
                     onTap: () => _openIngredientModal(mobile: false),
-                    borderRadius: BorderRadius.circular(7),
+                    borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        border: Border.all(color: AppColors.border),
-                        borderRadius: BorderRadius.circular(7),
+                        color: const Color(0xFFFACC15),
+                        border: Border.all(color: const Color(0xFFEAB308)),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text('+ Ajouter un ingrédient',
-                          style: GoogleFonts.inter(
-                              fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add, size: 15, color: Color(0xFF1F2937)),
+                          SizedBox(width: 6),
+                          Text(
+                            '+ Ajouter un ingrédient',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
               ],
@@ -747,12 +833,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     _searchController.text.isNotEmpty
                         ? 'Aucun ingrédient pour "${_searchController.text}"'
                         : 'Aucun ingrédient dans cette famille',
-                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.muted),
+                    style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
                   ),
                   if (_searchController.text.isEmpty) ...[
                     const SizedBox(height: 6),
-                    Text('Cliquez sur "Ajouter un ingrédient" pour commencer',
-                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.muted)),
+                    const Text('Cliquez sur "Ajouter un ingrédient" pour commencer',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
                   ],
                 ],
               ),
@@ -772,11 +858,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         color: ing.isEpuise ? _epuiseBg : AppColors.surface,
-        border: isLast ? null : const Border(bottom: BorderSide(color: AppColors.border)),
+        border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
       ),
       child: Row(
         children: [
-          Icon(Icons.circle, size: 9, color: ing.isEpuise ? AppColors.red : const Color(0xFFB5B0A8)),
+          Icon(Icons.circle, size: 9, color: ing.isEpuise ? const Color(0xFFEF4444) : const Color(0xFF10B981)),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -787,14 +873,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: ing.isEpuise ? _dimText : AppColors.ink,
+                    color: ing.isEpuise ? _dimText : const Color(0xFF111827),
                     decoration: ing.isEpuise ? TextDecoration.lineThrough : null,
                   ),
                 ),
                 if (ing.unit.isNotEmpty)
                   Text(
                     'Unité : ${ing.unit}${ing.notes != null && ing.notes!.isNotEmpty ? " · ${ing.notes}" : ""}',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.muted),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                   ),
               ],
             ),
@@ -803,37 +889,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
             SizedBox(
               width: 140,
               child: ing.isBloque
-                  ? Column(
+                  ? const Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text('Bloqué Caisse & Bne',
-                            style: GoogleFonts.inter(
-                                fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.red)),
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFEF4444))),
                         Text('Ingrédient bloqué',
-                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.muted)),
+                            style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
                       ],
                     )
                   : Text(
                       ing.notes?.isNotEmpty == true ? ing.notes! : 'Rupture de stock',
                       textAlign: TextAlign.right,
-                      style: GoogleFonts.inter(fontSize: 11, color: AppColors.muted),
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
                     ),
             ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: () => _openIngredientModal(ingredient: ing, mobile: false),
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.border),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.edit_outlined, size: 14, color: AppColors.muted),
-            ),
-          ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
           _toggleButton(ing, mobile: false),
         ],
       ),
@@ -846,8 +918,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
       decoration: BoxDecoration(
         color: ing.isEpuise ? _epuiseBg : AppColors.surface,
         border: Border(
-          bottom: isLast ? BorderSide.none : const BorderSide(color: AppColors.border),
-          left: BorderSide(color: ing.isEpuise ? AppColors.red : Colors.transparent, width: 3),
+          bottom: isLast ? BorderSide.none : const BorderSide(color: Color(0xFFE5E7EB)),
+          left: BorderSide(color: ing.isEpuise ? const Color(0xFFEF4444) : Colors.transparent, width: 3),
         ),
       ),
       child: Column(
@@ -862,7 +934,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
+                    color: const Color(0xFF111827),
                     decoration: ing.isEpuise ? TextDecoration.lineThrough : null,
                   ),
                 ),
@@ -879,16 +951,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     fontSize: 9.5,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.4,
-                    color: ing.isEpuise ? AppColors.red : _greenText,
+                    color: ing.isEpuise ? const Color(0xFFEF4444) : _greenText,
                   ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              InkWell(
-                onTap: () => _openIngredientModal(ingredient: ing, mobile: true),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  child: Icon(Icons.edit_outlined, size: 15, color: AppColors.muted),
                 ),
               ),
             ],
@@ -901,22 +965,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   if (ing.unit.isNotEmpty) 'Unité : ${ing.unit}',
                   if (ing.notes?.isNotEmpty ?? false) ing.notes!,
                 ].join(' · '),
-                style: GoogleFonts.inter(fontSize: 12, color: AppColors.muted),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
             ),
           if (ing.isEpuise)
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: ing.isBloque
-                  ? Wrap(
+                  ? const Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 6,
                       children: [
                         Text('Bloqué Caisse & Bne',
-                            style: GoogleFonts.inter(
-                                fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.red)),
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFEF4444))),
                         Text('· Ingrédient bloqué',
-                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.muted)),
+                            style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
                       ],
                     )
                   : Container(
@@ -925,8 +989,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           BoxDecoration(color: _orangeChipBg, borderRadius: BorderRadius.circular(6)),
                       child: Text(
                         '⚠  ${ing.notes?.isNotEmpty == true ? ing.notes! : "Rupture de stock"}',
-                        style: GoogleFonts.inter(
-                            fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.orange),
+                        style: const TextStyle(
+                            fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFFD9720C)),
                       ),
                     ),
             ),
@@ -952,16 +1016,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
         padding: EdgeInsets.symmetric(horizontal: mobile ? 0 : 18, vertical: mobile ? 11 : 9),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: epuise ? AppColors.ink : _greenBg,
+          color: epuise ? const Color(0xFF1C1917) : _greenBg,
           borderRadius: BorderRadius.circular(mobile ? 9 : 8),
-          border: (!epuise && mobile) ? Border.all(color: AppColors.green, width: 1.5) : null,
+          border: (!epuise && mobile) ? Border.all(color: const Color(0xFF059669), width: 1.5) : null,
         ),
         child: Opacity(
           opacity: loading ? 0.6 : 1,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.circle, size: 7, color: epuise ? const Color(0xFFE03C31) : AppColors.green),
+              Icon(Icons.circle, size: 7, color: epuise ? const Color(0xFFE03C31) : const Color(0xFF059669)),
               const SizedBox(width: 8),
               Text(
                 epuise
@@ -984,39 +1048,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Widget _buildMobileBulkButtons() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 20),
-      child: Column(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => _openIngredientModal(mobile: true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.gold,
-                foregroundColor: AppColors.brown,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: const Text('+ Ajouter un ingrédient',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            ),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () => _openIngredientModal(mobile: true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFFACC15),
+            foregroundColor: const Color(0xFF1F2937),
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => _openFamilyModal(mobile: true),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.muted,
-                side: const BorderSide(color: AppColors.border),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add, size: 16),
+              SizedBox(width: 6),
+              Text(
+                'Ajouter un ingrédient',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               ),
-              child: const Text('+ Nouvelle famille',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1026,7 +1080,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+        border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1036,15 +1090,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
               Container(
                 width: 6,
                 height: 6,
-                decoration: const BoxDecoration(color: AppColors.green, shape: BoxShape.circle),
+                decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
               ),
               const SizedBox(width: 6),
               Text('Connecté',
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF111827))),
             ],
           ),
           Text('SprintKitchen OS v2.4.0-PROD',
-              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.muted)),
+              style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFF6B7280))),
         ],
       ),
     );
