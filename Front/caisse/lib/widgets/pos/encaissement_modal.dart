@@ -12,12 +12,14 @@ class EncaissementResult {
     required this.amountReceived,
     required this.change,
     required this.printReceipt,
+    this.printKitchenReceipt = false,
   });
 
   final PaymentMethod method;
   final double amountReceived;
   final double change;
   final bool printReceipt;
+  final bool printKitchenReceipt;
 }
 
 /// The "ENCAISSEMENT — TICKET N° ..." payment dialog.
@@ -58,6 +60,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
   PaymentMethod _method = PaymentMethod.especes;
   int _receivedCents = 0;
   bool _printReceipt = true;
+  bool _printKitchenReceipt = true;
 
   int get _dueCents => (widget.total * 100).round();
 
@@ -118,10 +121,10 @@ class _EncaissementModalState extends State<EncaissementModal> {
   }
 
   String _fmt(num value) =>
-      '${(value / 100).toStringAsFixed(2).replaceAll('.', ',')} €';
+      '${(value / 100).toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   String _fmtEuros(double value) =>
-      '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
+      '${value.toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   void _validate() {
     if (!_isValid) return;
@@ -133,6 +136,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
             : _received,
         change: _method == PaymentMethod.carte ? 0 : _change,
         printReceipt: _printReceipt,
+        printKitchenReceipt: _printKitchenReceipt,
       ),
     );
   }
@@ -364,7 +368,94 @@ class _EncaissementModalState extends State<EncaissementModal> {
           subtitle: 'Terminal Pinpad connecté',
           trailing: _fmtEuros(widget.total),
         ),
+        const SizedBox(height: 18),
+        const Text(
+          'IMPRESSION DIRECTE (SANS VALIDATION)',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textMuted,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _printToggleTile(
+          icon: Icons.print_outlined,
+          title: 'Ticket Client Direct',
+          subtitle: 'Avec logo & détail complet',
+          value: _printReceipt,
+          onChanged: (v) => setState(() => _printReceipt = v),
+        ),
+        const SizedBox(height: 8),
+        _printToggleTile(
+          icon: Icons.restaurant_menu,
+          title: 'Bon Cuisine Direct',
+          subtitle: 'Production cuisine (Sans prix)',
+          value: _printKitchenReceipt,
+          onChanged: (v) => setState(() => _printKitchenReceipt = v),
+        ),
       ],
+    );
+  }
+
+  Widget _printToggleTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: value ? const Color(0xFFF9FAFB) : AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: value ? AppColors.brandDark.withValues(alpha: 0.4) : AppColors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: value ? AppColors.brandDark : AppColors.textMuted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: value ? AppColors.textPrimary : AppColors.textMuted,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: AppColors.brandDark,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

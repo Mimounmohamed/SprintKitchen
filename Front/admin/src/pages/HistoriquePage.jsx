@@ -263,14 +263,10 @@ function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
         <hr/>
         ${itemsHtml}
         <hr/>
-        <div class="row"><span>Sous-total HT</span><span>${fmtPrice(ord.subtotalHT)}</span></div>
-        <div class="row"><span>TVA (10%)</span><span>${fmtPrice(ord.tvaAmount)}</span></div>
-        <hr/>
         <div class="row" style="font-size:16px;font-weight:bold;margin:6px 0">
           <span>TOTAL PAYÉ</span>
           <span>${fmtPrice(ord.totalTTC)}</span>
         </div>
-        <div class="center" style="font-size:10px;color:#555">TOUTES TAXES COMPRISES</div>
         <hr/>
         <div class="row"><span>Mode de règlement</span><span class="bold">${paymentLabel}</span></div>
         ${payment?.change ? `<div class="row"><span>Rendu monnaie</span><span>${fmtPrice(payment.change)}</span></div>` : ''}
@@ -334,7 +330,7 @@ function printSessionCloture({ summary, range }) {
         <div class="row"><span>Commandes annulées :</span><span>${counts.annulee || 0}</span></div>
         <hr/>
         <div class="row" style="font-size:15px;font-weight:bold;margin:8px 0">
-          <span>TOTAL SESSION (TTC) :</span>
+          <span>TOTAL SESSION :</span>
           <span>${fmtPrice(totalRev)}</span>
         </div>
         <hr/>
@@ -400,7 +396,6 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
     [ord.delivery?.postalCode, ord.delivery?.city].filter(Boolean).join(' ')
   ].filter(Boolean);
   const addressDisplay = addressParts.length > 0 ? addressParts.join(', ') : '—';
-  const tvaPercent = ord.subtotalHT > 0 ? ((ord.tvaAmount || 0) / ord.subtotalHT) * 100 : 10;
   const paymentLabel = payment ? PAYMENT_LABELS[payment.method] || payment.method : null;
 
   return (
@@ -760,31 +755,15 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
 
                 <div style={{ height: 1, background: COLORS.border, margin: '14px 0' }} />
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: COLORS.ink }}>Sous-total HT</span>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: COLORS.ink }}>{fmtPrice(ord.subtotalHT)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: COLORS.ink }}>
-                    TVA ({tvaPercent.toFixed(1)}%)
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: COLORS.ink }}>{fmtPrice(ord.tvaAmount)}</span>
-                </div>
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'baseline',
-                    paddingTop: 10,
-                    borderTop: `1px solid ${COLORS.stone200}`,
+                    paddingTop: 4,
                   }}
                 >
-                  <div>
-                    <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.brandDark }}>TOTAL PAYÉ</span>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.stone400, letterSpacing: '0.4px', marginTop: 2 }}>
-                      TOUTES TAXES COMPRISES
-                    </div>
-                  </div>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.brandDark }}>TOTAL PAYÉ</span>
                   <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.brandDark }}>
                     {fmtPrice(ord.totalTTC)}
                   </span>

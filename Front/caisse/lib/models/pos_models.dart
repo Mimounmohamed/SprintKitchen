@@ -208,6 +208,7 @@ class AppliedCustomization {
 /// A line item currently in the active ticket.
 class TicketLine {
   TicketLine({
+    this.id,
     required this.name,
     required this.unitPrice,
     this.subtitle,
@@ -219,6 +220,7 @@ class TicketLine {
     this.notes,
   });
 
+  final String? id;
   final String name;
   final String? subtitle;
   final double unitPrice;
@@ -228,6 +230,32 @@ class TicketLine {
   final List<AppliedCustomization> customizations;
   final List<String> removedIngredients;
   final String? notes;
+
+  TicketLine copyWith({
+    String? id,
+    String? name,
+    String? subtitle,
+    double? unitPrice,
+    int? quantity,
+    String? productId,
+    double? extrasTotal,
+    List<AppliedCustomization>? customizations,
+    List<String>? removedIngredients,
+    String? notes,
+  }) {
+    return TicketLine(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      subtitle: subtitle ?? this.subtitle,
+      unitPrice: unitPrice ?? this.unitPrice,
+      quantity: quantity ?? this.quantity,
+      productId: productId ?? this.productId,
+      extrasTotal: extrasTotal ?? this.extrasTotal,
+      customizations: customizations ?? this.customizations,
+      removedIngredients: removedIngredients ?? this.removedIngredients,
+      notes: notes ?? this.notes,
+    );
+  }
 
   /// (base price + selected extras) * quantity — matches how
   /// Order.items[].lineTotal is computed server-side.

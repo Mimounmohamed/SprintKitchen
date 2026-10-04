@@ -6,8 +6,10 @@ import '../models/order_models.dart';
 import '../services/history_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/order_details_panel.dart';
+import '../widgets/order_edit_panel.dart';
 import '../widgets/date_range_popover.dart';
-import 'pos_screen.dart';
+import '../services/receipt_printer_service.dart';
+import '../widgets/receipt_preview_dialog.dart';
 
 /// "Historique des ventes" — list of past orders, filtered by status tab,
 /// date range and search, with pagination.
@@ -223,7 +225,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _fmtTime(DateTime d) =>
       '${_two(d.hour)}:${_two(d.minute)}:${_two(d.second)}';
   String _fmtLong(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
-  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} €';
+  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   _ModeStyle _modeStyle(String type) {
     switch (type) {
@@ -924,14 +926,86 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   _detailsButton(o, selected),
                   if (selected) ...[
                     const SizedBox(width: 10),
-                    InkWell(
-                      onTap: () => _comingSoon('Impression du ticket'),
-                      borderRadius: BorderRadius.circular(6),
-                      child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(Icons.print_outlined,
-                            size: 18, color: _stone600),
-                      ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Imprimer / Aperçu',
+                      icon: const Icon(Icons.print_outlined, size: 18, color: _stone600),
+                      padding: EdgeInsets.zero,
+                      splashRadius: 18,
+                      onSelected: (val) async {
+                        final data = PrintableReceiptData.fromHistoryOrder(o);
+                        if (val == 'client_direct') {
+                          final ok = await ReceiptPrinterService.printClientReceiptDirect(data);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(ok
+                                    ? 'Ticket client #${o.ticketNumber} envoyé directement à l\'imprimante.'
+                                    : 'Impression du ticket client lancée.'),
+                                backgroundColor: const Color(0xFF059669),
+                                action: SnackBarAction(
+                                  label: 'VOIR',
+                                  textColor: Colors.white,
+                                  onPressed: () => ReceiptPreviewDialog.show(context, data),
+                                ),
+                              ),
+                            );
+                          }
+                        } else if (val == 'kitchen_direct') {
+                          final ok = await ReceiptPrinterService.printKitchenReceiptDirect(data);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(ok
+                                    ? 'Bon cuisine #${o.ticketNumber} envoyé directement à l\'imprimante.'
+                                    : 'Impression du bon cuisine lancée.'),
+                                backgroundColor: const Color(0xFF059669),
+                                action: SnackBarAction(
+                                  label: 'VOIR',
+                                  textColor: Colors.white,
+                                  onPressed: () => ReceiptPreviewDialog.show(context, data, initialShowKitchen: true),
+                                ),
+                              ),
+                            );
+                          }
+                        } else if (val == 'preview') {
+                          ReceiptPreviewDialog.show(context, data);
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        const PopupMenuItem(
+                          value: 'client_direct',
+                          child: Row(
+                            children: [
+                              Icon(Icons.print, size: 18, color: Color(0xFF1E293B)),
+                              SizedBox(width: 10),
+                              Text('Imprimer Ticket Client (Direct)',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'kitchen_direct',
+                          child: Row(
+                            children: [
+                              Icon(Icons.restaurant_menu, size: 18, color: Color(0xFF1E293B)),
+                              SizedBox(width: 10),
+                              Text('Imprimer Bon Cuisine (Direct)',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                        const PopupMenuItem(
+                          value: 'preview',
+                          child: Row(
+                            children: [
+                              Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF4B5563)),
+                              SizedBox(width: 10),
+                              Text('Aperçu du Ticket', style: TextStyle(fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     if (o.status != 'terminee' && o.status != 'annulee') ...[
                       const SizedBox(width: 8),
@@ -1168,24 +1242,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _modifyOrder(HistoryOrder o) {
-    if (widget.onOrderEdit != null) {
-      widget.onOrderEdit!(o);
-    } else {
-      Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => PosScreen(
-            editingOrder: o,
-            ticketNumber: o.ticketNumber,
-            posteLabel: widget.posteLabel,
-          ),
-        ),
-      ).then((res) {
-        if (res == true && mounted) {
+    showOrderEditPanel(
+      context,
+      o,
+      posteLabel: widget.posteLabel,
+      onOrderUpdated: () {
+        if (mounted) {
           _loadOrders(keepData: true);
           _loadSummary();
         }
-      });
-    }
+      },
+    );
   }
 
   void _showDetails(HistoryOrder o) => showOrderDetailsPanel(

@@ -213,6 +213,43 @@ class KdsItem {
   }
 }
 
+class OrderModification {
+  final String action; // 'deleted', 'added', 'modified', 'table', 'note', 'general'
+  final String text;
+  final String? details;
+
+  const OrderModification({
+    required this.action,
+    required this.text,
+    this.details,
+  });
+
+  factory OrderModification.fromJson(dynamic j) {
+    if (j is String) {
+      final s = j.trim();
+      String act = 'modified';
+      if (s.toLowerCase().startsWith('supprim') || s.contains('❌')) {
+        act = 'deleted';
+      } else if (s.toLowerCase().startsWith('ajout') || s.contains('➕')) {
+        act = 'added';
+      } else if (s.toLowerCase().startsWith('table')) {
+        act = 'table';
+      } else if (s.toLowerCase().startsWith('note')) {
+        act = 'note';
+      }
+      return OrderModification(action: act, text: s);
+    }
+    if (j is Map) {
+      return OrderModification(
+        action: j['action']?.toString() ?? 'modified',
+        text: j['text']?.toString() ?? '',
+        details: j['details']?.toString(),
+      );
+    }
+    return const OrderModification(action: 'modified', text: '');
+  }
+}
+
 class KitchenOrder {
   final String id;
   final String ticketNumber;
@@ -230,6 +267,7 @@ class KitchenOrder {
   final String? clientName;
   final String? registerName;
   final bool isEdited;
+  final List<OrderModification> modificationSummary;
 
   KitchenOrder({
     required this.id,
@@ -242,12 +280,13 @@ class KitchenOrder {
     this.comment,
     this.tableNumber,
     this.subtotalHT = 0.0,
-    this.tvaRate = 10.0,
+    this.tvaRate = 0.0,
     this.tvaAmount = 0.0,
     this.totalTTC = 0.0,
     this.clientName,
     this.registerName,
     this.isEdited = false,
+    this.modificationSummary = const [],
   });
 
   factory KitchenOrder.fromJson(Map<String, dynamic> j) {
@@ -302,11 +341,9 @@ class KitchenOrder {
         items.fold<double>(0.0, (sum, it) => sum + it.lineTotal);
     final double totalTTC =
         (j['totalTTC'] as num?)?.toDouble() ?? computedTotal;
-    final double tvaRate = (j['tvaRate'] as num?)?.toDouble() ?? 10.0;
-    final double tvaAmount = (j['tvaAmount'] as num?)?.toDouble() ??
-        (totalTTC > 0 ? (totalTTC - totalTTC / (1 + tvaRate / 100)) : 0.0);
-    final double subtotalHT = (j['subtotalHT'] as num?)?.toDouble() ??
-        (totalTTC - tvaAmount);
+    final double tvaRate = (j['tvaRate'] as num?)?.toDouble() ?? 0.0;
+    final double tvaAmount = (j['tvaAmount'] as num?)?.toDouble() ?? 0.0;
+    final double subtotalHT = (j['subtotalHT'] as num?)?.toDouble() ?? totalTTC;
     final clientName = j['clientName']?.toString();
     final registerName = j['registerId'] is Map
         ? (j['registerId'] as Map)['name']?.toString()
@@ -330,7 +367,10 @@ class KitchenOrder {
       totalTTC:     totalTTC,
       clientName:   (clientName != null && clientName.isNotEmpty) ? clientName : null,
       registerName: (registerName != null && registerName.isNotEmpty) ? registerName : null,
-      isEdited:     j['isEdited'] == true,
+      isEdited:     j['isEdited'] == true || (j['modificationSummary'] is List && (j['modificationSummary'] as List).isNotEmpty),
+      modificationSummary: (j['modificationSummary'] as List<dynamic>? ?? [])
+          .map((m) => OrderModification.fromJson(m))
+          .toList(),
     );
   }
 }
@@ -853,6 +893,10 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
 
   Color get _borderColor {
     if (widget.order.status == OrderStatus.terminee) return C.border;
+    if (widget.order.isEdited) {
+      if (_urgency == Urgency.critical) return C.red;
+      return const Color(0xFFF87171);
+    }
     switch (_urgency) {
       case Urgency.critical: return C.red;
       case Urgency.warning:  return C.orange;
@@ -907,94 +951,136 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
         color: bg,
         borderRadius: BorderRadius.circular(r.w < 800 ? 10 : 12),
         border: Border.all(
-            color: _borderColor, width: _urgency == Urgency.normal ? 1 : 1.8),
+            color: _borderColor,
+            width: (widget.order.isEdited || _urgency != Urgency.normal) ? 1.8 : 1),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 6, offset: const Offset(0, 2))],
       ),
       padding: EdgeInsets.fromLTRB(pad, pad, pad, pad),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        /* ID + table badge + badge */
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(widget.order.ticketNumber, style: TextStyle(fontSize: r.fs(13.5),
-                  fontWeight: FontWeight.w800, color: isCrit ? C.red : C.ink)),
-              if (widget.order.tableNumber != null && widget.order.tableNumber!.isNotEmpty) ...[
-                SizedBox(width: r.fs(6)),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: const Color(0xFFBFDBFE), width: 0.8),
-                  ),
-                  child: Text(
-                    widget.order.tableNumber!.toUpperCase().startsWith('TABLE')
-                        ? widget.order.tableNumber!.toUpperCase()
-                        : 'TABLE ${widget.order.tableNumber}',
+        /* ID + table badge ────── Mode badge */
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Text(
+                    widget.order.ticketNumber,
                     style: TextStyle(
-                      fontSize: r.fs(9.5),
+                      fontSize: r.fs(13.5),
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1D4ED8),
-                      letterSpacing: 0.2,
+                      color: isCrit ? C.red : C.ink,
                     ),
                   ),
-                ),
-              ],
-              if (widget.order.isEdited) ...[
-                SizedBox(width: r.fs(6)),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: const Color(0xFFFCA5A5), width: 0.8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.edit, size: r.fs(9.5), color: const Color(0xFFDC2626)),
-                      const SizedBox(width: 3),
-                      Text(
-                        'MODIFIÉ',
-                        style: TextStyle(
-                          fontSize: r.fs(9.5),
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFFDC2626),
-                          letterSpacing: 0.3,
+                  if (widget.order.tableNumber != null && widget.order.tableNumber!.isNotEmpty) ...[
+                    SizedBox(width: r.fs(6)),
+                    Flexible(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(color: const Color(0xFFBFDBFE), width: 0.8),
+                        ),
+                        child: Text(
+                          widget.order.tableNumber!.toUpperCase().startsWith('TABLE')
+                              ? widget.order.tableNumber!.toUpperCase()
+                              : 'TABLE ${widget.order.tableNumber}',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: r.fs(9.5),
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1D4ED8),
+                            letterSpacing: 0.2,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+              decoration: BoxDecoration(color: b.bg, borderRadius: BorderRadius.circular(5)),
+              child: Text(
+                b.label,
+                style: TextStyle(
+                  fontSize: r.fs(9.5),
+                  fontWeight: FontWeight.w800,
+                  color: b.fg,
+                  letterSpacing: 0.1,
                 ),
-              ],
-            ],
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
-            decoration: BoxDecoration(color: b.bg, borderRadius: BorderRadius.circular(5)),
-            child: Text(b.label, style: TextStyle(fontSize: r.fs(9.5),
-                fontWeight: FontWeight.w800, color: b.fg, letterSpacing: 0.1)),
-          ),
-        ]),
+              ),
+            ),
+          ],
+        ),
         SizedBox(height: r.fs(4)),
-        /* Timer */
-        Row(children: [
-          Icon(
-            widget.order.status == OrderStatus.terminee
-                ? Icons.check_circle_outline_rounded
-                : Icons.access_time_rounded,
-            size: r.fs(12),
-            color: _timerColor,
-          ),
-          SizedBox(width: r.fs(4)),
-          Text(widget.order.note ?? _elapsedLabel,
-            style: TextStyle(fontSize: r.fs(11.5), fontWeight: FontWeight.w700,
-              color: _timerColor,
-              fontFeatures: widget.order.note == null
-                  ? const [FontFeature.tabularFigures()] : null)),
-        ]),
+        /* Timer ────── MODIFIÉ badge */
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Icon(
+                    widget.order.status == OrderStatus.terminee
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.access_time_rounded,
+                    size: r.fs(12),
+                    color: _timerColor,
+                  ),
+                  SizedBox(width: r.fs(4)),
+                  Flexible(
+                    child: Text(
+                      widget.order.note ?? _elapsedLabel,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: r.fs(11.5),
+                        fontWeight: FontWeight.w700,
+                        color: _timerColor,
+                        fontFeatures: widget.order.note == null
+                            ? const [FontFeature.tabularFigures()]
+                            : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (widget.order.isEdited) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: r.fs(6), vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: const Color(0xFFFCA5A5), width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit, size: r.fs(9.5), color: const Color(0xFFDC2626)),
+                    const SizedBox(width: 3),
+                    Text(
+                      'MODIFIÉ',
+                      style: TextStyle(
+                        fontSize: r.fs(9.5),
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFFDC2626),
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
         SizedBox(height: r.fs(8)),
         Divider(color: C.border, height: 1, thickness: 1),
         SizedBox(height: r.fs(8)),
@@ -1007,6 +1093,120 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.order.isEdited) ...[
+                    Container(
+                      width: double.infinity,
+                      margin: EdgeInsets.only(bottom: r.fs(8)),
+                      padding: EdgeInsets.all(r.fs(7)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: const Color(0xFFF87171), width: 1.2),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.edit_note_rounded,
+                                size: r.fs(15),
+                                color: const Color(0xFFDC2626),
+                              ),
+                              SizedBox(width: r.fs(4)),
+                              Text(
+                                'MODIFICATIONS :',
+                                style: TextStyle(
+                                  fontSize: r.fs(9.5),
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFFDC2626),
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (widget.order.modificationSummary.isNotEmpty) ...[
+                            SizedBox(height: r.fs(4)),
+                            for (final m in widget.order.modificationSummary) ...[
+                              Padding(
+                                padding: EdgeInsets.only(bottom: r.fs(3)),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      m.action == 'deleted'
+                                          ? Icons.remove_circle
+                                          : (m.action == 'added'
+                                              ? Icons.add_circle
+                                              : (m.action == 'table'
+                                                  ? Icons.table_restaurant
+                                                  : (m.action == 'note'
+                                                      ? Icons.chat_bubble
+                                                      : Icons.change_circle))),
+                                      size: r.fs(11),
+                                      color: m.action == 'deleted'
+                                          ? const Color(0xFFDC2626)
+                                          : (m.action == 'added'
+                                              ? const Color(0xFF16A34A)
+                                              : (m.action == 'table'
+                                                  ? const Color(0xFF2563EB)
+                                                  : (m.action == 'note'
+                                                      ? const Color(0xFF7C3AED)
+                                                      : const Color(0xFFD97706)))),
+                                    ),
+                                    SizedBox(width: r.fs(4)),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            m.text,
+                                            style: TextStyle(
+                                              fontSize: r.fs(9),
+                                              fontWeight: FontWeight.w800,
+                                              color: m.action == 'deleted'
+                                                  ? const Color(0xFFB91C1C)
+                                                  : (m.action == 'added'
+                                                      ? const Color(0xFF15803D)
+                                                      : const Color(0xFF1F2937)),
+                                              decoration: m.action == 'deleted'
+                                                  ? TextDecoration.lineThrough
+                                                  : null,
+                                            ),
+                                          ),
+                                          if (m.details != null && m.details!.isNotEmpty) ...[
+                                            Text(
+                                              m.details!,
+                                              style: TextStyle(
+                                                fontSize: r.fs(8.5),
+                                                fontWeight: FontWeight.w600,
+                                                color: const Color(0xFF4B5563),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ] else ...[
+                            SizedBox(height: r.fs(2)),
+                            Text(
+                              'Vérifier les articles et options ci-dessous',
+                              style: TextStyle(
+                                fontSize: r.fs(8.5),
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF991B1B),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                   if (widget.order.comment != null && widget.order.comment!.isNotEmpty) ...[
                     Container(
                       width: double.infinity,

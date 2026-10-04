@@ -92,8 +92,8 @@ class OrderService {
     // Safety net: never charge an amount the server computed differently.
     if ((created.totalTTC - expectedTotal).abs() > 0.01) {
       throw ApiException(
-        'Écart de total (caisse ${expectedTotal.toStringAsFixed(2)} € / '
-        'serveur ${created.totalTTC.toStringAsFixed(2)} €).',
+        'Écart de total (caisse ${expectedTotal.toStringAsFixed(2)} DA / '
+        'serveur ${created.totalTTC.toStringAsFixed(2)} DA).',
       );
     }
     return created;
@@ -111,10 +111,14 @@ class OrderService {
     String? deliveryAddress,
     String? deliveryPhone,
     String? notes,
+    List<Map<String, dynamic>>? modificationSummary,
   }) async {
     final body = <String, dynamic>{
       'orderType': _orderTypeToApi(orderType),
       'items': lines.map(_lineToJson).toList(),
+      'isEdited': true,
+      if (modificationSummary != null && modificationSummary.isNotEmpty)
+        'modificationSummary': modificationSummary,
     };
 
     if (notes != null) {
@@ -253,6 +257,8 @@ class OrderService {
       m == PaymentMethod.especes ? 'especes' : 'carte_bancaire';
 
   Map<String, dynamic> _lineToJson(TicketLine l) => {
+        if (l.id != null && l.id!.isNotEmpty && !l.id!.startsWith('new_') && !l.id!.startsWith('line_'))
+          '_id': l.id,
         if (l.productId != null && l.productId!.trim().isNotEmpty)
           'productId': l.productId!.trim(),
         'productName': l.name,

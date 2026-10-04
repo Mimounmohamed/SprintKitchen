@@ -173,6 +173,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
 
     Navigator.of(context).pop(
       TicketLine(
+        id: widget.initialLine?.id,
         name: widget.item.name,
         subtitle: subtitleParts.isEmpty ? null : subtitleParts.join(', '),
         unitPrice: widget.item.price,
@@ -187,7 +188,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
   }
 
   String _money(num value) =>
-      '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
+      '${value.toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   /// Renders options evenly in a single row when they fit, or wraps them
   /// into rows scrollable from UP to DOWN when there are extra elements.

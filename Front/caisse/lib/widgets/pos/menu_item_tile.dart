@@ -53,7 +53,7 @@ class MenuItemTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${item.price.toStringAsFixed(2).replaceAll('.', ',')} €',
+                        '${item.price.toStringAsFixed(2).replaceAll('.', ',')} DA',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontWeight: FontWeight.w900,

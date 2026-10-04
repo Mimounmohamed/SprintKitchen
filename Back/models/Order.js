@@ -58,6 +58,21 @@ const DeliveryDetailsSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// ── Modification item schema (tracks specific changes made to an order) ────
+const ModificationItemSchema = new mongoose.Schema(
+  {
+    action: {
+      type: String,
+      enum: ['deleted', 'added', 'modified', 'table', 'note', 'general'],
+      default: 'modified',
+    },
+    text: { type: String, required: true },
+    details: String,
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 // ── Counter schema for auto-incrementing ticket numbers ───────────────────────
 const CounterSchema = new mongoose.Schema({
   _id: String,
@@ -103,9 +118,11 @@ const OrderSchema = new mongoose.Schema(
     delivery: DeliveryDetailsSchema,
     // Order lines
     items: [OrderItemSchema],
+    // Snapshot of original items when order was first opened / sent
+    initialItems: [OrderItemSchema],
     // Financials
     subtotalHT: { type: Number, default: 0 },
-    tvaRate: { type: Number, default: 10 },
+    tvaRate: { type: Number, default: 0 },
     tvaAmount: { type: Number, default: 0 },
     totalTTC: { type: Number, default: 0 },
     // Discount
@@ -133,6 +150,7 @@ const OrderSchema = new mongoose.Schema(
     // Order modified after initial submission
     isEdited: { type: Boolean, default: false },
     editedAt: Date,
+    modificationSummary: [ModificationItemSchema],
   },
   { timestamps: true }
 );
@@ -163,11 +181,9 @@ OrderSchema.methods.recalculateTotals = function () {
       this.totalTTC = Math.max(0, this.totalTTC - this.discount.value);
     }
   }
-  this.tvaAmount = parseFloat(
-    (this.totalTTC - this.totalTTC / (1 + this.tvaRate / 100)).toFixed(2)
-  );
-  this.subtotalHT = parseFloat((this.totalTTC - this.tvaAmount).toFixed(2));
   this.totalTTC = parseFloat(this.totalTTC.toFixed(2));
+  this.tvaAmount = 0;
+  this.subtotalHT = this.totalTTC;
 };
 
 OrderSchema.index({ storeId: 1, createdAt: -1 });

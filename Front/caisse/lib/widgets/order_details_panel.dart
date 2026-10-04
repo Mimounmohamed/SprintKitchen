@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/order_models.dart';
 import '../../theme/app_colors.dart';
+import '../services/receipt_printer_service.dart';
+import 'receipt_preview_dialog.dart';
 
 class _ModeStyle {
   const _ModeStyle(this.label, this.bg, this.fg, this.dot);
@@ -52,7 +54,7 @@ class OrderDetailsPanel extends StatelessWidget {
   String _fmtDate(DateTime d) => '${_two(d.day)}/${_two(d.month)}/${d.year}';
   String _fmtTime(DateTime d) =>
       '${_two(d.hour)}:${_two(d.minute)}:${_two(d.second)}';
-  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} €';
+  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   _ModeStyle _modeStyle(String type) {
     switch (type) {
@@ -104,8 +106,6 @@ class OrderDetailsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mode = _modeStyle(order.orderType);
-    final tvaPercent =
-        order.subtotalHT > 0 ? (order.tvaAmount / order.subtotalHT * 100) : 0;
 
     return Column(
       children: [
@@ -118,8 +118,9 @@ class OrderDetailsPanel extends StatelessWidget {
               children: [
                 _buildInfoCard(mode),
                 const SizedBox(height: 16),
+                _buildModificationsCard(),
                 _buildKitchenNotesCard(),
-                _buildItemsCard(tvaPercent),
+                _buildItemsCard(),
               ],
             ),
           ),
@@ -313,6 +314,108 @@ class OrderDetailsPanel extends StatelessWidget {
     );
   }
 
+  Widget _buildModificationsCard() {
+    if (!order.isEdited || order.modificationSummary.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF87171), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.edit_note_rounded, size: 20, color: Color(0xFFDC2626)),
+              SizedBox(width: 8),
+              Text(
+                'MODIFICATIONS EFFECTUÉES',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFFDC2626),
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final m in order.modificationSummary) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    m.action == 'deleted'
+                        ? Icons.remove_circle
+                        : (m.action == 'added'
+                            ? Icons.add_circle
+                            : (m.action == 'table'
+                                ? Icons.table_restaurant
+                                : (m.action == 'note'
+                                    ? Icons.chat_bubble
+                                    : Icons.change_circle))),
+                    size: 15,
+                    color: m.action == 'deleted'
+                        ? const Color(0xFFDC2626)
+                        : (m.action == 'added'
+                            ? const Color(0xFF16A34A)
+                            : (m.action == 'table'
+                                ? const Color(0xFF2563EB)
+                                : (m.action == 'note'
+                                    ? const Color(0xFF7C3AED)
+                                    : const Color(0xFFD97706)))),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m.text,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: m.action == 'deleted'
+                                ? const Color(0xFFDC2626)
+                                : (m.action == 'added'
+                                    ? const Color(0xFF15803D)
+                                    : const Color(0xFF1F2937)),
+                            decoration: m.action == 'deleted'
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        if (m.details != null && m.details!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            m.details!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF4B5563),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildKitchenNotesCard() {
     if (order.notes == null || order.notes!.trim().isEmpty) {
       return const SizedBox.shrink();
@@ -432,7 +535,7 @@ class OrderDetailsPanel extends StatelessWidget {
 
   // ───────────────────────────── items card ─────────────────────────────
 
-  Widget _buildItemsCard(num tvaPercent) {
+  Widget _buildItemsCard() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -457,10 +560,10 @@ class OrderDetailsPanel extends StatelessWidget {
                 child: Text(
                   'QTÉ',
                   style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF57534E),
-                    letterSpacing: 0.5,
+                     fontSize: 11,
+                     fontWeight: FontWeight.w700,
+                     color: Color(0xFF57534E),
+                     letterSpacing: 0.5,
                   ),
                 ),
               ),
@@ -507,24 +610,7 @@ class OrderDetailsPanel extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 14),
             child: Divider(height: 1, color: Color(0xFFE5E7EB)),
           ),
-          _totalRow('Sous-total HT', _euro(order.subtotalHT)),
-          const SizedBox(height: 4),
-          _totalRow(
-              'TVA (${tvaPercent.toStringAsFixed(1)}%)', _euro(order.tvaAmount)),
-          const SizedBox(height: 10),
           _totalRow('TOTAL PAYÉ', _euro(order.totalTTC), bold: true),
-          const Padding(
-            padding: EdgeInsets.only(top: 2),
-            child: Text(
-              'TOUTES TAXES COMPRISES',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF9CA3AF),
-                letterSpacing: 0.4,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -711,36 +797,104 @@ class OrderDetailsPanel extends StatelessWidget {
             ),
             const SizedBox(height: 10),
           ],
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: ElevatedButton.icon(
-              onPressed: onPrintReceipt ??
-                  () => _fallback(context, 'Impression du ticket'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.gold,
-                foregroundColor: AppColors.brandDark,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: AppColors.goldLight),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      if (onPrintReceipt != null) {
+                        onPrintReceipt!();
+                      } else {
+                        final data = PrintableReceiptData.fromHistoryOrder(order);
+                        final ok = await ReceiptPrinterService.printClientReceiptDirect(data);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(ok
+                                  ? 'Ticket client envoyé directement à l\'imprimante.'
+                                  : 'Impression lancée.'),
+                              backgroundColor: const Color(0xFF059669),
+                              action: SnackBarAction(
+                                label: 'VOIR TICKET',
+                                textColor: Colors.white,
+                                onPressed: () => ReceiptPreviewDialog.show(context, data),
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: AppColors.brandDark,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: AppColors.goldLight),
+                      ),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 20),
+                    label: const Text(
+                      'IMPRIMER TICKET DE CAISSE',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                    ),
+                  ),
                 ),
-                elevation: 0,
               ),
-              icon: const Icon(Icons.print_outlined, size: 20),
-              label: const Text(
-                'IMPRIMER LE TICKET DE CAISSE',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'Voir l\'aperçu du ticket',
+                child: InkWell(
+                  onTap: () {
+                    final data = PrintableReceiptData.fromHistoryOrder(order);
+                    ReceiptPreviewDialog.show(context, data, initialShowKitchen: false);
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFD1D5DB)),
+                    ),
+                    child: const Icon(Icons.visibility_outlined, color: Color(0xFF374151), size: 22),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: onReprintKitchenSlip ??
-                      () => _fallback(context, 'Réimpression du bon cuisine'),
+                  onPressed: () async {
+                    if (onReprintKitchenSlip != null) {
+                      onReprintKitchenSlip!();
+                    } else {
+                      final data = PrintableReceiptData.fromHistoryOrder(order);
+                      final ok = await ReceiptPrinterService.printKitchenReceiptDirect(data);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(ok
+                                ? 'Bon cuisine envoyé directement à l\'imprimante.'
+                                : 'Impression lancée.'),
+                            backgroundColor: const Color(0xFF059669),
+                            action: SnackBarAction(
+                              label: 'VOIR BON',
+                              textColor: Colors.white,
+                              onPressed: () => ReceiptPreviewDialog.show(context, data, initialShowKitchen: true),
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF374151),
                     side: const BorderSide(color: Color(0xFFD1D5DB)),
@@ -750,8 +904,29 @@ class OrderDetailsPanel extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.restaurant_menu, size: 16),
                   label: const Text(
-                    'Réimprimer Bon Cuisine',
+                    'Imprimer Bon Cuisine',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'Voir l\'aperçu du bon cuisine',
+                child: InkWell(
+                  onTap: () {
+                    final data = PrintableReceiptData.fromHistoryOrder(order);
+                    ReceiptPreviewDialog.show(context, data, initialShowKitchen: true);
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFD1D5DB)),
+                    ),
+                    child: const Icon(Icons.visibility_outlined, size: 20, color: Color(0xFF4B5563)),
                   ),
                 ),
               ),

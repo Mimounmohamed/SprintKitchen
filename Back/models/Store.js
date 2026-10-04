@@ -21,7 +21,7 @@ const StoreSchema = new mongoose.Schema(
         isActive: { type: Boolean, default: true },
       },
     ],
-    tvaRate: { type: Number, default: 10 }, // 10% TVA
+    tvaRate: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

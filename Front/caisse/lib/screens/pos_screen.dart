@@ -12,6 +12,8 @@ import '../services/order_service.dart';
 import '../widgets/pos/encaissement_modal.dart';
 import '../widgets/pos/order_details_modal.dart';
 import '../models/order_models.dart' show HistoryOrder;
+import '../services/receipt_printer_service.dart';
+import '../widgets/receipt_preview_dialog.dart';
 import 'history_screen.dart';
 
 /// The POS / register screen ("SprintKitchen POS - Caisse Principale").
@@ -537,8 +539,6 @@ class _PosScreenState extends State<PosScreen> {
         printReceipt: result.printReceipt,
       );
       paid = _pendingOrder;
-      _pendingOrder = null;
-      _orderDetails = null;
     } on ApiException catch (e) {
       failure = e;
     } catch (e) {
@@ -549,18 +549,72 @@ class _PosScreenState extends State<PosScreen> {
 
     if (failure != null || !mounted) return failure;
 
+    // Build printable receipt data before clearing form state
+    final receiptTicketNumber = paid?.ticketNumber ?? _ticketNumber;
+    final receiptTableNumber = _orderDetails?.tableNumber;
+    final receiptClientName = _orderDetails?.clientName;
+    final receiptDeliveryAddress = _orderDetails?.deliveryAddress;
+    final receiptDeliveryPhone = _orderDetails?.deliveryPhone;
+    final receiptNotes = _orderNotes;
+    final receiptLines = List<TicketLine>.from(_ticketLines);
+    final receiptOrderType = _orderType;
+
+    _pendingOrder = null;
+    _orderDetails = null;
+
+    final receiptData = PrintableReceiptData.fromPosTicket(
+      ticketNumber: receiptTicketNumber,
+      lines: receiptLines,
+      orderType: receiptOrderType,
+      tableNumber: receiptTableNumber,
+      clientName: receiptClientName,
+      deliveryAddress: receiptDeliveryAddress,
+      deliveryPhone: receiptDeliveryPhone,
+      notes: receiptNotes,
+      paymentMethod: result.method == PaymentMethod.especes ? 'Espèces' : 'Carte Bancaire',
+      amountReceived: result.amountReceived,
+      change: result.change,
+      serverName: widget.posteLabel,
+    );
+
+    // Direct / Silent printing to the connected printer
+    if (result.printReceipt) {
+      ReceiptPrinterService.printClientReceiptDirect(receiptData);
+    }
+    if (result.printKitchenReceipt) {
+      ReceiptPrinterService.printKitchenReceiptDirect(receiptData);
+    }
+
     setState(() {
       _ticketLines.clear();
       _selectedLineIndex = null;
       _orderNotes = null;
       _ticketNumber = _nextTicketNumber(paid!.ticketNumber);
     });
+
+    final printNotice = result.printReceipt && result.printKitchenReceipt
+        ? ' (Tickets client et cuisine envoyés)'
+        : result.printReceipt
+            ? ' (Ticket client envoyé)'
+            : result.printKitchenReceipt
+                ? ' (Bon cuisine envoyé)'
+                : '';
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          result.method == PaymentMethod.especes
-              ? 'Paiement espèces enregistré — rendu ${result.change.toStringAsFixed(2).replaceAll('.', ',')} €'
-              : 'Paiement carte enregistré',
+          (result.method == PaymentMethod.especes
+              ? 'Paiement espèces enregistré — rendu ${result.change.toStringAsFixed(2).replaceAll('.', ',')} DA'
+              : 'Paiement carte enregistré') + printNotice,
+        ),
+        backgroundColor: const Color(0xFF059669),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'VOIR TICKET',
+          textColor: Colors.white,
+          onPressed: () {
+            ReceiptPreviewDialog.show(context, receiptData);
+          },
         ),
       ),
     );
@@ -1292,7 +1346,7 @@ class _PosScreenState extends State<PosScreen> {
                     ),
                   ),
                   Text(
-                    '${_total.toStringAsFixed(2).replaceAll('.', ',')} €',
+                    '${_total.toStringAsFixed(2).replaceAll('.', ',')} DA',
                     style: GoogleFonts.bebasNeue(
                       color: const Color(0xFF1F2937),
                       fontSize: 28,
@@ -1384,10 +1438,6 @@ class _PosScreenState extends State<PosScreen> {
                         MaterialPageRoute(
                           builder: (_) => HistoryScreen(
                             posteLabel: widget.posteLabel,
-                            onOrderEdit: (o) {
-                              Navigator.of(context).pop();
-                              _loadOrderForEditing(o);
-                            },
                           ),
                         ),
                       );
