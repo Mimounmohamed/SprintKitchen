@@ -295,6 +295,8 @@ class _PosScreenState extends State<PosScreen> {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        showCloseIcon: true,
+        closeIconColor: Colors.white,
         content: const Text('Commande réinitialisée — tous les articles ont été supprimés'),
         action: SnackBarAction(
           label: 'ANNULER',

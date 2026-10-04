@@ -9,7 +9,6 @@ import '../../services/order_service.dart';
 import '../../theme/app_colors.dart';
 import 'pos/customization_modal.dart';
 import 'pos/menu_picker_modal.dart';
-import 'pos/order_details_modal.dart';
 
 class _ModeStyle {
   const _ModeStyle(this.label, this.bg, this.fg, this.dot);
@@ -241,6 +240,8 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        showCloseIcon: true,
+        closeIconColor: Colors.white,
         content: Text('${removed.name} supprimé'),
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
@@ -287,34 +288,6 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
   }
 
   // ────────────────────────── Edit Order Details ──────────────────────────
-
-  Future<void> _editOrderDetails() async {
-    final details = await showDialog<OrderDetailsResult>(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (_) => OrderDetailsModal(
-        orderType: _orderType,
-        ticketNumber: widget.order.ticketNumber,
-        posteLabel: widget.posteLabel,
-        initialNotes: _notes,
-        initialTable: _tableNumber,
-        initialClient: _clientName,
-        initialAddress: _deliveryAddress,
-        initialPhone: _deliveryPhone,
-        currentTicketNumber: widget.order.ticketNumber,
-      ),
-    );
-
-    if (details != null && mounted) {
-      setState(() {
-        if (details.tableNumber != null) _tableNumber = details.tableNumber;
-        if (details.clientName != null) _clientName = details.clientName;
-        if (details.deliveryAddress != null) _deliveryAddress = details.deliveryAddress;
-        if (details.deliveryPhone != null) _deliveryPhone = details.deliveryPhone;
-        if (details.notes != null) _notes = details.notes!.isEmpty ? null : details.notes;
-      });
-    }
-  }
 
   Future<void> _editTableDialog() async {
     final controller = TextEditingController(text: _tableNumber ?? '');
@@ -781,6 +754,8 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          showCloseIcon: true,
+          closeIconColor: Colors.white,
           content: Text(
             'Commande #${widget.order.ticketNumber} mise à jour avec succès.',
           ),
@@ -1037,22 +1012,6 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
               ],
             ),
           ],
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: _editOrderDetails,
-              icon: const Icon(Icons.tune, size: 14, color: AppColors.brandDark),
-              label: const Text(
-                'Modifier toutes les coordonnées',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.brandDark,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1190,33 +1149,14 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'ARTICLES DE LA COMMANDE (${_lines.length})',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF57534E),
-                  letterSpacing: 0.5,
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: _loadingMenu ? null : _openAddProductCatalog,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF059669),
-                  side: const BorderSide(color: Color(0xFF059669)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text(
-                  '+ Ajouter un article',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
+          Text(
+            'ARTICLES DE LA COMMANDE (${_lines.length})',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF57534E),
+              letterSpacing: 0.5,
+            ),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
