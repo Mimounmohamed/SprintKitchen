@@ -6,37 +6,25 @@ import '../widgets/pos/category_sidebar_item.dart';
 import '../widgets/pos/menu_item_tile.dart';
 import '../widgets/pos/ticket_line_tile.dart';
 import '../widgets/pos/customization_modal.dart';
-import '../services/api_client.dart' show ApiException;
 import '../services/menu_service.dart';
 import '../services/order_service.dart';
-import '../widgets/pos/encaissement_modal.dart';
-import '../widgets/pos/order_details_modal.dart';
-import '../models/order_models.dart' show HistoryOrder;
-import '../services/receipt_printer_service.dart';
-import '../widgets/receipt_preview_dialog.dart';
 import 'history_screen.dart';
 
-/// The POS / register screen ("SprintKitchen POS - Caisse Principale").
-///
-/// Drop into lib/screens/pos_screen.dart and navigate to it from the
-/// Hub screen's "New Order / Register" card.
-class PosScreen extends StatefulWidget {
-  const PosScreen({
+class ServeurPosScreen extends StatefulWidget {
+  const ServeurPosScreen({
     super.key,
     this.ticketNumber = '000001',
-    this.posteLabel = 'Caisse 01',
-    this.editingOrder,
+    this.posteLabel = 'Serveur 01',
   });
 
   final String ticketNumber;
   final String posteLabel;
-  final HistoryOrder? editingOrder;
 
   @override
-  State<PosScreen> createState() => _PosScreenState();
+  State<ServeurPosScreen> createState() => _ServeurPosScreenState();
 }
 
-class _PosScreenState extends State<PosScreen> {
+class _ServeurPosScreenState extends State<ServeurPosScreen> {
   int _selectedCategory = 0;
   OrderType _orderType = OrderType.dineIn;
   int? _selectedLineIndex = 0;
@@ -50,38 +38,15 @@ class _PosScreenState extends State<PosScreen> {
   final List<TicketLine> _ticketLines = [];
   final ScrollController _gridScrollController = ScrollController();
 
-  /// Current ticket number (starts from the widget value, then follows the
-  /// number returned by the server after each paid order).
   late String _ticketNumber;
-
-  /// True while an order/payment request is in flight (blocks double taps).
   bool _submitting = false;
-
-  /// Order created on the server but not yet paid (kept so a retry after a
-  /// payment failure does not create a duplicate order).
-  CreatedOrder? _pendingOrder;
-
-  /// Table number / client name / delivery info the cashier entered for the
-  /// order currently in flight. Cleared together with [_pendingOrder]: once
-  /// an order exists server-side its details are already saved, so a retry
-  /// after a payment failure skips straight to the payment modal instead of
-  /// asking again.
-  OrderDetailsResult? _orderDetails;
-
-  /// Optional kitchen note / comment for the current order.
   String? _orderNotes;
-
-  /// Order currently being modified from HistoryScreen (if any).
-  HistoryOrder? _editingOrder;
-  bool get _isEditing => _editingOrder != null;
+  String? _tableNumber;
 
   @override
   void initState() {
     super.initState();
     _ticketNumber = widget.ticketNumber;
-    if (widget.editingOrder != null) {
-      _loadOrderForEditing(widget.editingOrder!);
-    }
     _loadMenu();
   }
 
@@ -288,8 +253,6 @@ class _PosScreenState extends State<PosScreen> {
     setState(() {
       _ticketLines.clear();
       _selectedLineIndex = null;
-      _pendingOrder = null;
-      _orderDetails = null;
       _orderNotes = null;
     });
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -422,416 +385,85 @@ class _PosScreenState extends State<PosScreen> {
     }
   }
 
-  // ───────────────────────── Encaissement flow ─────────────────────────
-
-  Future<void> _openEncaissement() async {
-    if (_submitting) return;
-
-    // No order created yet for this ticket: ask for the order-type details
-    // first (table number / delivery info / optional client name). If an
-    // order already exists (retrying payment after a failure), its details
-    // are already saved server-side, so skip straight to payment.
-    if (_pendingOrder == null) {
-      final details = await showDialog<OrderDetailsResult>(
-        context: context,
-        barrierColor: Colors.transparent,
-        builder: (_) => OrderDetailsModal(
-          orderType: _orderType,
-          ticketNumber: _ticketNumber,
-          posteLabel: widget.posteLabel,
-          initialNotes: _orderNotes,
-        ),
-      );
-      if (details == null || !mounted) return;
-      _orderDetails = details;
-      if (details.notes != null) {
-        _orderNotes = details.notes!.isEmpty ? null : details.notes;
-      }
-    }
-
-    final result = await showDialog<EncaissementResult>(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (_) => EncaissementModal(
-        total: _total,
-        ticketNumber: _ticketNumber,
-        posteLabel: widget.posteLabel,
-      ),
-    );
-    if (result == null || !mounted) return;
-    await _submitOrder(result);
-  }
-
-  /// Runs order → payment, retrying on demand. The ticket is only cleared
-  /// after BOTH calls succeed.
-  Future<void> _submitOrder(EncaissementResult result) async {
+  Future<void> _sendToKitchen() async {
+    if (_submitting || _ticketLines.isEmpty) return;
     setState(() => _submitting = true);
+    // show loader
+    showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const PopScope(canPop: false, child: Center(child: CircularProgressIndicator())));
     try {
-      while (true) {
-        final failure = await _attempt(result);
-        if (failure == null) return; // success handled in _attempt
-        if (!mounted) return;
-        if (failure.message.contains('occupée') || failure.message.contains('déjà liée')) {
-          _pendingOrder = null;
-          _orderDetails = null;
-          await _showTableOccupiedError(failure);
-          return;
-        }
-        final retry = await _showPaymentError(failure);
-        if (!retry) {
-          // Cashier backed out: forget the pending order (and its details)
-          // so an edited ticket gets a fresh order instead of reusing a
-          // stale one.
-          _pendingOrder = null;
-          _orderDetails = null;
-          return;
-        }
-      }
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  /// One full attempt. Returns null on success, or the failure.
-  Future<ApiException?> _attempt(EncaissementResult result) async {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const PopScope(
-        canPop: false,
-        child: Center(child: CircularProgressIndicator()),
-      ),
-    );
-
-    ApiException? failure;
-    CreatedOrder? paid;
-    try {
-      // Reuse the order if a previous attempt created it but payment failed.
-      _pendingOrder ??= await _orderService.createOrder(
+      final created = await _orderService.createOrder(
         lines: _ticketLines,
         orderType: _orderType,
         expectedTotal: _total,
-        tableNumber: _orderDetails?.tableNumber,
-        clientName: _orderDetails?.clientName,
-        deliveryAddress: _orderDetails?.deliveryAddress,
-        deliveryPhone: _orderDetails?.deliveryPhone,
+        tableNumber: _tableNumber,
+        clientName: null,
+        deliveryAddress: null,
+        deliveryPhone: null,
         notes: _orderNotes,
       );
-      await _orderService.createPayment(
-        orderId: _pendingOrder!.id,
-        method: result.method,
-        amountReceived: result.amountReceived,
-        printReceipt: result.printReceipt,
-      );
-      paid = _pendingOrder;
-    } on ApiException catch (e) {
-      failure = e;
-    } catch (e) {
-      failure = ApiException(e.toString());
-    } finally {
-      if (mounted) Navigator.of(context, rootNavigator: true).pop(); // loader
-    }
-
-    if (failure != null || !mounted) return failure;
-
-    // Build printable receipt data before clearing form state
-    final receiptTicketNumber = paid?.ticketNumber ?? _ticketNumber;
-    final receiptTableNumber = _orderDetails?.tableNumber;
-    final receiptClientName = _orderDetails?.clientName;
-    final receiptDeliveryAddress = _orderDetails?.deliveryAddress;
-    final receiptDeliveryPhone = _orderDetails?.deliveryPhone;
-    final receiptNotes = _orderNotes;
-    final receiptLines = List<TicketLine>.from(_ticketLines);
-    final receiptOrderType = _orderType;
-
-    _pendingOrder = null;
-    _orderDetails = null;
-
-    final receiptData = PrintableReceiptData.fromPosTicket(
-      ticketNumber: receiptTicketNumber,
-      lines: receiptLines,
-      orderType: receiptOrderType,
-      tableNumber: receiptTableNumber,
-      clientName: receiptClientName,
-      deliveryAddress: receiptDeliveryAddress,
-      deliveryPhone: receiptDeliveryPhone,
-      notes: receiptNotes,
-      paymentMethod: result.method == PaymentMethod.especes ? 'Espèces' : 'Carte Bancaire',
-      amountReceived: result.amountReceived,
-      change: result.change,
-      serverName: widget.posteLabel,
-    );
-
-    // Direct / Silent printing to the connected printer
-    if (result.printReceipt) {
-      ReceiptPrinterService.printClientReceiptDirect(receiptData);
-    }
-    if (result.printKitchenReceipt) {
-      ReceiptPrinterService.printKitchenReceiptDirect(receiptData);
-    }
-
-    setState(() {
-      _ticketLines.clear();
-      _selectedLineIndex = null;
-      _orderNotes = null;
-      _ticketNumber = _nextTicketNumber(paid!.ticketNumber);
-    });
-
-    final printNotice = result.printReceipt && result.printKitchenReceipt
-        ? ' (Tickets client et cuisine envoyés)'
-        : result.printReceipt
-            ? ' (Ticket client envoyé)'
-            : result.printKitchenReceipt
-                ? ' (Bon cuisine envoyé)'
-                : '';
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          (result.method == PaymentMethod.especes
-              ? 'Paiement espèces enregistré — rendu ${result.change.toStringAsFixed(2).replaceAll('.', ',')} DA'
-              : 'Paiement carte enregistré') + printNotice,
-        ),
-        backgroundColor: const Color(0xFF059669),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'VOIR TICKET',
-          textColor: Colors.white,
-          onPressed: () {
-            ReceiptPreviewDialog.show(context, receiptData);
-          },
-        ),
-      ),
-    );
-    return null;
-  }
-
-  Future<bool> _showPaymentError(ApiException e) async {
-    final orderNote = _pendingOrder != null
-        ? '\n\nLa commande est créée : seul le paiement reste à enregistrer.'
-        : '';
-    final retry = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Encaissement non enregistré'),
-        content: Text('${e.message}\n\nLe ticket est conservé.$orderNote'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Réessayer'),
-          ),
-        ],
-      ),
-    );
-    return retry ?? false;
-  }
-
-  Future<void> _showTableOccupiedError(ApiException e) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: const [
-            Icon(Icons.table_restaurant_outlined, color: AppColors.danger),
-            SizedBox(width: 8),
-            Text('Table indisponible'),
-          ],
-        ),
-        content: Text(
-          '${e.message}\n\nVeuillez choisir une autre table avant de procéder au paiement.',
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brandDark,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Changer de table'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  OrderType _orderTypeFromApi(String raw) {
-    switch (raw) {
-      case 'a_emporter':
-        return OrderType.takeaway;
-      case 'livraison':
-        return OrderType.delivery;
-      default:
-        return OrderType.dineIn;
-    }
-  }
-
-  void _loadOrderForEditing(HistoryOrder order) {
-    setState(() {
-      _editingOrder = order;
-      _ticketNumber = order.ticketNumber;
-      _orderType = _orderTypeFromApi(order.orderType);
-      _orderNotes = order.notes;
-      _orderDetails = OrderDetailsResult(
-        tableNumber: order.tableNumber,
-        clientName: order.clientName,
-        deliveryAddress: order.deliveryAddress,
-        deliveryPhone: order.deliveryPhone,
-        notes: order.notes,
-      );
-      _ticketLines.clear();
-      for (final line in order.lines) {
-        _ticketLines.add(line.toTicketLine());
-      }
-      _selectedLineIndex = _ticketLines.isNotEmpty ? 0 : null;
-    });
-  }
-
-  void _cancelEditing() {
-    setState(() {
-      _editingOrder = null;
-      _ticketLines.clear();
-      _selectedLineIndex = null;
-      _orderNotes = null;
-      _orderDetails = null;
-      _ticketNumber = widget.ticketNumber;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Mode modification quitté.')),
-    );
-  }
-
-  Future<void> _openEditOrderDetails() async {
-    final details = await showDialog<OrderDetailsResult>(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (_) => OrderDetailsModal(
-        orderType: _orderType,
-        ticketNumber: _ticketNumber,
-        posteLabel: widget.posteLabel,
-        initialNotes: _orderNotes,
-        initialTable: _orderDetails?.tableNumber ?? _editingOrder?.tableNumber,
-        initialClient: _orderDetails?.clientName ?? _editingOrder?.clientName,
-        initialAddress: _orderDetails?.deliveryAddress ?? _editingOrder?.deliveryAddress,
-        initialPhone: _orderDetails?.deliveryPhone ?? _editingOrder?.deliveryPhone,
-        currentTicketNumber: _editingOrder?.ticketNumber,
-      ),
-    );
-    if (details == null || !mounted) return;
-    setState(() {
-      _orderDetails = details;
-      if (details.notes != null) {
-        _orderNotes = details.notes!.isEmpty ? null : details.notes;
-      }
-    });
-  }
-
-  Future<void> _saveOrderModifications() async {
-    if (_submitting || _editingOrder == null) return;
-    if (_ticketLines.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Le ticket ne peut pas être vide.')),
-      );
-      return;
-    }
-
-    setState(() => _submitting = true);
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const PopScope(
-        canPop: false,
-        child: Center(child: CircularProgressIndicator()),
-      ),
-    );
-
-    try {
-      await _orderService.updateOrder(
-        orderId: _editingOrder!.id,
-        lines: _ticketLines,
-        orderType: _orderType,
-        expectedTotal: _total,
-        tableNumber: _orderDetails?.tableNumber,
-        clientName: _orderDetails?.clientName,
-        deliveryAddress: _orderDetails?.deliveryAddress,
-        deliveryPhone: _orderDetails?.deliveryPhone,
-        notes: _orderNotes,
-      );
-
+      // Dispatch to kitchen queue — moves order from en_cours → en_attente
+      // which makes it visible in KDS and in the history EN ATTENTE tab.
+      await _orderService.updateStatus(created.id, 'en_attente');
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop(); // loader
-
-      final updatedTicket = _editingOrder!.ticketNumber;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF059669),
-          content: Text('Commande #$updatedTicket modifiée avec succès et transmise en cuisine !'),
-        ),
-      );
-
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop(true);
-      } else {
-        _cancelEditing();
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // loader
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red.shade700,
-            content: Text(e.message),
-          ),
-        );
-      }
+      Navigator.of(context, rootNavigator: true).pop(); // close loader
+      final savedTable = _tableNumber;
+      setState(() {
+        _ticketLines.clear();
+        _selectedLineIndex = null;
+        _orderNotes = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        backgroundColor: const Color(0xFF059669),
+        content: Text('Commande${savedTable != null ? ' table $savedTable' : ''} envoyée en cuisine !'),
+      ));
     } catch (e) {
       if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // loader
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red.shade700,
-            content: Text('Erreur: $e'),
-          ),
-        );
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: Colors.red.shade700,
+          content: Text('Erreur : $e'),
+        ));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
-  /// "0000123" -> "0000124". The server's counter is global, so with several
-  /// registers this is only a preview; the real number comes from the server.
-  String _nextTicketNumber(String served) {
-    final n = int.tryParse(served);
-    return n == null ? _ticketNumber : (n + 1).toString().padLeft(6, '0');
-  }
-
-  // ───────────────────────────── UI ─────────────────────────────
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
+  Widget _buildTableSelector() {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
         children: [
-          _buildHeader(context),
+          const Text('TABLE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF6B7280), letterSpacing: 0.5)),
+          const SizedBox(width: 10),
           Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? _buildErrorState()
-                    : Row(
-                        children: [
-                          _buildSidebar(),
-                          Expanded(child: _buildMenuGrid()),
-                          _buildTicketPanel(),
-                        ],
-                      ),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: 10,
+              separatorBuilder: (context, index) => const SizedBox(width: 6),
+              itemBuilder: (context, i) {
+                final t = '${i + 1}';
+                final selected = _tableNumber == t;
+                return GestureDetector(
+                  onTap: () => setState(() => _tableNumber = selected ? null : t),
+                  child: Container(
+                    width: 36, height: 32,
+                    decoration: BoxDecoration(
+                      color: selected ? const Color(0xFF2E1F0F) : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: selected ? const Color(0xFF2E1F0F) : const Color(0xFFE5E7EB)),
+                    ),
+                    child: Center(
+                      child: Text('T$t', style: TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w700,
+                        color: selected ? const Color(0xFFFBBF24) : const Color(0xFF374151),
+                      )),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -940,9 +572,9 @@ class _PosScreenState extends State<PosScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  widget.posteLabel,
-                  style: const TextStyle(
+                const Text(
+                  'SERVEUR',
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF1F2937),
@@ -958,7 +590,7 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildSidebar() {
     return Container(
-      width: 210,
+      width: 180,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(right: BorderSide(color: Color(0xFFE5E7EB))),
@@ -1014,10 +646,6 @@ class _PosScreenState extends State<PosScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bool hasManyItems = items.length > 15;
-        final double maxExtent = hasManyItems ? 175 : 205;
-        final double itemHeight = hasManyItems ? 140 : 155;
-
         return RawScrollbar(
           controller: _gridScrollController,
           thumbColor: const Color(0xFFFACC15),
@@ -1028,9 +656,9 @@ class _PosScreenState extends State<PosScreen> {
             controller: _gridScrollController,
             padding: const EdgeInsets.all(16),
             itemCount: items.length,
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: maxExtent,
-              mainAxisExtent: itemHeight,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 160,
+              mainAxisExtent: 160,
               mainAxisSpacing: 14,
               crossAxisSpacing: 14,
             ),
@@ -1049,15 +677,17 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildTicketPanel() {
     return Container(
-      width: 383,
+      width: 340,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(left: BorderSide(color: AppColors.border)),
       ),
       child: Column(
         children: [
+          const SizedBox(height: 12),
+          _buildTableSelector(),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: Row(
               children: [
                 Text(
@@ -1068,99 +698,9 @@ class _PosScreenState extends State<PosScreen> {
                     color: Color(0xFF111827),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _isEditing ? const Color(0xFFFEF3C7) : const Color(0xFFE5E7EB),
-                    borderRadius: BorderRadius.circular(4),
-                    border: _isEditing ? Border.all(color: const Color(0xFFF59E0B)) : null,
-                  ),
-                  child: Text(
-                    _isEditing ? 'MODIFICATION' : 'En cours',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: _isEditing ? const Color(0xFF92400E) : const Color(0xFF4B5563),
-                    ),
-                  ),
-                ),
-                if (_isEditing) ...[
-                  const Spacer(),
-                  InkWell(
-                    onTap: _cancelEditing,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEE2E2),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFFCA5A5)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.close, size: 12, color: Color(0xFFB91C1C)),
-                          SizedBox(width: 4),
-                          Text(
-                            'Annuler',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFB91C1C),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
-          if (_isEditing) ...[
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.table_restaurant_outlined, size: 14, color: Color(0xFF64748B)),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      _orderDetails?.tableNumber != null && _orderDetails!.tableNumber!.isNotEmpty
-                          ? 'Table ${_orderDetails!.tableNumber}'
-                          : (_orderDetails?.clientName != null && _orderDetails!.clientName!.isNotEmpty
-                              ? _orderDetails!.clientName!
-                              : 'Sans table assignée'),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF334155),
-                      ),
-                    ),
-                  ),
-                  InkWell(
-                    onTap: _openEditOrderDetails,
-                    borderRadius: BorderRadius.circular(4),
-                    child: const Tooltip(
-                      message: 'Modifier la table / infos',
-                      child: Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(Icons.edit, size: 14, color: Color(0xFF2563EB)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
           if (_orderNotes != null && _orderNotes!.isNotEmpty)
             InkWell(
               onTap: _openCommentDialog,
@@ -1331,7 +871,7 @@ class _PosScreenState extends State<PosScreen> {
                     ),
                   ),
                   Text(
-                    '${_total.toStringAsFixed(2).replaceAll('.', ',')} DA',
+                    '${_total.toStringAsFixed(2).replaceAll('.', ',')} €',
                     style: GoogleFonts.bebasNeue(
                       color: const Color(0xFF1F2937),
                       fontSize: 28,
@@ -1374,9 +914,9 @@ class _PosScreenState extends State<PosScreen> {
               child: ElevatedButton(
                 onPressed: (_ticketLines.isEmpty || _submitting)
                     ? null
-                    : (_isEditing ? _saveOrderModifications : _openEncaissement),
+                    : _sendToKitchen,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isEditing ? const Color(0xFFD97706) : const Color(0xFF059669),
+                  backgroundColor: const Color(0xFF059669),
                   disabledBackgroundColor:
                       const Color(0xFF059669).withValues(alpha: 0.5),
                   foregroundColor: Colors.white,
@@ -1389,14 +929,14 @@ class _PosScreenState extends State<PosScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      _isEditing ? Icons.check_circle_outline : Icons.credit_card,
-                      color: const Color(0xFFFBBF24),
+                    const Icon(
+                      Icons.send,
+                      color: Color(0xFFFBBF24),
                       size: 24,
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      _isEditing ? 'ENREGISTRER LA MODIFICATION' : 'ENCAISSEMENT',
+                      'ENVOYER EN CUISINE',
                       style: GoogleFonts.bebasNeue(
                         fontSize: 22,
                         letterSpacing: 2.0,
@@ -1410,36 +950,38 @@ class _PosScreenState extends State<PosScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _smallActionButton(
-                    label: 'History',
-                    icon: Icons.inventory_2_outlined,
-                    bg: const Color(0xFF27272A),
-                    fg: Colors.white,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => HistoryScreen(
-                            posteLabel: widget.posteLabel,
+            child: SizedBox(
+              width: double.infinity,
+              height: 42,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _smallActionButton(
+                      label: 'Historique',
+                      icon: Icons.inventory_2_outlined,
+                      bg: const Color(0xFF27272A),
+                      fg: Colors.white,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => HistoryScreen(posteLabel: widget.posteLabel),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _smallActionButton(
-                    label: 'Reprise',
-                    icon: Icons.sync,
-                    bg: const Color(0xFF452B1E),
-                    fg: const Color(0xFFFBBF24),
-                    onTap: _repriseOrder,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _smallActionButton(
+                      label: 'Reprise',
+                      icon: Icons.sync,
+                      bg: const Color(0xFF452B1E),
+                      fg: const Color(0xFFFBBF24),
+                      onTap: _repriseOrder,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -1569,6 +1111,31 @@ class _PosScreenState extends State<PosScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Column(
+        children: [
+          _buildHeader(context),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _buildErrorState()
+                    : Row(
+                        children: [
+                          _buildSidebar(),
+                          Expanded(child: _buildMenuGrid()),
+                          _buildTicketPanel(),
+                        ],
+                      ),
+          ),
+        ],
       ),
     );
   }
