@@ -4,3 +4,6 @@
 Back/.env
 Back/.env.*
 *.env
+**/generated_plugin_registrant.cc
+**/generated_plugins.cmake
+**/GeneratedPluginRegistrant.swift
