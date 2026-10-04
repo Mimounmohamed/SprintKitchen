@@ -75,6 +75,7 @@ class InventoryService {
   }) async {
     final json = await _client.patch('/ingredients/$id/availability', {
       'availability': availability,
+      // ignore: use_null_aware_elements
       if (notes != null) 'notes': notes,
     });
     return Ingredient.fromJson(json['data'] as Map<String, dynamic>);

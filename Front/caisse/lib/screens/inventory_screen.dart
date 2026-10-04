@@ -786,34 +786,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       ),
                   ],
                 ),
-                if (!mobile)
-                  InkWell(
-                    onTap: () => _openIngredientModal(mobile: false),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFACC15),
-                        border: Border.all(color: const Color(0xFFEAB308)),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add, size: 15, color: Color(0xFF1F2937)),
-                          SizedBox(width: 6),
-                          Text(
-                            '+ Ajouter un ingrédient',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1F2937),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),

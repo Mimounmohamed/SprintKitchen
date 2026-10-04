@@ -336,14 +336,18 @@ class _HubScreenState extends State<HubScreen> {
                             value: ticketsFmt,
                             sub: "Aujourd'hui",
                           ),
-                          HubKpiCard(
-                            label: "Articles en Rupture",
-                            value: ruptureFmt,
-                            valueColor:
-                                ruptureWarn ? AppColors.orange : AppColors.ink,
-                            sub: "Ingrédients (86 list)",
-                            subColor:
-                                ruptureWarn ? AppColors.orange : AppColors.muted,
+                          InkWell(
+                            onTap: () => _showStockModal(context),
+                            borderRadius: BorderRadius.circular(12),
+                            child: HubKpiCard(
+                              label: "Articles en Rupture",
+                              value: ruptureFmt,
+                              valueColor:
+                                  ruptureWarn ? AppColors.orange : AppColors.ink,
+                              sub: "Ingrédients (86 list)",
+                              subColor:
+                                  ruptureWarn ? AppColors.orange : AppColors.muted,
+                            ),
                           ),
                         ],
                       ),
