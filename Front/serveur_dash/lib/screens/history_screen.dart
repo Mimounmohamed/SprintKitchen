@@ -224,7 +224,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _fmtTime(DateTime d) =>
       '${_two(d.hour)}:${_two(d.minute)}:${_two(d.second)}';
   String _fmtLong(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
-  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} €';
+  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   _ModeStyle _modeStyle(String type) {
     switch (type) {

@@ -19,7 +19,7 @@ class OrderService {
   final ApiClient _client;
 
   /// POST /api/orders
-  /// The server picks the store automatically and computes totalTTC / TVA
+  /// The server picks the store automatically and computes totalTTC
   /// from the line totals we send.
   ///
   /// [tableNumber] (sur place), [clientName] (à emporter, optional) and

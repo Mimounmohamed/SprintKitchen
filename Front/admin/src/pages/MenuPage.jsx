@@ -401,7 +401,6 @@ function ArticleDrawer({ product, categories, onClose, onSave }) {
                 <span style={{ width:20, height:20, borderRadius:6, background:C.brown, color:"#F5F0E6", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:800, flexShrink:0 }}>3</span>
                 PRIX &amp; OPTIONS
               </span>
-              <span style={{ fontSize:10, fontWeight:700, background:"#E6F9EE", color:C.green, padding:"3px 9px", borderRadius:6, letterSpacing:"0.04em", textTransform:"uppercase" }}>Taxes Incluses</span>
             </div>
 
             <Field label="Prix (DA)" required>

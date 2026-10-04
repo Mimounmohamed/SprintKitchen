@@ -52,7 +52,7 @@ class OrderDetailsPanel extends StatelessWidget {
   String _fmtDate(DateTime d) => '${_two(d.day)}/${_two(d.month)}/${d.year}';
   String _fmtTime(DateTime d) =>
       '${_two(d.hour)}:${_two(d.minute)}:${_two(d.second)}';
-  String _euro(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} €';
+  String _da(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   _ModeStyle _modeStyle(String type) {
     switch (type) {
@@ -104,8 +104,6 @@ class OrderDetailsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mode = _modeStyle(order.orderType);
-    final tvaPercent =
-        order.subtotalHT > 0 ? (order.tvaAmount / order.subtotalHT * 100) : 0;
 
     return Column(
       children: [
@@ -119,7 +117,7 @@ class OrderDetailsPanel extends StatelessWidget {
                 _buildInfoCard(mode),
                 const SizedBox(height: 16),
                 _buildKitchenNotesCard(),
-                _buildItemsCard(tvaPercent),
+                _buildItemsCard(),
               ],
             ),
           ),
@@ -432,7 +430,7 @@ class OrderDetailsPanel extends StatelessWidget {
 
   // ───────────────────────────── items card ─────────────────────────────
 
-  Widget _buildItemsCard(num tvaPercent) {
+  Widget _buildItemsCard() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -507,24 +505,7 @@ class OrderDetailsPanel extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 14),
             child: Divider(height: 1, color: Color(0xFFE5E7EB)),
           ),
-          _totalRow('Sous-total HT', _euro(order.subtotalHT)),
-          const SizedBox(height: 4),
-          _totalRow(
-              'TVA (${tvaPercent.toStringAsFixed(1)}%)', _euro(order.tvaAmount)),
-          const SizedBox(height: 10),
-          _totalRow('TOTAL PAYÉ', _euro(order.totalTTC), bold: true),
-          const Padding(
-            padding: EdgeInsets.only(top: 2),
-            child: Text(
-              'TOUTES TAXES COMPRISES',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF9CA3AF),
-                letterSpacing: 0.4,
-              ),
-            ),
-          ),
+          _totalRow('TOTAL PAYÉ', _da(order.totalTTC), bold: true),
         ],
       ),
     );
@@ -629,7 +610,7 @@ class OrderDetailsPanel extends StatelessWidget {
         Expanded(
           flex: 2,
           child: Text(
-            _euro(l.lineTotal),
+            _da(l.lineTotal),
             textAlign: TextAlign.right,
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
           ),

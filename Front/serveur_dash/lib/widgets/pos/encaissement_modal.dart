@@ -118,10 +118,10 @@ class _EncaissementModalState extends State<EncaissementModal> {
   }
 
   String _fmt(num value) =>
-      '${(value / 100).toStringAsFixed(2).replaceAll('.', ',')} €';
+      '${(value / 100).toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   String _fmtEuros(double value) =>
-      '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
+      '${value.toStringAsFixed(2).replaceAll('.', ',')} DA';
 
   void _validate() {
     if (!_isValid) return;

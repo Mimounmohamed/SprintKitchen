@@ -871,7 +871,7 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
                     ),
                   ),
                   Text(
-                    '${_total.toStringAsFixed(2).replaceAll('.', ',')} €',
+                    '${_total.toStringAsFixed(2).replaceAll('.', ',')} DA',
                     style: GoogleFonts.bebasNeue(
                       color: const Color(0xFF1F2937),
                       fontSize: 28,
