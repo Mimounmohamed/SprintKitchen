@@ -7,10 +7,11 @@ import '../../models/pos_models.dart';
 import '../../services/order_service.dart';
 import '../../theme/app_colors.dart';
 
-/// What the cashier entered before going to payment. Only the fields that
-/// apply to the order's type are ever filled in.
+/// Holds the order fulfilment type and customer/table attributes.
+/// Attributes from previous order types are preserved rather than erased.
 class OrderDetailsResult {
   const OrderDetailsResult({
+    this.orderType,
     this.tableNumber,
     this.clientName,
     this.deliveryAddress,
@@ -18,28 +19,32 @@ class OrderDetailsResult {
     this.notes,
   });
 
-  /// Sur place — becomes `Table 5` on the order's `buzzerNumber`.
+  /// Selected mode: dineIn (Sur Place), takeaway (À Emporter), or delivery (Livraison).
+  final OrderType? orderType;
+
+  /// Sur place — becomes `Table XX` on the order.
   final String? tableNumber;
 
-  /// À emporter — optional, goes on `clientName`.
+  /// Client name (required for à emporter and livraison, optional for sur place).
   final String? clientName;
 
-  /// Livraison — required, go on `delivery.address` / `delivery.phone`.
+  /// Delivery address (required for livraison, optional for à emporter).
   final String? deliveryAddress;
+
+  /// Contact phone (required for à emporter and livraison, optional for sur place).
   final String? deliveryPhone;
 
-  /// Optional kitchen note / comment
+  /// Optional kitchen note / comment.
   final String? notes;
 }
 
-/// "Informations de la commande" popup shown right before payment, so the
-/// cashier fills in what the order type needs:
-/// - Sur place: table number (required)
-/// - Livraison: address + phone (both required)
-/// - À emporter: client name (optional)
+/// "Informations de la commande" popup shown before payment or when modifying order type / details.
 ///
-/// Self-blurring, same as EncaissementModal — call with
-/// `barrierColor: Colors.transparent`.
+/// Features:
+/// - Switch order type seamlessly between Sur Place, À Emporter, and Livraison.
+/// - Required validation for essential attributes per order type.
+/// - Preserves previously entered attributes (never erases table, name, phone, etc.).
+/// - Real-time occupied table validation for Sur Place.
 class OrderDetailsModal extends StatefulWidget {
   const OrderDetailsModal({
     super.key,
@@ -52,6 +57,7 @@ class OrderDetailsModal extends StatefulWidget {
     this.initialAddress,
     this.initialPhone,
     this.currentTicketNumber,
+    this.submitLabel = 'VALIDER LES INFORMATIONS',
   });
 
   final OrderType orderType;
@@ -63,6 +69,7 @@ class OrderDetailsModal extends StatefulWidget {
   final String? initialAddress;
   final String? initialPhone;
   final String? currentTicketNumber;
+  final String submitLabel;
 
   @override
   State<OrderDetailsModal> createState() => _OrderDetailsModalState();
@@ -76,17 +83,22 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
   final _phoneController = TextEditingController();
   final _notesController = TextEditingController();
 
+  late OrderType _activeOrderType;
   List<OccupiedTableInfo> _occupiedTables = [];
   bool _loadingOccupied = false;
 
   @override
   void initState() {
     super.initState();
+    _activeOrderType = widget.orderType;
+
     if (widget.initialNotes != null) {
       _notesController.text = widget.initialNotes!;
     }
     if (widget.initialTable != null) {
-      _tableController.text = widget.initialTable!.replaceFirst(RegExp(r'^table\s*', caseSensitive: false), '').trim();
+      _tableController.text = widget.initialTable!
+          .replaceFirst(RegExp(r'^table\s*', caseSensitive: false), '')
+          .trim();
     }
     if (widget.initialClient != null) {
       _clientController.text = widget.initialClient!;
@@ -97,7 +109,8 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
     if (widget.initialPhone != null) {
       _phoneController.text = widget.initialPhone!;
     }
-    if (widget.orderType == OrderType.dineIn) {
+
+    if (_activeOrderType == OrderType.dineIn) {
       _loadOccupiedTables();
     }
   }
@@ -128,10 +141,10 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
   }
 
   ({IconData icon, Color color, String label}) get _typeMeta {
-    switch (widget.orderType) {
+    switch (_activeOrderType) {
       case OrderType.dineIn:
         return (
-          icon: Icons.shopping_cart_outlined,
+          icon: Icons.restaurant_rounded,
           color: const Color(0xFFE11D48),
           label: 'Sur Place',
         );
@@ -143,7 +156,7 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
         );
       case OrderType.delivery:
         return (
-          icon: Icons.local_shipping_outlined,
+          icon: Icons.moped_rounded,
           color: const Color(0xFF0D9488),
           label: 'Livraison',
         );
@@ -159,25 +172,55 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
     return clean;
   }
 
+  void _switchOrderType(OrderType type) {
+    if (_activeOrderType == type) return;
+    setState(() {
+      _activeOrderType = type;
+    });
+    if (type == OrderType.dineIn && _occupiedTables.isEmpty && !_loadingOccupied) {
+      _loadOccupiedTables();
+    }
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+
+    // Preserve all attributes: if user entered text, use it; otherwise retain previous value without erasing!
+    final enteredTable = _tableController.text.trim();
+    final table = enteredTable.isNotEmpty
+        ? _formatTableTwoDigits(enteredTable)
+        : (widget.initialTable != null && widget.initialTable!.trim().isNotEmpty
+            ? _formatTableTwoDigits(widget.initialTable!)
+            : null);
+
+    final enteredClient = _clientController.text.trim();
+    final client = enteredClient.isNotEmpty
+        ? enteredClient
+        : widget.initialClient;
+
+    final enteredPhone = _phoneController.text.trim();
+    final phone = enteredPhone.isNotEmpty
+        ? enteredPhone
+        : widget.initialPhone;
+
+    final enteredAddress = _addressController.text.trim();
+    final address = enteredAddress.isNotEmpty
+        ? enteredAddress
+        : widget.initialAddress;
+
+    final enteredNotes = _notesController.text.trim();
+    final notes = enteredNotes.isNotEmpty
+        ? enteredNotes
+        : widget.initialNotes;
+
     Navigator.of(context).pop(
       OrderDetailsResult(
-        tableNumber: widget.orderType == OrderType.dineIn
-            ? _formatTableTwoDigits(_tableController.text.trim())
-            : null,
-        clientName: widget.orderType == OrderType.takeaway
-            ? _clientController.text.trim()
-            : null,
-        deliveryAddress: widget.orderType == OrderType.delivery
-            ? _addressController.text.trim()
-            : null,
-        deliveryPhone: widget.orderType == OrderType.delivery
-            ? _phoneController.text.trim()
-            : null,
-        notes: _notesController.text.trim().isNotEmpty
-            ? _notesController.text.trim()
-            : null,
+        orderType: _activeOrderType,
+        tableNumber: table,
+        clientName: client,
+        deliveryAddress: address,
+        deliveryPhone: phone,
+        notes: notes,
       ),
     );
   }
@@ -185,7 +228,7 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final dialogWidth = (size.width - 32) < 460 ? size.width - 32 : 460.0;
+    final dialogWidth = (size.width - 32) < 480 ? size.width - 32 : 480.0;
     final meta = _typeMeta;
 
     return Stack(
@@ -230,9 +273,12 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _buildHeader(meta),
-                          Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: _buildFields(meta),
+                          _buildTypeSelector(),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                              child: _buildFields(meta),
+                            ),
                           ),
                           _buildFooter(),
                         ],
@@ -261,13 +307,13 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
       child: Row(
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               color: AppColors.gold,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(meta.icon, size: 16, color: AppColors.brandDark),
+            child: Icon(meta.icon, size: 18, color: AppColors.brandDark),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -278,15 +324,14 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                   'INFORMATIONS — TICKET N° ${widget.ticketNumber}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: GoogleFonts.bebasNeue(
                     color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
+                    fontSize: 20,
+                    letterSpacing: 0.6,
                   ),
                 ),
-                const SizedBox(height: 2),
                 Text(
-                  '${widget.posteLabel} — ${meta.label}',
+                  '${widget.posteLabel} • Mode actuel : ${meta.label}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -313,14 +358,135 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
     );
   }
 
+  Widget _buildTypeSelector() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF9FAFB),
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'TYPE DE COMMANDE',
+                style: GoogleFonts.openSans(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const Text(
+                'Les attributs sont conservés lors du changement',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF9CA3AF),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildTypeTab(
+                OrderType.dineIn,
+                'Sur Place',
+                Icons.restaurant_rounded,
+                const Color(0xFFE11D48),
+              ),
+              const SizedBox(width: 8),
+              _buildTypeTab(
+                OrderType.takeaway,
+                'À Emporter',
+                Icons.shopping_bag_outlined,
+                const Color(0xFF2563EB),
+              ),
+              const SizedBox(width: 8),
+              _buildTypeTab(
+                OrderType.delivery,
+                'Livraison',
+                Icons.moped_rounded,
+                const Color(0xFF0D9488),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypeTab(
+    OrderType type,
+    String label,
+    IconData icon,
+    Color activeColor,
+  ) {
+    final bool isSelected = _activeOrderType == type;
+    return Expanded(
+      child: InkWell(
+        onTap: () => _switchOrderType(type),
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? activeColor : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? activeColor : const Color(0xFFD1D5DB),
+              width: isSelected ? 1.5 : 1,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: activeColor.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: isSelected ? Colors.white : const Color(0xFF4B5563),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                    color: isSelected ? Colors.white : const Color(0xFF374151),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFields(({IconData icon, Color color, String label}) meta) {
-    switch (widget.orderType) {
+    switch (_activeOrderType) {
       case OrderType.dineIn:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sectionLabel('NUMÉRO DE TABLE'),
-            const SizedBox(height: 8),
+            _sectionLabel('NUMÉRO DE TABLE (OBLIGATOIRE)'),
+            const SizedBox(height: 6),
             _field(
               controller: _tableController,
               hint: 'ex. 05',
@@ -334,7 +500,7 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
               maxLength: 2,
               validator: (v) {
                 if (v == null || v.trim().isEmpty) {
-                  return 'Le numéro de table est requis';
+                  return 'Le numéro de table est requis pour Sur Place';
                 }
                 final clean = v.trim();
                 final cleanNum = int.tryParse(clean);
@@ -347,7 +513,10 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                          '#${t.ticketNumber}' == widget.ticketNumber)) {
                       return false;
                     }
-                    final tClean = t.tableNumber.toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
+                    final tClean = t.tableNumber
+                        .toLowerCase()
+                        .replaceFirst(RegExp(r'^table\s*'), '')
+                        .trim();
                     final tNum = int.tryParse(tClean);
                     if (cleanNum != null && tNum != null) {
                       return cleanNum == tNum;
@@ -357,15 +526,15 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                   orElse: () => null,
                 );
                 if (occupied != null) {
-                  return 'Table $clean déjà occupée';
+                  return 'Table $clean déjà occupée (#${occupied.ticketNumber})';
                 }
                 return null;
               },
             ),
             if (_loadingOccupied) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: const [
+              const SizedBox(height: 6),
+              const Row(
+                children: [
                   SizedBox(
                     width: 12,
                     height: 12,
@@ -379,96 +548,29 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                 ],
               ),
             ] else if (_occupiedTables.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFFECACA)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: const [
-                        Icon(Icons.info_outline, size: 14, color: AppColors.danger),
-                        SizedBox(width: 6),
-                        Text(
-                          'Tables actuellement occupées :',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.danger,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: () {
-                        final sorted = List<OccupiedTableInfo>.from(_occupiedTables)
-                          ..sort((a, b) {
-                            final cleanA = a.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
-                            final cleanB = b.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
-                            final numA = int.tryParse(cleanA) ?? 0;
-                            final numB = int.tryParse(cleanB) ?? 0;
-                            return numA.compareTo(numB);
-                          });
-                        return sorted.map((t) {
-                          final twoDigits = _formatTableTwoDigits(t.tableNumber);
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFFCA5A5)),
-                            ),
-                            child: Text(
-                              twoDigits,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFFB91C1C),
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          );
-                        }).toList();
-                      }(),
-                    ),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 8),
+              _buildOccupiedTablesBanner(),
             ],
-            const SizedBox(height: 16),
-            _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
-            const SizedBox(height: 8),
-            _field(
-              controller: _notesController,
-              hint: 'ex. Sans sel sur les frites, allergie...',
-              icon: Icons.chat_bubble_outline_rounded,
-            ),
-          ],
-        );
-      case OrderType.takeaway:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+            const SizedBox(height: 14),
             _sectionLabel('NOM DU CLIENT (OPTIONNEL)'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             _field(
               controller: _clientController,
               hint: 'ex. Thomas B.',
               icon: Icons.person_outline,
-              autofocus: true,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            _sectionLabel('TÉLÉPHONE (OPTIONNEL)'),
+            const SizedBox(height: 6),
+            _field(
+              controller: _phoneController,
+              hint: 'ex. 06 12 34 56 78',
+              icon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 14),
             _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             _field(
               controller: _notesController,
               hint: 'ex. Sans sel sur les frites, allergie...',
@@ -476,44 +578,167 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
             ),
           ],
         );
+
+      case OrderType.takeaway:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionLabel('NOM DU CLIENT (OBLIGATOIRE)'),
+            const SizedBox(height: 6),
+            _field(
+              controller: _clientController,
+              hint: 'ex. Karim / Thomas B.',
+              icon: Icons.person_outline,
+              autofocus: true,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Le nom du client est requis pour À emporter'
+                  : null,
+            ),
+            const SizedBox(height: 14),
+            _sectionLabel('NUMÉRO DE TÉLÉPHONE (OBLIGATOIRE)'),
+            const SizedBox(height: 6),
+            _field(
+              controller: _phoneController,
+              hint: 'ex. 06 12 34 56 78 / 0555 12 34 56',
+              icon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Le numéro de téléphone est requis'
+                  : null,
+            ),
+            const SizedBox(height: 14),
+            _sectionLabel('ADRESSE (OPTIONNELLE)'),
+            const SizedBox(height: 6),
+            _field(
+              controller: _addressController,
+              hint: 'ex. Quartier ou adresse de contact',
+              icon: Icons.location_on_outlined,
+            ),
+            const SizedBox(height: 14),
+            _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
+            const SizedBox(height: 6),
+            _field(
+              controller: _notesController,
+              hint: 'ex. Sans sel sur les frites, prêt à 12h30...',
+              icon: Icons.chat_bubble_outline_rounded,
+            ),
+          ],
+        );
+
       case OrderType.delivery:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sectionLabel('ADRESSE DE LIVRAISON'),
-            const SizedBox(height: 8),
+            _sectionLabel('NOM DU CLIENT (OBLIGATOIRE)'),
+            const SizedBox(height: 6),
             _field(
-              controller: _addressController,
-              hint: 'Rue, bâtiment, étage...',
-              icon: Icons.location_on_outlined,
+              controller: _clientController,
+              hint: 'ex. Sarah / Thomas B.',
+              icon: Icons.person_outline,
               autofocus: true,
               validator: (v) => (v == null || v.trim().isEmpty)
-                  ? "L'adresse est requise"
+                  ? 'Le nom du client est requis pour la livraison'
                   : null,
             ),
-            const SizedBox(height: 16),
-            _sectionLabel('TÉLÉPHONE'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
+            _sectionLabel('NUMÉRO DE TÉLÉPHONE (OBLIGATOIRE)'),
+            const SizedBox(height: 6),
             _field(
               controller: _phoneController,
               hint: 'ex. 06 12 34 56 78',
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
               validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Le téléphone est requis'
+                  ? 'Le téléphone est requis pour la livraison'
                   : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            _sectionLabel('ADRESSE DE LIVRAISON (OBLIGATOIRE)'),
+            const SizedBox(height: 6),
+            _field(
+              controller: _addressController,
+              hint: 'Rue, bâtiment, étage, digicode...',
+              icon: Icons.location_on_outlined,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? "L'adresse de livraison est requise"
+                  : null,
+            ),
+            const SizedBox(height: 14),
             _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             _field(
               controller: _notesController,
-              hint: 'ex. Sans sel sur les frites, allergie...',
+              hint: 'ex. Sonner interphone #4, sauce supplémentaire...',
               icon: Icons.chat_bubble_outline_rounded,
             ),
           ],
         );
     }
+  }
+
+  Widget _buildOccupiedTablesBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.info_outline, size: 14, color: AppColors.danger),
+              SizedBox(width: 6),
+              Text(
+                'Tables actuellement occupées :',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.danger,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: () {
+              final sorted = List<OccupiedTableInfo>.from(_occupiedTables)
+                ..sort((a, b) {
+                  final cleanA = a.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
+                  final cleanB = b.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
+                  final numA = int.tryParse(cleanA) ?? 0;
+                  final numB = int.tryParse(cleanB) ?? 0;
+                  return numA.compareTo(numB);
+                });
+              return sorted.map((t) {
+                final twoDigits = _formatTableTwoDigits(t.tableNumber);
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Text(
+                    twoDigits,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFB91C1C),
+                    ),
+                  ),
+                );
+              }).toList();
+            }(),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _sectionLabel(String text) => Text(
@@ -549,13 +774,12 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
       style: GoogleFonts.openSans(fontSize: 14, color: AppColors.textPrimary),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: GoogleFonts.openSans(fontSize: 14, color: AppColors.textMuted),
+        hintStyle: GoogleFonts.openSans(fontSize: 13, color: AppColors.textMuted),
         prefixIcon: Icon(icon, size: 18, color: AppColors.textSecondary),
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: Colors.white,
         isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.border),
@@ -598,7 +822,8 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                 side: const BorderSide(color: AppColors.border),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               child: const Text(
                 'Annuler',
@@ -611,10 +836,10 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
             flex: 2,
             child: ElevatedButton.icon(
               onPressed: _submit,
-              icon: const Icon(Icons.arrow_forward, size: 18),
-              label: const Text(
-                'CONTINUER VERS LE PAIEMENT',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: Text(
+                widget.submitLabel,
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.gold,
@@ -622,7 +847,8 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),

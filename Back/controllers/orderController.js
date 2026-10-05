@@ -168,25 +168,29 @@ exports.createOrder = async (req, res) => {
         data.buzzerNumber = `Table ${table}`;
       }
 
-      const occupiedOrder = await Order.findOne({
-        storeId: data.storeId,
-        status: { $nin: ['terminee', 'annulee'] },
-        kdsStatus: { $ne: 'served' },
-        $or: [
-          { tableNumber: table },
-          { buzzerNumber: `Table ${table}` },
-          { buzzerNumber: table },
-          { buzzerNumber: new RegExp(`^Table\\s*${escapeRegex(table)}$`, 'i') },
-        ],
-      });
-
-      if (occupiedOrder) {
-        return res.status(400).json({
-          success: false,
-          message: `La table ${table} est déjà liée à une commande active (#${occupiedOrder.ticketNumber || occupiedOrder._id}). Elle ne peut pas être réutilisée tant que cette commande n'est pas marquée terminée.`,
-          occupiedTable: table,
-          activeTicketNumber: occupiedOrder.ticketNumber,
+      // Table conflict check only applies to dine-in orders
+      if (data.orderType === 'sur_place') {
+        const occupiedOrder = await Order.findOne({
+          storeId: data.storeId,
+          orderType: 'sur_place',
+          status: { $nin: ['terminee', 'annulee'] },
+          kdsStatus: { $ne: 'served' },
+          $or: [
+            { tableNumber: table },
+            { buzzerNumber: `Table ${table}` },
+            { buzzerNumber: table },
+            { buzzerNumber: new RegExp(`^Table\\s*${escapeRegex(table)}$`, 'i') },
+          ],
         });
+
+        if (occupiedOrder) {
+          return res.status(400).json({
+            success: false,
+            message: `La table ${table} est déjà liée à une commande active (#${occupiedOrder.ticketNumber || occupiedOrder._id}). Elle ne peut pas être réutilisée tant que cette commande n'est pas marquée terminée.`,
+            occupiedTable: table,
+            activeTicketNumber: occupiedOrder.ticketNumber,
+          });
+        }
       }
     }
 
@@ -368,6 +372,52 @@ function computeOrderChanges(oldOrder, newBody) {
     });
   }
 
+  // Order type check
+  if (newBody.orderType && newBody.orderType !== oldOrder.orderType) {
+    const typeLabel = (t) => {
+      if (t === 'sur_place') return 'Sur place';
+      if (t === 'a_emporter') return 'À emporter';
+      if (t === 'livraison') return 'Livraison';
+      return t;
+    };
+    changes.push({
+      action: 'general',
+      text: `Mode : ${typeLabel(oldOrder.orderType)} ➔ ${typeLabel(newBody.orderType)}`,
+    });
+  }
+
+  // Client name check
+  if (newBody.clientName !== undefined && (newBody.clientName || '').trim() !== (oldOrder.clientName || '').trim()) {
+    const oldClient = (oldOrder.clientName || '').trim();
+    const newClient = (newBody.clientName || '').trim();
+    if (oldClient !== newClient) {
+      changes.push({
+        action: 'general',
+        text: `Client : ${oldClient || 'Non assigné'} ➔ ${newClient || 'Non assigné'}`,
+      });
+    }
+  }
+
+  // Delivery info check
+  if (newBody.delivery && typeof newBody.delivery === 'object') {
+    const oldPhone = (oldOrder.delivery && oldOrder.delivery.phone) || '';
+    const newPhone = newBody.delivery.phone || '';
+    if (newPhone.trim() && newPhone.trim() !== oldPhone.trim()) {
+      changes.push({
+        action: 'general',
+        text: `Téléphone : ${oldPhone || 'Non renseigné'} ➔ ${newPhone.trim()}`,
+      });
+    }
+    const oldAddress = (oldOrder.delivery && oldOrder.delivery.address) || '';
+    const newAddress = newBody.delivery.address || '';
+    if (newAddress.trim() && newAddress.trim() !== oldAddress.trim()) {
+      changes.push({
+        action: 'general',
+        text: `Adresse : ${oldAddress || 'Non renseignée'} ➔ ${newAddress.trim()}`,
+      });
+    }
+  }
+
   // Note check
   if (newBody.notes !== undefined && (newBody.notes || '').trim() !== (oldOrder.notes || '').trim()) {
     const noteText = (newBody.notes || '').trim();
@@ -406,6 +456,18 @@ function mergeModifications(existingList, incomingList) {
       (e) => e.action === incAction && e.text === incText && (e.details || null) === incDetails
     );
     if (isDup) continue;
+
+    // General action: update existing general change with same prefix if present
+    if (incAction === 'general') {
+      const prefix = incText.split(' : ')[0];
+      const genIdx = result.findIndex((e) => e.action === 'general' && e.text.startsWith(prefix + ' : '));
+      if (genIdx !== -1) {
+        result[genIdx] = inc;
+      } else {
+        result.push(inc);
+      }
+      continue;
+    }
 
     // Table action: update existing table change if present
     if (incAction === 'table') {
@@ -486,6 +548,9 @@ exports.updateOrder = async (req, res) => {
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
     // Validate table if updating tableNumber or buzzerNumber
+    const targetStatus = req.body.status || order.status;
+    const targetOrderType = req.body.orderType || order.orderType;
+
     const rawTable = req.body.tableNumber !== undefined
       ? req.body.tableNumber
       : (req.body.buzzerNumber !== undefined ? req.body.buzzerNumber : null);
@@ -493,11 +558,11 @@ exports.updateOrder = async (req, res) => {
     if (rawTable !== null) {
       const table = normalizeTableNumber(rawTable);
       if (table) {
-        const targetStatus = req.body.status || order.status;
-        if (!['terminee', 'annulee'].includes(targetStatus)) {
+        if (!['terminee', 'annulee'].includes(targetStatus) && targetOrderType === 'sur_place') {
           const occupiedOrder = await Order.findOne({
             _id: { $ne: order._id },
             storeId: order.storeId,
+            orderType: 'sur_place',
             status: { $nin: ['terminee', 'annulee'] },
             kdsStatus: { $ne: 'served' },
             $or: [
@@ -518,6 +583,9 @@ exports.updateOrder = async (req, res) => {
           }
         }
         req.body.tableNumber = table;
+        if (!req.body.buzzerNumber && targetOrderType === 'sur_place') {
+          req.body.buzzerNumber = `Table ${table}`;
+        }
       }
     }
 
@@ -544,6 +612,12 @@ exports.updateOrder = async (req, res) => {
     // Preserve initialItems snapshot if not present
     if (!order.initialItems || order.initialItems.length === 0) {
       order.initialItems = order.items.slice();
+    }
+
+    // Preserve existing delivery details if partial delivery object provided
+    if (req.body.delivery && typeof req.body.delivery === 'object') {
+      const existingDelivery = order.delivery ? (order.delivery.toObject ? order.delivery.toObject() : order.delivery) : {};
+      req.body.delivery = { ...existingDelivery, ...req.body.delivery };
     }
 
     Object.assign(order, req.body);
@@ -644,6 +718,7 @@ exports.getDailyStats = async (req, res) => {
 exports.getOccupiedTables = async (req, res) => {
   try {
     const filter = {
+      orderType: 'sur_place',
       status: { $nin: ['terminee', 'annulee'] },
       kdsStatus: { $ne: 'served' },
     };

@@ -9,6 +9,7 @@ import '../../services/order_service.dart';
 import '../../theme/app_colors.dart';
 import 'pos/customization_modal.dart';
 import 'pos/menu_picker_modal.dart';
+import 'pos/order_details_modal.dart';
 
 class _ModeStyle {
   const _ModeStyle(this.label, this.bg, this.fg, this.dot);
@@ -288,6 +289,249 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
   }
 
   // ────────────────────────── Edit Order Details ──────────────────────────
+
+  String _orderTypeToApi(OrderType t) {
+    switch (t) {
+      case OrderType.dineIn:
+        return 'sur_place';
+      case OrderType.takeaway:
+        return 'a_emporter';
+      case OrderType.delivery:
+        return 'livraison';
+    }
+  }
+
+  Future<void> _openOrderDetailsDialog([OrderType? targetType]) async {
+    final details = await showDialog<OrderDetailsResult>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (_) => OrderDetailsModal(
+        orderType: targetType ?? _orderType,
+        ticketNumber: widget.order.ticketNumber,
+        posteLabel: widget.posteLabel,
+        initialNotes: _notes,
+        initialTable: _tableNumber,
+        initialClient: _clientName,
+        initialAddress: _deliveryAddress,
+        initialPhone: _deliveryPhone,
+        currentTicketNumber: widget.order.ticketNumber,
+        submitLabel: 'ENREGISTRER LES INFORMATIONS',
+      ),
+    );
+
+    if (details != null && mounted) {
+      setState(() {
+        if (details.orderType != null) {
+          _orderType = details.orderType!;
+        }
+        if (details.tableNumber != null && details.tableNumber!.isNotEmpty) {
+          _tableNumber = details.tableNumber;
+        }
+        if (details.clientName != null) {
+          _clientName = details.clientName;
+        }
+        if (details.deliveryPhone != null) {
+          _deliveryPhone = details.deliveryPhone;
+        }
+        if (details.deliveryAddress != null) {
+          _deliveryAddress = details.deliveryAddress;
+        }
+        if (details.notes != null) {
+          _notes = details.notes!.isEmpty ? null : details.notes;
+        }
+      });
+    }
+  }
+
+  Future<void> _editClientDialog() async {
+    final controller = TextEditingController(text: _clientName ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.person_outline, color: AppColors.brandDark),
+            SizedBox(width: 8),
+            Text('Nom du Client', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Indiquez le nom du client :',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Ex: Karim / Thomas B.',
+                prefixIcon: const Icon(Icons.person, size: 20),
+                filled: true,
+                fillColor: const Color(0xFFF9FAFB),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandDark,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _clientName = result.isEmpty ? null : result;
+      });
+    }
+  }
+
+  Future<void> _editPhoneDialog() async {
+    final controller = TextEditingController(text: _deliveryPhone ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.phone_outlined, color: AppColors.brandDark),
+            SizedBox(width: 8),
+            Text('Numéro de Téléphone', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Indiquez le numéro de téléphone :',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Ex: 06 12 34 56 78 / 0555 12 34 56',
+                prefixIcon: const Icon(Icons.phone, size: 20),
+                filled: true,
+                fillColor: const Color(0xFFF9FAFB),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandDark,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _deliveryPhone = result.isEmpty ? null : result;
+      });
+    }
+  }
+
+  Future<void> _editAddressDialog() async {
+    final controller = TextEditingController(text: _deliveryAddress ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.location_on_outlined, color: AppColors.brandDark),
+            SizedBox(width: 8),
+            Text('Adresse', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Indiquez l\'adresse pour cette commande :',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Rue, bâtiment, étage...',
+                prefixIcon: const Icon(Icons.location_on, size: 20),
+                filled: true,
+                fillColor: const Color(0xFFF9FAFB),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandDark,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _deliveryAddress = result.isEmpty ? null : result;
+      });
+    }
+  }
 
   Future<void> _editTableDialog() async {
     final controller = TextEditingController(text: _tableNumber ?? '');
@@ -578,7 +822,49 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
       });
     }
 
-    // 7. Notes check
+    // 7. Mode check
+    final oldTypeApi = widget.order.orderType;
+    final newTypeApi = _orderTypeToApi(_orderType);
+    if (newTypeApi != oldTypeApi) {
+      final oldLabel = _modeStyle(oldTypeApi).label;
+      final newLabel = _modeStyle(newTypeApi).label;
+      changes.add({
+        'action': 'general',
+        'text': 'Mode : $oldLabel ➔ $newLabel',
+      });
+    }
+
+    // 8. Client Name check
+    final oldClient = (widget.order.clientName ?? widget.order.deliveryName ?? '').trim();
+    final newClient = (_clientName ?? '').trim();
+    if (newClient != oldClient) {
+      changes.add({
+        'action': 'general',
+        'text': 'Client : ${oldClient.isNotEmpty ? oldClient : "Non assigné"} ➔ ${newClient.isNotEmpty ? newClient : "Non assigné"}',
+      });
+    }
+
+    // 9. Phone check
+    final oldPhone = (widget.order.deliveryPhone ?? '').trim();
+    final newPhone = (_deliveryPhone ?? '').trim();
+    if (newPhone != oldPhone) {
+      changes.add({
+        'action': 'general',
+        'text': 'Téléphone : ${oldPhone.isNotEmpty ? oldPhone : "Non renseigné"} ➔ ${newPhone.isNotEmpty ? newPhone : "Non renseigné"}',
+      });
+    }
+
+    // 10. Address check
+    final oldAddr = (widget.order.deliveryAddress ?? '').trim();
+    final newAddr = (_deliveryAddress ?? '').trim();
+    if (newAddr != oldAddr) {
+      changes.add({
+        'action': 'general',
+        'text': 'Adresse : ${oldAddr.isNotEmpty ? oldAddr : "Non renseignée"} ➔ ${newAddr.isNotEmpty ? newAddr : "Non renseignée"}',
+      });
+    }
+
+    // 11. Notes check
     final oldNote = (widget.order.notes ?? '').trim();
     final newNote = (_notes ?? '').trim();
     if (newNote != oldNote) {
@@ -641,6 +927,20 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
           e['text'] == incText &&
           (e['details'] ?? '') == (incDetails ?? ''));
       if (isDup) continue;
+
+      // General action: update existing general change with same prefix if present
+      if (incAction == 'general') {
+        final prefix = incText.split(' : ')[0];
+        final genIdx = result.indexWhere((e) =>
+            e['action'] == 'general' &&
+            (e['text']?.toString() ?? '').startsWith('$prefix : '));
+        if (genIdx != -1) {
+          result[genIdx] = inc;
+        } else {
+          result.add(inc);
+        }
+        continue;
+      }
 
       // Table action: replace existing table change with new one
       if (incAction == 'table') {
@@ -726,6 +1026,43 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
         ),
       );
       return;
+    }
+    // Verify essential attributes before saving modifications
+    final bool hasEssential;
+    switch (_orderType) {
+      case OrderType.dineIn:
+        hasEssential = _tableNumber != null && _tableNumber!.trim().isNotEmpty;
+        break;
+      case OrderType.takeaway:
+        hasEssential = _clientName != null && _clientName!.trim().isNotEmpty &&
+                       _deliveryPhone != null && _deliveryPhone!.trim().isNotEmpty;
+        break;
+      case OrderType.delivery:
+        hasEssential = _clientName != null && _clientName!.trim().isNotEmpty &&
+                       _deliveryPhone != null && _deliveryPhone!.trim().isNotEmpty &&
+                       _deliveryAddress != null && _deliveryAddress!.trim().isNotEmpty;
+        break;
+    }
+
+    if (!hasEssential) {
+      await _openOrderDetailsDialog();
+      if (!mounted) return;
+      final bool stillMissing;
+      switch (_orderType) {
+        case OrderType.dineIn:
+          stillMissing = _tableNumber == null || _tableNumber!.trim().isEmpty;
+          break;
+        case OrderType.takeaway:
+          stillMissing = _clientName == null || _clientName!.trim().isEmpty ||
+                         _deliveryPhone == null || _deliveryPhone!.trim().isEmpty;
+          break;
+        case OrderType.delivery:
+          stillMissing = _clientName == null || _clientName!.trim().isEmpty ||
+                         _deliveryPhone == null || _deliveryPhone!.trim().isEmpty ||
+                         _deliveryAddress == null || _deliveryAddress!.trim().isEmpty;
+          break;
+      }
+      if (stillMissing) return;
     }
 
     setState(() => _saving = true);
@@ -887,20 +1224,80 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     );
   }
 
+  Widget _buildModeTab(
+    OrderType type,
+    String label,
+    Color color,
+    IconData icon,
+  ) {
+    final bool isSelected = _orderType == type;
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          if (isSelected) {
+            _openOrderDetailsDialog();
+          } else {
+            _openOrderDetailsDialog(type);
+          }
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? color : const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? color : const Color(0xFFE5E7EB),
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 13,
+                color: isSelected ? Colors.white : const Color(0xFF4B5563),
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                    color: isSelected ? Colors.white : const Color(0xFF374151),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ────────────────────────── Info Card ──────────────────────────
 
   Widget _buildInfoCard(_ModeStyle mode) {
     final clientDisplay = (_clientName != null && _clientName!.trim().isNotEmpty)
         ? _clientName!
-        : 'Client Passant';
+        : 'Cliquer pour renseigner';
 
-    String tableDisplay = '—';
+    String tableDisplay = 'Cliquer pour assigner';
     if (_tableNumber != null && _tableNumber!.trim().isNotEmpty) {
       final cleaned = _tableNumber!
           .replaceAll(RegExp(r'^(buzzer\s*#?|table\s*)', caseSensitive: false), '')
           .trim();
       tableDisplay = cleaned.isNotEmpty ? 'Table $cleaned' : 'Table';
     }
+
+    final bool showDeliveryOrContact = _orderType == OrderType.delivery ||
+        _orderType == OrderType.takeaway ||
+        (_deliveryPhone != null && _deliveryPhone!.isNotEmpty) ||
+        (_deliveryAddress != null && _deliveryAddress!.isNotEmpty);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -922,13 +1319,13 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
                   '${_fmtDate(widget.order.createdAt)} à ${_fmtTime(widget.order.createdAt)}',
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'MODE DE CONSOMMATION',
+                      'MODE (CLIQUER POUR CHANGER)',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
@@ -937,27 +1334,50 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    _modeChip(mode),
+                    Row(
+                      children: [
+                        _buildModeTab(OrderType.dineIn, 'Sur place', const Color(0xFFE11D48), Icons.restaurant_rounded),
+                        const SizedBox(width: 4),
+                        _buildModeTab(OrderType.takeaway, 'Emporter', const Color(0xFF2563EB), Icons.shopping_bag_outlined),
+                        const SizedBox(width: 4),
+                        _buildModeTab(OrderType.delivery, 'Livraison', const Color(0xFF0D9488), Icons.moped_rounded),
+                      ],
+                    ),
                   ],
                 ),
               ),
             ],
           ),
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
+            padding: EdgeInsets.symmetric(vertical: 12),
             child: Divider(height: 1, color: Color(0xFFF3F4F6)),
           ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: _infoCell(
-                  Icons.person_outline,
-                  'NOM DU CLIENT',
-                  clientDisplay,
+                child: InkWell(
+                  onTap: _editClientDialog,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _infoCell(
+                            Icons.person_outline,
+                            'NOM DU CLIENT (MODIFIABLE)',
+                            clientDisplay,
+                          ),
+                        ),
+                        const Icon(Icons.edit_outlined, size: 15, color: Color(0xFF2563EB)),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: InkWell(
                   onTap: _editTableDialog,
@@ -970,11 +1390,11 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
                         Expanded(
                           child: _infoCell(
                             Icons.table_restaurant_outlined,
-                            'TABLE (CLIQUER POUR MODIFIER)',
+                            'TABLE (MODIFIABLE)',
                             tableDisplay,
                           ),
                         ),
-                        const Icon(Icons.edit_outlined, size: 16, color: Color(0xFFD97706)),
+                        const Icon(Icons.edit_outlined, size: 15, color: Color(0xFFD97706)),
                       ],
                     ),
                   ),
@@ -982,36 +1402,95 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
               ),
             ],
           ),
-          if (_orderType == OrderType.delivery) ...[
+          if (showDeliveryOrContact) ...[
             const Padding(
-              padding: EdgeInsets.symmetric(vertical: 14),
+              padding: EdgeInsets.symmetric(vertical: 12),
               child: Divider(height: 1, color: Color(0xFFF3F4F6)),
             ),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: _infoCell(
-                    Icons.phone_outlined,
-                    'TÉLÉPHONE',
-                    (_deliveryPhone != null && _deliveryPhone!.isNotEmpty)
-                        ? _deliveryPhone!
-                        : '—',
+                  child: InkWell(
+                    onTap: _editPhoneDialog,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _infoCell(
+                              Icons.phone_outlined,
+                              'TÉLÉPHONE (MODIFIABLE)',
+                              (_deliveryPhone != null && _deliveryPhone!.isNotEmpty)
+                                  ? _deliveryPhone!
+                                  : 'Cliquer pour renseigner',
+                            ),
+                          ),
+                          const Icon(Icons.edit_outlined, size: 15, color: Color(0xFF2563EB)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: _infoCell(
-                    Icons.location_on_outlined,
-                    'ADRESSE DE LIVRAISON',
-                    (_deliveryAddress != null && _deliveryAddress!.isNotEmpty)
-                        ? _deliveryAddress!
-                        : '—',
+                  child: InkWell(
+                    onTap: _editAddressDialog,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _infoCell(
+                              Icons.location_on_outlined,
+                              'ADRESSE (MODIFIABLE)',
+                              (_deliveryAddress != null && _deliveryAddress!.isNotEmpty)
+                                  ? _deliveryAddress!
+                                  : 'Cliquer pour renseigner',
+                            ),
+                          ),
+                          const Icon(Icons.edit_outlined, size: 15, color: Color(0xFF2563EB)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ],
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: () => _openOrderDetailsDialog(),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.tune, size: 14, color: Color(0xFF2563EB)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Modifier tous les attributs / type de commande',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1E40AF),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1104,30 +1583,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     );
   }
 
-  Widget _modeChip(_ModeStyle m) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: m.bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: m.dot, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            m.label,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: m.fg),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   // ────────────────────────── Items Card ──────────────────────────
 

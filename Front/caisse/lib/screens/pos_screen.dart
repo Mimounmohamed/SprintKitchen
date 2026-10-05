@@ -429,25 +429,48 @@ class _PosScreenState extends State<PosScreen> {
   Future<void> _openEncaissement() async {
     if (_submitting) return;
 
-    // No order created yet for this ticket: ask for the order-type details
-    // first (table number / delivery info / optional client name). If an
-    // order already exists (retrying payment after a failure), its details
-    // are already saved server-side, so skip straight to payment.
+    // Check if essential attributes for the current order type are already set
     if (_pendingOrder == null) {
-      final details = await showDialog<OrderDetailsResult>(
-        context: context,
-        barrierColor: Colors.transparent,
-        builder: (_) => OrderDetailsModal(
-          orderType: _orderType,
-          ticketNumber: _ticketNumber,
-          posteLabel: widget.posteLabel,
-          initialNotes: _orderNotes,
-        ),
-      );
-      if (details == null || !mounted) return;
-      _orderDetails = details;
-      if (details.notes != null) {
-        _orderNotes = details.notes!.isEmpty ? null : details.notes;
+      final bool hasEssential;
+      switch (_orderType) {
+        case OrderType.dineIn:
+          hasEssential = _orderDetails?.tableNumber != null && _orderDetails!.tableNumber!.isNotEmpty;
+          break;
+        case OrderType.takeaway:
+          hasEssential = _orderDetails?.clientName != null && _orderDetails!.clientName!.isNotEmpty &&
+                         _orderDetails?.deliveryPhone != null && _orderDetails!.deliveryPhone!.isNotEmpty;
+          break;
+        case OrderType.delivery:
+          hasEssential = _orderDetails?.clientName != null && _orderDetails!.clientName!.isNotEmpty &&
+                         _orderDetails?.deliveryPhone != null && _orderDetails!.deliveryPhone!.isNotEmpty &&
+                         _orderDetails?.deliveryAddress != null && _orderDetails!.deliveryAddress!.isNotEmpty;
+          break;
+      }
+
+      if (!hasEssential) {
+        final details = await showDialog<OrderDetailsResult>(
+          context: context,
+          barrierColor: Colors.transparent,
+          builder: (_) => OrderDetailsModal(
+            orderType: _orderType,
+            ticketNumber: _ticketNumber,
+            posteLabel: widget.posteLabel,
+            initialNotes: _orderNotes,
+            initialTable: _orderDetails?.tableNumber ?? _editingOrder?.tableNumber,
+            initialClient: _orderDetails?.clientName ?? _editingOrder?.clientName,
+            initialAddress: _orderDetails?.deliveryAddress ?? _editingOrder?.deliveryAddress,
+            initialPhone: _orderDetails?.deliveryPhone ?? _editingOrder?.deliveryPhone,
+            submitLabel: 'CONTINUER VERS LE PAIEMENT',
+          ),
+        );
+        if (details == null || !mounted) return;
+        setState(() {
+          _orderType = details.orderType ?? _orderType;
+          _orderDetails = details;
+          if (details.notes != null) {
+            _orderNotes = details.notes!.isEmpty ? null : details.notes;
+          }
+        });
       }
     }
 
@@ -682,8 +705,9 @@ class _PosScreenState extends State<PosScreen> {
       _orderType = _orderTypeFromApi(order.orderType);
       _orderNotes = order.notes;
       _orderDetails = OrderDetailsResult(
-        tableNumber: order.tableNumber,
-        clientName: order.clientName,
+        orderType: _orderType,
+        tableNumber: order.tableNumber ?? order.buzzerNumber,
+        clientName: order.clientName ?? order.deliveryName,
         deliveryAddress: order.deliveryAddress,
         deliveryPhone: order.deliveryPhone,
         notes: order.notes,
@@ -724,15 +748,92 @@ class _PosScreenState extends State<PosScreen> {
         initialAddress: _orderDetails?.deliveryAddress ?? _editingOrder?.deliveryAddress,
         initialPhone: _orderDetails?.deliveryPhone ?? _editingOrder?.deliveryPhone,
         currentTicketNumber: _editingOrder?.ticketNumber,
+        submitLabel: _isEditing ? 'ENREGISTRER LES MODIFICATIONS' : 'VALIDER LES INFORMATIONS',
       ),
     );
     if (details == null || !mounted) return;
     setState(() {
+      _orderType = details.orderType ?? _orderType;
       _orderDetails = details;
       if (details.notes != null) {
         _orderNotes = details.notes!.isEmpty ? null : details.notes;
       }
     });
+  }
+
+  Future<void> _handleOrderTypeSelection(OrderType type) async {
+    // If tapping the currently selected type, open the modal to view/edit its details
+    if (_orderType == type) {
+      await _openEditOrderDetails();
+      return;
+    }
+
+    // Changing type: prompt for essential attributes for the new type
+    final details = await showDialog<OrderDetailsResult>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (_) => OrderDetailsModal(
+        orderType: type,
+        ticketNumber: _ticketNumber,
+        posteLabel: widget.posteLabel,
+        initialNotes: _orderNotes,
+        initialTable: _orderDetails?.tableNumber ?? _editingOrder?.tableNumber,
+        initialClient: _orderDetails?.clientName ?? _editingOrder?.clientName,
+        initialAddress: _orderDetails?.deliveryAddress ?? _editingOrder?.deliveryAddress,
+        initialPhone: _orderDetails?.deliveryPhone ?? _editingOrder?.deliveryPhone,
+        currentTicketNumber: _editingOrder?.ticketNumber,
+        submitLabel: 'APPLIQUER LE TYPE & VALIDER',
+      ),
+    );
+
+    if (details != null && mounted) {
+      setState(() {
+        _orderType = details.orderType ?? type;
+        _orderDetails = details;
+        if (details.notes != null) {
+          _orderNotes = details.notes!.isEmpty ? null : details.notes;
+        }
+      });
+    }
+  }
+
+  Color _orderTypeColor(OrderType type) {
+    switch (type) {
+      case OrderType.dineIn:
+        return const Color(0xFFE11D48);
+      case OrderType.takeaway:
+        return const Color(0xFF2563EB);
+      case OrderType.delivery:
+        return const Color(0xFF0D9488);
+    }
+  }
+
+  String _formatCurrentOrderSummary() {
+    switch (_orderType) {
+      case OrderType.dineIn:
+        final tbl = _orderDetails?.tableNumber;
+        final name = _orderDetails?.clientName;
+        if (tbl != null && tbl.isNotEmpty) {
+          return name != null && name.isNotEmpty ? 'Table $tbl ($name)' : 'Table $tbl';
+        }
+        return name != null && name.isNotEmpty ? 'Sur place ($name)' : 'Table non assignée (cliquer pour définir)';
+      case OrderType.takeaway:
+        final name = _orderDetails?.clientName;
+        final phone = _orderDetails?.deliveryPhone;
+        if (name != null && name.isNotEmpty) {
+          return phone != null && phone.isNotEmpty ? '$name ($phone)' : name;
+        }
+        return 'Client à emporter (cliquer pour renseigner)';
+      case OrderType.delivery:
+        final name = _orderDetails?.clientName;
+        final phone = _orderDetails?.deliveryPhone;
+        final addr = _orderDetails?.deliveryAddress;
+        if (addr != null && addr.isNotEmpty) {
+          final parts = [if (name != null && name.isNotEmpty) name, if (phone != null && phone.isNotEmpty) phone, addr];
+          return parts.join(' • ');
+        }
+        return 'Infos livraison requises (cliquer pour renseigner)';
+    }
   }
 
   Future<void> _saveOrderModifications() async {
@@ -742,6 +843,44 @@ class _PosScreenState extends State<PosScreen> {
         const SnackBar(content: Text('Le ticket ne peut pas être vide.')),
       );
       return;
+    }
+
+    // Verify essential attributes before saving modifications
+    final bool hasEssential;
+    switch (_orderType) {
+      case OrderType.dineIn:
+        hasEssential = _orderDetails?.tableNumber != null && _orderDetails!.tableNumber!.isNotEmpty;
+        break;
+      case OrderType.takeaway:
+        hasEssential = _orderDetails?.clientName != null && _orderDetails!.clientName!.isNotEmpty &&
+                       _orderDetails?.deliveryPhone != null && _orderDetails!.deliveryPhone!.isNotEmpty;
+        break;
+      case OrderType.delivery:
+        hasEssential = _orderDetails?.clientName != null && _orderDetails!.clientName!.isNotEmpty &&
+                       _orderDetails?.deliveryPhone != null && _orderDetails!.deliveryPhone!.isNotEmpty &&
+                       _orderDetails?.deliveryAddress != null && _orderDetails!.deliveryAddress!.isNotEmpty;
+        break;
+    }
+
+    if (!hasEssential) {
+      await _openEditOrderDetails();
+      if (!mounted) return;
+      final bool stillMissing;
+      switch (_orderType) {
+        case OrderType.dineIn:
+          stillMissing = _orderDetails?.tableNumber == null || _orderDetails!.tableNumber!.isEmpty;
+          break;
+        case OrderType.takeaway:
+          stillMissing = _orderDetails?.clientName == null || _orderDetails!.clientName!.isEmpty ||
+                         _orderDetails?.deliveryPhone == null || _orderDetails!.deliveryPhone!.isEmpty;
+          break;
+        case OrderType.delivery:
+          stillMissing = _orderDetails?.clientName == null || _orderDetails!.clientName!.isEmpty ||
+                         _orderDetails?.deliveryPhone == null || _orderDetails!.deliveryPhone!.isEmpty ||
+                         _orderDetails?.deliveryAddress == null || _orderDetails!.deliveryAddress!.isEmpty;
+          break;
+      }
+      if (stillMissing) return;
     }
 
     setState(() => _submitting = true);
@@ -1123,26 +1262,40 @@ class _PosScreenState extends State<PosScreen> {
               ],
             ),
           ),
-          if (_isEditing) ...[
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: InkWell(
+              onTap: _openEditOrderDetails,
+              borderRadius: BorderRadius.circular(6),
               child: Row(
                 children: [
-                  const Icon(Icons.table_restaurant_outlined, size: 14, color: Color(0xFF64748B)),
-                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _orderTypeColor(_orderType).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      _orderType.label.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: _orderTypeColor(_orderType),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _orderDetails?.tableNumber != null && _orderDetails!.tableNumber!.isNotEmpty
-                          ? 'Table ${_orderDetails!.tableNumber}'
-                          : (_orderDetails?.clientName != null && _orderDetails!.clientName!.isNotEmpty
-                              ? _orderDetails!.clientName!
-                              : 'Sans table assignée'),
+                      _formatCurrentOrderSummary(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1150,21 +1303,17 @@ class _PosScreenState extends State<PosScreen> {
                       ),
                     ),
                   ),
-                  InkWell(
-                    onTap: _openEditOrderDetails,
-                    borderRadius: BorderRadius.circular(4),
-                    child: const Tooltip(
-                      message: 'Modifier la table / infos',
-                      child: Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(Icons.edit, size: 14, color: Color(0xFF2563EB)),
-                      ),
+                  const Tooltip(
+                    message: 'Modifier le mode & les infos',
+                    child: Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.edit_outlined, size: 15, color: Color(0xFF2563EB)),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
+          ),
           if (_orderNotes != null && _orderNotes!.isNotEmpty)
             InkWell(
               onTap: _openCommentDialog,
@@ -1508,7 +1657,7 @@ class _PosScreenState extends State<PosScreen> {
     final bool selected = _orderType == type;
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _orderType = type),
+        onTap: () => _handleOrderTypeSelection(type),
         borderRadius: BorderRadius.circular(20),
         child: Container(
           height: 38,
