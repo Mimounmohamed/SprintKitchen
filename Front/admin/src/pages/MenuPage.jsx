@@ -1,13 +1,16 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Plus, Pencil, Trash2, Settings, Circle, X, ChevronDown } from "lucide-react";
+import { ArrowLeft, Search, Plus, Pencil, Trash2, Settings, Circle, X, ChevronDown, UtensilsCrossed } from "lucide-react";
 import { productService, categoryService, ingredientService } from "../services";
 
 const C = {
-  bg: "#F5F4F0", cardBg: "#FFFFFF", ink: "#1C1917", brown: "#2E2117",
-  yellow: "#F2B705", muted: "#8B8378", border: "#E7E4DD", green: "#2FAE5C",
-  red: "#E0533D", redBg: "#FBEAE7", yellowBg: "#FCEFCB",
+  bg: "#F5F4F0", cardBg: "#FFFFFF", ink: "#1C1917", brown: "#583926",
+  yellow: "#FACC15", muted: "#6B7280", border: "#E5E7EB", borderDark: "#D1D5DB", green: "#059669",
+  red: "#EF4444", redBg: "#FDEAE8", yellowBg: "#FEF08A",
 };
+
+const FONT_TITLE = "'Bebas Neue', sans-serif";
+const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 /* ── Toggle ─────────────────────────────────────────────────────────────────── */
 function Toggle({ checked, onChange }) {
@@ -836,100 +839,240 @@ export default function MenuPage() {
       color: C.ink, display: "flex", flexDirection: "column",
     }}>
 
-      {/* ── Header ── */}
-      {mobile ? (
-        <header style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 16px", borderBottom:`1px solid ${C.border}`, background:C.cardBg, flexShrink:0 }}>
-          <button style={{ background:"none", border:"none", cursor:"pointer", padding:4, color:C.ink, display:"flex" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      {/* ── Top Header Bar (Exact Caisse / Historique / Inventaire) ── */}
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          background: C.cardBg,
+          borderBottom: `1px solid ${C.border}`,
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <button
+            onClick={() => navigate('/')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: `1px solid ${C.borderDark}`,
+              background: '#F9FAFB',
+              color: '#374151',
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: 'pointer',
+              fontFamily: FONT_BODY,
+            }}
+          >
+            <ArrowLeft size={14} /> Retour à l'accueil
           </button>
-          <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-            <div style={{ width:30, height:30, borderRadius:7, background:C.brown, color:C.yellow, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="11" y2="16"/></svg>
-            </div>
-            <span style={{ fontSize:14, fontWeight:800, letterSpacing:"0.02em" }}>SPRINTKITCHEN</span>
-            <span style={{ background:C.brown, color:"#F5F0E6", fontSize:9, fontWeight:700, padding:"2px 6px", borderRadius:4 }}>HUB</span>
-          </div>
-          <div style={{ width:34, height:34, borderRadius:"50%", background:C.brown, color:C.yellow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800 }}>AD</div>
-        </header>
-      ) : (
-        <header style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 40px", borderBottom:`1px solid ${C.border}`, background:C.cardBg, flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:38, height:38, borderRadius:9, background:C.brown, color:C.yellow, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="11" y2="16"/></svg>
-            </div>
-            <span style={{ fontSize:17, fontWeight:800, letterSpacing:"0.02em" }}>SPRINTKITCHEN</span>
-            <span style={{ background:C.brown, color:"#F5F0E6", fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:5 }}>HUB</span>
-            <Circle size={7} fill={C.yellow} color={C.yellow}/>
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"6px 13px", borderRadius:999, background:"#F1F0EC", color:C.ink }}>
-              <Circle size={6} fill={C.green} color={C.green}/> Admin
-            </span>
-            <div style={{ width:34, height:34, borderRadius:"50%", background:C.brown, color:C.yellow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800 }}>AD</div>
-          </div>
-        </header>
-      )}
 
-      {/* ── Main ── */}
-      <main style={{ flex:1, padding: mobile ? "16px 14px 32px" : "32px 40px 40px" }}>
-
-        {/* Back + Title row */}
-        <button onClick={() => navigate("/")} style={{ display:"inline-flex", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, color:C.muted, marginBottom:10, fontFamily:"inherit", padding:0 }}>
-          <ArrowLeft size={14}/> Retour au Hub
-        </button>
-
-        {mobile ? (
-          /* ── Mobile title ── */
-          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, marginBottom:6 }}>
-            <div>
-              <h1 style={{ margin:"0 0 4px", color:"#583926", fontFamily:"'Bebas Neue',sans-serif", fontSize:28, fontWeight:400, lineHeight:"28px", letterSpacing:"0.5px" }}>GESTION DU MENU</h1>
-              <p style={{ margin:0, color:C.muted, fontSize:11.5 }}>Activez, modifiez ou organisez les articles et tarifs en temps réel.</p>
-            </div>
-            <span style={{ fontSize:11, fontWeight:700, background:"#F1F0EC", color:C.muted, padding:"4px 9px", borderRadius:999, whiteSpace:"nowrap", flexShrink:0, marginTop:3 }}>{total} articles</span>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: C.brown,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <UtensilsCrossed size={17} color={C.yellow} />
           </div>
-        ) : (
-          /* ── Desktop title ── */
-          <div style={{ marginBottom:24 }}>
-            <h1 style={{ margin:"0 0 6px", color:"#583926", fontFamily:"'Bebas Neue', sans-serif", fontSize:48, fontWeight:400, lineHeight:"48px" }}>GESTION DU MENU &amp; CATALOGUE</h1>
-            <p style={{ margin:0, color:C.muted, fontSize:14 }}>Ajoutez, modifiez ou désactivez les articles de votre carte en temps réel.</p>
-          </div>
-        )}
 
-        {/* Search */}
-        <div style={{ position:"relative", marginBottom: mobile ? 10 : 0, width: mobile ? "100%" : 320 }}>
-          <Search size={14} style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:C.muted, pointerEvents:"none" }}/>
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Rechercher un article..."
-            style={{ width:"100%", padding:"10px 12px 10px 36px", border:`1px solid ${C.border}`, borderRadius:10, fontSize:13, outline:"none", background:C.cardBg, fontFamily:"inherit", color:C.ink, boxSizing:"border-box" }}
-          />
+          <span
+            style={{
+              fontFamily: FONT_TITLE,
+              fontSize: 22,
+              letterSpacing: '1.2px',
+              color: '#111827',
+              lineHeight: 1,
+            }}
+          >
+            SPRINTKITCHEN
+          </span>
         </div>
 
-        {/* Desktop: search row + new button side by side */}
-        {!mobile && (
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, marginBottom:20, marginTop:"-42px" }}>
-            <div style={{ width:320 }}/>
-            <div style={{ display:"flex", gap:8 }}>
-              <button onClick={() => setDrawer("new")} style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", borderRadius:10, border:"none", background:C.yellow, color:C.brown, fontSize:13, fontWeight:800, letterSpacing:"0.03em", textTransform:"uppercase", cursor:"pointer", fontFamily:"inherit" }}>
-                <Plus size={15} strokeWidth={2.5}/> NOUVEL ARTICLE
-              </button>
-              <button onClick={() => setCatModal("new")} style={{ padding:"10px 16px", borderRadius:10, border:`1px dashed ${C.border}`, background:C.cardBg, color:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-                + Catégorie
-              </button>
-              <button onClick={() => setGererOpen(true)} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"10px 16px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", background:"none", color:C.muted, border:`1px solid ${C.border}`, fontFamily:"inherit" }}>
-                <Settings size={13}/> Gérer
-              </button>
-            </div>
-          </div>
-        )}
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 12px',
+            borderRadius: 20,
+            background: '#F9FAFB',
+            border: `1px solid ${C.border}`,
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#1F2937',
+          }}
+        >
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10B981' }} />
+          Poste Admin (Caisse 01)
+        </div>
+      </header>
 
-        {/* Mobile: yellow new article button */}
-        {mobile && (
-          <button onClick={() => setDrawer("new")} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, width:"100%", padding:"13px 20px", borderRadius:11, border:"none", background:"#FACC15", color:"#583926", fontSize:13, fontWeight:800, letterSpacing:"0.05em", textTransform:"uppercase", cursor:"pointer", fontFamily:"inherit", marginBottom:14, boxSizing:"border-box" }}>
-            <Plus size={15} strokeWidth={2.5}/> + NOUVEL ARTICLE
+      {/* ── Title Bar (Exact Caisse / Historique / Inventaire) ── */}
+      <div
+        style={{
+          width: '100%',
+          padding: mobile ? '16px 16px' : '20px 32px 18px',
+          background: C.cardBg,
+          borderBottom: `1px solid ${C.border}`,
+          display: 'flex',
+          alignItems: mobile ? 'flex-start' : 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 600, letterSpacing: '0.6px', color: C.muted, marginBottom: 4 }}>
+            <span>GESTION DU MENU &amp; CATALOGUE</span>
+            <span>•</span>
+            <span style={{ color: C.green, fontWeight: 700 }}>SYNCHRONISÉ POS &amp; BORNES</span>
+          </div>
+          <h1
+            style={{
+              margin: '0 0 4px',
+              fontFamily: FONT_TITLE,
+              fontSize: mobile ? 28 : 34,
+              fontWeight: 400,
+              color: '#111827',
+              letterSpacing: '0.5px',
+              lineHeight: 1,
+            }}
+          >
+            GESTION DU MENU
+          </h1>
+          <p style={{ margin: 0, fontSize: 12.5, color: C.muted }}>
+            Ajoutez, modifiez ou désactivez les articles de votre carte et tarifs en temps réel.
+          </p>
+        </div>
+
+        {/* Right-aligned controls */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+            width: mobile ? '100%' : 'auto',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: '#F9FAFB',
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              padding: '8px 12px',
+              height: 38,
+              boxSizing: 'border-box',
+              flex: mobile ? 1 : undefined,
+              width: mobile ? 'auto' : 240,
+            }}
+          >
+            <Search size={15} color="#9CA3AF" style={{ flexShrink: 0 }} />
+            <input
+              type="text"
+              placeholder="Rechercher un article…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              style={{
+                border: 'none',
+                outline: 'none',
+                fontSize: 12.5,
+                fontFamily: 'inherit',
+                background: 'transparent',
+                color: C.ink,
+                width: '100%',
+              }}
+            />
+          </div>
+
+          <button
+            onClick={() => setGererOpen(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 14px',
+              height: 38,
+              borderRadius: 8,
+              border: `1px solid ${C.borderDark}`,
+              background: '#F9FAFB',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              color: '#374151',
+              flexShrink: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            <Settings size={14} /> {mobile ? 'Catégories' : 'Gérer catégories'}
           </button>
-        )}
+
+          <button
+            onClick={() => setCatModal('new')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 14px',
+              height: 38,
+              borderRadius: 8,
+              border: `1px dashed ${C.borderDark}`,
+              background: '#FFFFFF',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              color: C.muted,
+              flexShrink: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            <Plus size={14} /> + Catégorie
+          </button>
+
+          <button
+            onClick={() => setDrawer('new')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 16px',
+              height: 38,
+              borderRadius: 8,
+              border: '1px solid #EAB308',
+              background: C.yellow,
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              color: '#1F2937',
+              flexShrink: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            <Plus size={16} /> {mobile ? 'Ajouter' : 'Nouvel article'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Main ── */}
+      <main style={{ flex: 1, padding: mobile ? "16px 14px 32px" : "20px 32px 32px" }}>
 
         {/* Category tabs */}
         <div style={{ display:"flex", alignItems:"center", gap:mobile?6:8, marginBottom:mobile?14:20, overflowX:"auto", paddingBottom:mobile?4:0, flexWrap:mobile?"nowrap":"wrap" }}>
@@ -952,18 +1095,6 @@ export default function MenuPage() {
             </button>
           ))}
         </div>
-
-        {/* Mobile: Gérer + Nouvelle cat buttons */}
-        {mobile && (
-          <div style={{ display:"flex", gap:8, marginBottom:14 }}>
-            <button onClick={() => setGererOpen(true)} style={{ display:"inline-flex", alignItems:"center", gap:6, flex:1, justifyContent:"center", padding:"9px 14px", borderRadius:10, fontSize:12.5, fontWeight:700, cursor:"pointer", background:C.cardBg, color:C.ink, border:`1px solid ${C.border}`, fontFamily:"inherit" }}>
-              <Settings size={13}/> Gérer les catégories
-            </button>
-            <button onClick={() => setCatModal("new")} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"9px 14px", borderRadius:10, fontSize:12.5, fontWeight:700, cursor:"pointer", background:C.cardBg, color:C.muted, border:`1px dashed ${C.border}`, fontFamily:"inherit", flexShrink:0 }}>
-              + Nouvelle
-            </button>
-          </div>
-        )}
 
         {/* ── MOBILE: card list ── */}
         {mobile ? (

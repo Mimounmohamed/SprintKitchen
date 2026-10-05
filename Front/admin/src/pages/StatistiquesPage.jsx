@@ -1,13 +1,17 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Circle, Download, Printer, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeft, Circle, Download, Printer, ChevronRight, TrendingUp, TrendingDown, UtensilsCrossed } from "lucide-react";
 import { statsService } from "../services";
 
 const C = {
-  bg: "#F5F4F0", cardBg: "#FFFFFF", ink: "#1C1917", brown: "#2E2117",
-  yellow: "#F2B705", yellowBg: "#FCEFCB", muted: "#8B8378", border: "#E7E4DD",
-  green: "#2FAE5C", greenBg: "#E6F9EE", red: "#C0392B", redBg: "#FBEAE7", blue: "#2E5BD9",
+  bg: "#F5F4F0", cardBg: "#FFFFFF", ink: "#1C1917", brown: "#583926",
+  yellow: "#FACC15", yellowBg: "#FEF08A", muted: "#6B7280", border: "#E5E7EB",
+  borderDark: "#D1D5DB", green: "#059669", greenBg: "#E8F8EF", red: "#EF4444",
+  redBg: "#FDEAE8", blue: "#2563EB",
 };
+
+const FONT_TITLE = "'Bebas Neue', sans-serif";
+const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 function fmtDA(n) {
   return `${(n || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DA`;
@@ -439,7 +443,7 @@ export default function StatistiquesPage() {
     setTimeout(() => w.print(), 500);
   };
 
-  const pad = mobile ? "14px 14px" : "24px 32px 40px";
+  const pad = mobile ? "16px 14px 32px" : "20px 32px 32px";
 
   const spinner = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 0" }}>
@@ -454,55 +458,223 @@ export default function StatistiquesPage() {
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color: C.ink, display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: FONT_BODY, color: C.ink, display: "flex", flexDirection: "column" }}>
 
-      {/* Header */}
-      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: mobile ? "11px 14px" : "13px 32px", borderBottom: `1px solid ${C.border}`, background: C.cardBg, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => navigate("/")} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, color: C.ink, background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontFamily: "inherit" }}>
-            <ArrowLeft size={13} />{mobile ? "" : "Retour au Hub"}
+      {/* ── Top Header Bar (Exact Caisse / Historique / Inventaire) ── */}
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          background: C.cardBg,
+          borderBottom: `1px solid ${C.border}`,
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <button
+            onClick={() => navigate('/')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: `1px solid ${C.borderDark}`,
+              background: '#F9FAFB',
+              color: '#374151',
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: 'pointer',
+              fontFamily: FONT_BODY,
+            }}
+          >
+            <ArrowLeft size={14} /> Retour à l'accueil
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.brown, color: C.yellow, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800 }}>SK</div>
-            {!mobile && <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "0.02em" }}>SPRINTKITCHEN</span>}
+
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: C.brown,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <UtensilsCrossed size={17} color={C.yellow} />
           </div>
+
+          <span
+            style={{
+              fontFamily: FONT_TITLE,
+              fontSize: 22,
+              letterSpacing: '1.2px',
+              color: '#111827',
+              lineHeight: 1,
+            }}
+          >
+            SPRINTKITCHEN
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 12px',
+            borderRadius: 20,
+            background: '#F9FAFB',
+            border: `1px solid ${C.border}`,
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#1F2937',
+          }}
+        >
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10B981' }} />
+          Poste Admin (Caisse 01)
         </div>
       </header>
 
-      {/* Main */}
-      <main style={{ flex: 1, padding: pad, maxWidth: 1340, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: C.muted, marginBottom: 4 }}>
-            PORTAIL OPÉRATIONNEL &bull; <span style={{ color: C.green }}>RAPPORTS &amp; STATISTIQUES</span>
+      {/* ── Title Bar (Exact Caisse / Historique / Inventaire) ── */}
+      <div
+        style={{
+          width: '100%',
+          padding: mobile ? '16px 16px' : '20px 32px 18px',
+          background: C.cardBg,
+          borderBottom: `1px solid ${C.border}`,
+          display: 'flex',
+          alignItems: mobile ? 'flex-start' : 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 600, letterSpacing: '0.6px', color: C.muted, marginBottom: 4 }}>
+            <span>PORTAIL OPÉRATIONNEL &amp; DIRECTION</span>
+            <span>•</span>
+            <span style={{ color: C.green, fontWeight: 700 }}>SYNCHRONISÉ KDS &amp; CAISSE</span>
           </div>
-          <h1 style={{ margin: "0 0 4px", color: "#583926", fontFamily: "'Bebas Neue',sans-serif", fontSize: 30, fontWeight: 400, lineHeight: "30px", letterSpacing: "0.75px" }}>
+          <h1
+            style={{
+              margin: '0 0 4px',
+              fontFamily: FONT_TITLE,
+              fontSize: mobile ? 28 : 34,
+              fontWeight: 400,
+              color: '#111827',
+              letterSpacing: '0.5px',
+              lineHeight: 1,
+            }}
+          >
             RAPPORTS &amp; STATISTIQUES
           </h1>
-          <p style={{ margin: 0, fontSize: 12, color: C.muted }}>Performances de caisse et export comptable en direct.</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: C.muted }}>
+            Performances de vente, clôtures de caisse et export comptable en direct.
+          </p>
         </div>
 
-        {/* Period tabs */}
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 14 }}>
-          {PERIODS.map(p => (
-            <button key={p} onClick={() => setPeriod(p)}
-              style={{ padding: "9px 15px", borderRadius: 9, border: `1px solid ${period === p ? C.brown : C.border}`, background: period === p ? C.brown : C.cardBg, color: period === p ? "#F5F0E6" : C.ink, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
-              {p}
-            </button>
-          ))}
-        </div>
+        {/* Right-aligned controls: Period pills + Action buttons */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+            width: mobile ? '100%' : 'auto',
+          }}
+        >
+          {/* Period selector pills */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            background: '#F9FAFB',
+            border: `1px solid ${C.border}`,
+            padding: '3px 4px',
+            borderRadius: 8,
+            overflowX: 'auto',
+            maxWidth: '100%',
+          }}>
+            {PERIODS.map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: period === p ? C.brown : 'transparent',
+                  color: period === p ? '#F5F0E6' : '#374151',
+                  fontSize: 12,
+                  fontWeight: period === p ? 700 : 500,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  transition: 'background .15s',
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
 
-        {/* Action buttons */}
-        <div style={{ display: "flex", flexDirection: mobile ? "column" : "row", gap: 10, marginBottom: 20 }}>
-          <button onClick={openRapportZ} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "13px 20px", borderRadius: 11, border: "none", background: "#FACC15", color: "#583926", cursor: "pointer", fontFamily: "inherit", flex: mobile ? undefined : 1 }}>
-            <Printer size={15} />
-            <span style={{ color: "#583926", textAlign: "center", fontFamily: "Inter,sans-serif", fontSize: 12, fontWeight: 700, lineHeight: "16px", letterSpacing: "0.6px", textTransform: "uppercase" }}>
-              CLÔTURE DE CAISSE
-            </span>
+          <button
+            onClick={openRapportZ}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '8px 16px',
+              height: 38,
+              borderRadius: 8,
+              border: '1px solid #EAB308',
+              background: C.yellow,
+              color: '#1F2937',
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              flexShrink: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            <Printer size={15} /> Clôture Z
           </button>
-          <button onClick={exportPDF} disabled={!summary || loading} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 20px", borderRadius: 11, border: `1px solid ${C.border}`, background: C.cardBg, color: !summary || loading ? C.muted : C.ink, fontSize: 13, fontWeight: 600, cursor: !summary || loading ? "not-allowed" : "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+
+          <button
+            onClick={exportPDF}
+            disabled={!summary || loading}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '8px 14px',
+              height: 38,
+              borderRadius: 8,
+              border: `1px solid ${C.borderDark}`,
+              background: '#FFFFFF',
+              color: !summary || loading ? C.muted : '#374151',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: !summary || loading ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+              flexShrink: 0,
+              boxSizing: 'border-box',
+            }}
+          >
             <Download size={14} /> Exporter (.PDF)
           </button>
         </div>
+      </div>
+
+      {/* Main */}
+      <main style={{ flex: 1, padding: pad, maxWidth: 1340, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
 
         {/* Error banner */}
         {error && (
