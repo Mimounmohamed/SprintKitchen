@@ -107,10 +107,11 @@ export const ingredientService = {
 
 // ── Ingredient Families ───────────────────────────────────────────────────────
 export const ingredientFamilyService = {
-  getAll:  ()         => api.get('/ingredient-families'),
-  create:  (data)     => api.post('/ingredient-families',      data),
-  update:  (id, data) => api.put(`/ingredient-families/${id}`, data),
-  delete:  (id)       => api.delete(`/ingredient-families/${id}`),
+  getAll:   ()         => api.get('/ingredient-families'),
+  getStats: ()         => api.get('/ingredients/families'),
+  create:   (data)     => api.post('/ingredient-families',      data),
+  update:   (id, data) => api.put(`/ingredient-families/${id}`, data),
+  delete:   (id)       => api.delete(`/ingredient-families/${id}`),
 };
 
 // ── Dashboard KPIs ────────────────────────────────────────────────────────────

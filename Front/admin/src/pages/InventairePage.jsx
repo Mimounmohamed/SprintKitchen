@@ -484,33 +484,53 @@ export default function InventairePage() {
       .then(res => {
         if (cancel) return;
         const list = res.data?.data || [];
-        setFamilies(list);
-        if (list.length > 0) {
-          setActiveFamily(prev => prev || list[0].slug);
+        const safeList = Array.isArray(list) ? list : [];
+        setFamilies(safeList);
+        if (safeList.length > 0) {
+          setActiveFamily(prev => (safeList.some(f => f.slug === prev) ? prev : safeList[0].slug));
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Erreur chargement familles :", err);
+      })
       .finally(() => { if (!cancel) setLoadingFams(false); });
     return () => { cancel = true; };
   }, [refreshKey]);
 
   // ── Load family stats (rupture counts) ──
   React.useEffect(() => {
+    let cancel = false;
     ingredientFamilyService.getStats()
-      .then(res => setFamilyStats(res.data?.data || []))
-      .catch(() => {});
+      .then(res => {
+        if (!cancel) {
+          const stats = res.data?.data;
+          setFamilyStats(Array.isArray(stats) ? stats : []);
+        }
+      })
+      .catch((err) => {
+        console.error("Erreur chargement stats familles :", err);
+      });
+    return () => { cancel = true; };
   }, [refreshKey]);
 
   // ── Load ingredients when activeFamily changes ──
   React.useEffect(() => {
-    if (!activeFamily) return;
+    if (!activeFamily) {
+      setIngredients([]);
+      return;
+    }
     let cancel = false;
     setLoadingIngs(true);
     ingredientService.getAll({ family: activeFamily, limit: 100 })
       .then(res => {
-        if (!cancel) setIngredients(res.data?.data || []);
+        if (!cancel) {
+          const list = res.data?.data;
+          setIngredients(Array.isArray(list) ? list : []);
+        }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Erreur chargement ingrédients :", err);
+      })
       .finally(() => { if (!cancel) setLoadingIngs(false); });
     return () => { cancel = true; };
   }, [activeFamily, refreshKey]);
@@ -552,31 +572,36 @@ export default function InventairePage() {
 
   const handleFamSaved = (saved, isNew) => {
     if (isNew) {
-      setFamilies(prev => [...prev, saved].sort((a,b) => a.displayOrder - b.displayOrder));
+      setFamilies(prev => [...prev, saved].sort((a,b) => (a.displayOrder || 0) - (b.displayOrder || 0)));
       setActiveFamily(saved.slug);
     } else {
       setFamilies(prev => prev.map(f => f._id === saved._id ? saved : f));
     }
+    setRefreshKey(k => k + 1);
   };
 
   const handleFamDeleted = (id) => {
     setFamilies(prev => {
       const remaining = prev.filter(f => f._id !== id);
       if (remaining.length > 0) setActiveFamily(remaining[0].slug);
+      else setActiveFamily(null);
       return remaining;
     });
+    setRefreshKey(k => k + 1);
   };
 
-  const filtered = ingredients.filter(i =>
+  const safeIngredients = Array.isArray(ingredients) ? ingredients : [];
+  const filtered = safeIngredients.filter(i =>
     !search ||
-    i.name.toLowerCase().includes(search.toLowerCase()) ||
-    (i.notes||"").toLowerCase().includes(search.toLowerCase())
+    (i?.name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (i?.notes || "").toLowerCase().includes(search.toLowerCase())
   );
   const dispoCnt  = filtered.filter(i => !isEpuise(i)).length;
   const epuiseCnt = filtered.filter(i =>  isEpuise(i)).length;
-  const activeFamilyObj = families.find(f => f.slug === activeFamily);
+  const safeFamilies = Array.isArray(families) ? families : [];
+  const activeFamilyObj = safeFamilies.find(f => f.slug === activeFamily);
 
-  const statFor = (slug) => familyStats.find(f => f._id === slug) || { total: 0, epuise: 0 };
+  const statFor = (slug) => (Array.isArray(familyStats) ? familyStats : []).find(f => f._id === slug) || { total: 0, epuise: 0 };
 
   return (
     <div style={{
@@ -838,6 +863,16 @@ export default function InventairePage() {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
+              {loadingFams && families.length === 0 && (
+                <div style={{ padding: '20px 16px', fontSize: 12, color: C.muted, textAlign: 'center' }}>
+                  Chargement…
+                </div>
+              )}
+              {!loadingFams && families.length === 0 && (
+                <div style={{ padding: '20px 16px', fontSize: 12, color: C.muted, textAlign: 'center' }}>
+                  Aucune famille
+                </div>
+              )}
               {families.map((fam) => {
                 const active = fam.slug === activeFamily;
                 const stat = statFor(fam.slug);
@@ -900,7 +935,7 @@ export default function InventairePage() {
                                 flexShrink: 0,
                               }}
                             >
-                              {stat.total} articles
+                              {stat.epuise} épuisé
                             </span>
                           )}
                         </div>
@@ -1007,6 +1042,9 @@ export default function InventairePage() {
               WebkitOverflowScrolling: 'touch',
             }}
           >
+            {loadingFams && families.length === 0 && (
+              <span style={{ fontSize: 12, color: C.muted, padding: '6px 12px' }}>Chargement…</span>
+            )}
             {families.map((fam) => {
               const active = fam.slug === activeFamily;
               const stat = statFor(fam.slug);
@@ -1035,7 +1073,7 @@ export default function InventairePage() {
                   }}
                 >
                   <span>{fam.emoji}</span>
-                  {fam.name.split(' ')[0]}
+                  {(fam.name || '').split(' ')[0]}
                   {stat.epuise > 0 && (
                     <span
                       style={{
@@ -1081,7 +1119,7 @@ export default function InventairePage() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 20 }}>{activeFamilyObj?.emoji}</span>
+              <span style={{ fontSize: 20 }}>{activeFamilyObj?.emoji || '📦'}</span>
               <h2
                 style={{
                   margin: 0,
@@ -1092,7 +1130,7 @@ export default function InventairePage() {
                   letterSpacing: '0.5px',
                 }}
               >
-                {activeFamilyObj?.name || '—'}
+                {activeFamilyObj?.name || (loadingFams ? 'Chargement…' : '—')}
               </h2>
               {!loadingIngs && filtered.length > 0 && (
                 <span style={{ fontSize: 12, color: C.muted }}>
