@@ -147,11 +147,13 @@ export default function SprintKitchenAdminHub() {
         <button style={{ background:"none", border:"none", cursor:"pointer", padding:4, color:C.ink, display:"flex" }}>
           <MenuIcon size={22}/>
         </button>
-        <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-          <div style={{ width:30, height:30, borderRadius:7, background:C.brown, color:C.yellow, display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <Book size={15}/>
-          </div>
-          <span style={{ fontSize:14, fontWeight:800, letterSpacing:"0.02em" }}>SPRINTKITCHEN</span>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <img
+            src="/bobo_portrait.jpg"
+            alt="Bobo's"
+            style={{ width:32, height:32, borderRadius:"50%", objectFit:"cover", border:`1.5px solid ${C.yellow}` }}
+          />
+          <span style={{ fontSize:15, fontWeight:900, letterSpacing:"0.03em" }}>BOBO'S</span>
           <span style={{ background:C.brown, color:"#F5F0E6", fontSize:9, fontWeight:700, padding:"2px 6px", borderRadius:4 }}>HUB</span>
           <Circle size={6} fill={C.yellow} color={C.yellow}/>
         </div>
@@ -265,10 +267,12 @@ export default function SprintKitchenAdminHub() {
     <div style={shell}>
       <header style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 40px", borderBottom:`1px solid ${C.border}`, background:C.cardBg, flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <div style={{ width:38, height:38, borderRadius:9, background:C.brown, color:C.yellow, display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <Book size={20}/>
-          </div>
-          <span style={{ fontSize:17, fontWeight:800, letterSpacing:"0.02em" }}>SPRINTKITCHEN</span>
+          <img
+            src="/bobo_portrait.jpg"
+            alt="Bobo's"
+            style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.yellow}` }}
+          />
+          <span style={{ fontSize:18, fontWeight:900, letterSpacing:"0.04em" }}>BOBO'S</span>
           <span style={{ background:C.brown, color:"#F5F0E6", fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:5 }}>HUB</span>
           <Circle size={7} fill={C.yellow} color={C.yellow}/>
         </div>
@@ -355,7 +359,7 @@ export default function SprintKitchenAdminHub() {
         <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, fontWeight:600 }}>
           <Circle size={7} fill={C.green} color={C.green}/> Connecté <span style={{ color:C.muted }}>·</span>
         </div>
-        <span style={{ fontSize:12, color:C.muted }}>SprintKitchen OS Admin v2.4.0-PROD</span>
+        <span style={{ fontSize:12, color:C.muted }}>Bobo's Admin v2.4.0</span>
       </footer>
     </div>
   );

@@ -1979,19 +1979,17 @@ export default function HistoriquePage() {
             <ArrowLeft size={14} /> Retour à l'accueil
           </button>
 
-          <div
+          <img
+            src="/bobo_portrait.jpg"
+            alt="Bobo's"
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: COLORS.brandDark,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              borderRadius: "50%",
+              objectFit: "cover",
+              border: `2px solid ${COLORS.gold}`,
             }}
-          >
-            <UtensilsCrossed size={17} color={COLORS.gold} />
-          </div>
+          />
 
           <span
             style={{
@@ -2002,7 +2000,7 @@ export default function HistoriquePage() {
               lineHeight: 1,
             }}
           >
-            SPRINTKITCHEN
+            BOBO'S
           </span>
         </div>
 

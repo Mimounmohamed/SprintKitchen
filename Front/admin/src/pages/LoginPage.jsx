@@ -58,19 +58,23 @@ export default function LoginPage() {
           background: C.brown, padding: "28px 32px 24px",
           display: "flex", flexDirection: "column", gap: 8,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: C.yellow, display: "flex", alignItems: "center",
-              justifyContent: "center",
-            }}>
-              <span style={{ fontSize: 18 }}>🍔</span>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <img
+              src="/bobo_portrait.jpg"
+              alt="Bobo's"
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: "50%",
+                objectFit: "cover",
+                border: `2px solid ${C.yellow}`,
+              }}
+            />
             <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "#F5F0E6", letterSpacing: "0.03em" }}>
-                SPRINTKITCHEN
+              <div style={{ fontSize: 18, fontWeight: 900, color: "#F5F0E6", letterSpacing: "0.05em" }}>
+                BOBO'S
               </div>
-              <div style={{ fontSize: 10, fontWeight: 600, color: C.yellow, letterSpacing: "0.08em" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.yellow, letterSpacing: "0.08em" }}>
                 PORTAIL ADMINISTRATEUR
               </div>
             </div>

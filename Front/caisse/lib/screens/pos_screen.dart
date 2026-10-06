@@ -916,11 +916,11 @@ class _PosScreenState extends State<PosScreen> {
           ),
           const SizedBox(width: 10),
           Text(
-            'SPRINTKITCHEN',
+            "BOBO'S",
             style: GoogleFonts.bebasNeue(
               fontWeight: FontWeight.w400,
-              fontSize: 22,
-              letterSpacing: 1.2,
+              fontSize: 24,
+              letterSpacing: 1.5,
               color: const Color(0xFF111827),
             ),
           ),

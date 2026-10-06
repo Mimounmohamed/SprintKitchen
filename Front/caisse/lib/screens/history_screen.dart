@@ -320,10 +320,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           const SizedBox(width: 10),
           Text(
-            'SPRINTKITCHEN',
+            "BOBO'S",
             style: GoogleFonts.bebasNeue(
-              fontSize: 22,
-              letterSpacing: 1.2,
+              fontSize: 24,
+              letterSpacing: 1.5,
               color: const Color(0xFF111827),
             ),
           ),

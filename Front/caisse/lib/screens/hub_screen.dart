@@ -14,7 +14,7 @@ class HubScreen extends StatefulWidget {
     super.key,
     this.posteLabel = 'Poste Caisse #01',
     this.userLabel = 'Admin — Caisse 01',
-    this.appVersion = 'SprintKitchen OS Caisse v2.4.0-PROD',
+    this.appVersion = "Bobo's OS Caisse v2.4.0",
     this.isConnected = true,
   });
 
@@ -168,7 +168,7 @@ class _HubScreenState extends State<HubScreen> {
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      'SPRINTKITCHEN',
+                      "BOBO'S",
                       style: GoogleFonts.inter(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
@@ -259,7 +259,7 @@ class _HubScreenState extends State<HubScreen> {
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
-                                  'SPRINTKITCHEN CAISSE',
+                                  "BOBO'S CAISSE",
                                   style: GoogleFonts.inter(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
@@ -474,7 +474,7 @@ class _HubScreenState extends State<HubScreen> {
                       ),
                       const SizedBox(width: 7),
                       Text(
-                        'SPRINTKITCHEN',
+                        "BOBO'S",
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,

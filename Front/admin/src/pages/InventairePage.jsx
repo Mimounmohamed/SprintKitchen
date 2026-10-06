@@ -643,19 +643,17 @@ export default function InventairePage() {
             <ArrowLeft size={14} /> Retour à l'accueil
           </button>
 
-          <div
+          <img
+            src="/bobo_portrait.jpg"
+            alt="Bobo's"
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: C.brown,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              borderRadius: "50%",
+              objectFit: "cover",
+              border: `2px solid ${C.yellow}`,
             }}
-          >
-            <UtensilsCrossed size={17} color={C.yellow} />
-          </div>
+          />
 
           <span
             style={{
@@ -666,7 +664,7 @@ export default function InventairePage() {
               lineHeight: 1,
             }}
           >
-            SPRINTKITCHEN
+            BOBO'S
           </span>
         </div>
 
