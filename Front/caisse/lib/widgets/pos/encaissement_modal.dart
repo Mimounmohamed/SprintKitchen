@@ -59,6 +59,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
 
   PaymentMethod _method = PaymentMethod.especes;
   int _receivedCents = 0;
+  bool _hasCustomInput = false;
   bool _printReceipt = true;
   bool _printKitchenReceipt = true;
 
@@ -78,6 +79,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
   void initState() {
     super.initState();
     _receivedCents = _dueCents; // default to exact amount
+    _hasCustomInput = false;
   }
 
   void _selectMethod(PaymentMethod method) {
@@ -85,6 +87,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
       _method = method;
       if (method == PaymentMethod.carte) {
         _receivedCents = _dueCents; // card always charges exact amount
+        _hasCustomInput = false;
       }
     });
   }
@@ -92,23 +95,34 @@ class _EncaissementModalState extends State<EncaissementModal> {
   void _appendDigit(String digits) {
     if (_method != PaymentMethod.especes) return;
     setState(() {
+      int currentDinars = _hasCustomInput ? (_receivedCents ~/ 100) : 0;
+      _hasCustomInput = true;
+
       for (final ch in digits.split('')) {
         final digit = int.parse(ch);
-        // Cap so it can't grow unbounded.
-        if (_receivedCents > 99999999) return;
-        _receivedCents = _receivedCents * 10 + digit;
+        if (currentDinars == 0 && digit == 0) continue;
+        if (currentDinars > 999999) return;
+        currentDinars = currentDinars * 10 + digit;
       }
+
+      _receivedCents = currentDinars * 100;
     });
   }
 
   void _clear() {
     if (_method != PaymentMethod.especes) return;
-    setState(() => _receivedCents = 0);
+    setState(() {
+      _hasCustomInput = true;
+      _receivedCents = 0;
+    });
   }
 
   void _setQuickAmount(int cents) {
     if (_method != PaymentMethod.especes) return;
-    setState(() => _receivedCents = cents);
+    setState(() {
+      _receivedCents = cents;
+      _hasCustomInput = false;
+    });
   }
 
   List<int> get _quickAmountsCents {

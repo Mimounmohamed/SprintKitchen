@@ -2,7 +2,10 @@ import api from '../lib/api';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authService = {
-  login: (email, password) => api.post('/auth/login', { email, password }),
+  login: (username, password) => {
+    const val = (username || '').trim();
+    return api.post('/auth/login', { username: val, email: val, identifier: val, password });
+  },
   getMe: () => api.get('/auth/me'),
 };
 

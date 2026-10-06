@@ -12,12 +12,14 @@ class EncaissementResult {
     required this.amountReceived,
     required this.change,
     required this.printReceipt,
+    this.printKitchenReceipt = false,
   });
 
   final PaymentMethod method;
   final double amountReceived;
   final double change;
   final bool printReceipt;
+  final bool printKitchenReceipt;
 }
 
 /// The "ENCAISSEMENT — TICKET N° ..." payment dialog.
@@ -57,7 +59,9 @@ class _EncaissementModalState extends State<EncaissementModal> {
 
   PaymentMethod _method = PaymentMethod.especes;
   int _receivedCents = 0;
+  bool _hasCustomInput = false;
   bool _printReceipt = true;
+  bool _printKitchenReceipt = true;
 
   int get _dueCents => (widget.total * 100).round();
 
@@ -75,6 +79,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
   void initState() {
     super.initState();
     _receivedCents = _dueCents; // default to exact amount
+    _hasCustomInput = false;
   }
 
   void _selectMethod(PaymentMethod method) {
@@ -82,6 +87,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
       _method = method;
       if (method == PaymentMethod.carte) {
         _receivedCents = _dueCents; // card always charges exact amount
+        _hasCustomInput = false;
       }
     });
   }
@@ -89,23 +95,34 @@ class _EncaissementModalState extends State<EncaissementModal> {
   void _appendDigit(String digits) {
     if (_method != PaymentMethod.especes) return;
     setState(() {
+      int currentDinars = _hasCustomInput ? (_receivedCents ~/ 100) : 0;
+      _hasCustomInput = true;
+
       for (final ch in digits.split('')) {
         final digit = int.parse(ch);
-        // Cap so it can't grow unbounded.
-        if (_receivedCents > 99999999) return;
-        _receivedCents = _receivedCents * 10 + digit;
+        if (currentDinars == 0 && digit == 0) continue;
+        if (currentDinars > 999999) return;
+        currentDinars = currentDinars * 10 + digit;
       }
+
+      _receivedCents = currentDinars * 100;
     });
   }
 
   void _clear() {
     if (_method != PaymentMethod.especes) return;
-    setState(() => _receivedCents = 0);
+    setState(() {
+      _hasCustomInput = true;
+      _receivedCents = 0;
+    });
   }
 
   void _setQuickAmount(int cents) {
     if (_method != PaymentMethod.especes) return;
-    setState(() => _receivedCents = cents);
+    setState(() {
+      _receivedCents = cents;
+      _hasCustomInput = false;
+    });
   }
 
   List<int> get _quickAmountsCents {
@@ -133,6 +150,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
             : _received,
         change: _method == PaymentMethod.carte ? 0 : _change,
         printReceipt: _printReceipt,
+        printKitchenReceipt: _printKitchenReceipt,
       ),
     );
   }
@@ -364,7 +382,94 @@ class _EncaissementModalState extends State<EncaissementModal> {
           subtitle: 'Terminal Pinpad connecté',
           trailing: _fmtEuros(widget.total),
         ),
+        const SizedBox(height: 18),
+        const Text(
+          'IMPRESSION DIRECTE (SANS VALIDATION)',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textMuted,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _printToggleTile(
+          icon: Icons.print_outlined,
+          title: 'Ticket Client Direct',
+          subtitle: 'Avec logo & détail complet',
+          value: _printReceipt,
+          onChanged: (v) => setState(() => _printReceipt = v),
+        ),
+        const SizedBox(height: 8),
+        _printToggleTile(
+          icon: Icons.restaurant_menu,
+          title: 'Bon Cuisine Direct',
+          subtitle: 'Production cuisine (Sans prix)',
+          value: _printKitchenReceipt,
+          onChanged: (v) => setState(() => _printKitchenReceipt = v),
+        ),
       ],
+    );
+  }
+
+  Widget _printToggleTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: value ? const Color(0xFFF9FAFB) : AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: value ? AppColors.brandDark.withValues(alpha: 0.4) : AppColors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: value ? AppColors.brandDark : AppColors.textMuted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: value ? AppColors.textPrimary : AppColors.textMuted,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: AppColors.brandDark,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

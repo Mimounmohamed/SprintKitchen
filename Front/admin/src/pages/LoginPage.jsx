@@ -12,7 +12,7 @@ const C = {
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email,    setEmail]    = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState("");
@@ -22,14 +22,15 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/auth/login`, { email, password });
+      const val = username.trim();
+      const res = await axios.post(`${API}/auth/login`, { username: val, email: val, identifier: val, password });
       const token = res.data?.token || res.data?.data?.token;
       if (!token) throw new Error("Token non reçu");
       localStorage.setItem("sk_token", token);
       navigate("/", { replace: true });
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 400) {
-        setError("Email ou mot de passe incorrect.");
+        setError("Nom d'utilisateur ou mot de passe incorrect.");
       } else {
         setError("Erreur de connexion — vérifiez votre connexion internet.");
       }
@@ -93,13 +94,14 @@ export default function LoginPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: C.ink, letterSpacing: "0.03em" }}>
-              ADRESSE EMAIL
+              NOM D'UTILISATEUR
             </label>
             <input
-              type="email" value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="admin@sprintkitchen.fr"
-              required autoComplete="email"
+              type="text" value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="Nom d'utilisateur"
+              required autoComplete="username"
+              autoCapitalize="none" autoCorrect="off" spellCheck={false}
               style={{
                 padding: "12px 14px", borderRadius: 10, fontSize: 14,
                 border: `1px solid ${C.border}`, outline: "none",

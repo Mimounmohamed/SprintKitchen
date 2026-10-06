@@ -161,6 +161,7 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    final phone = _phoneController.text.trim();
     Navigator.of(context).pop(
       OrderDetailsResult(
         tableNumber: widget.orderType == OrderType.dineIn
@@ -172,8 +173,9 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
         deliveryAddress: widget.orderType == OrderType.delivery
             ? _addressController.text.trim()
             : null,
-        deliveryPhone: widget.orderType == OrderType.delivery
-            ? _phoneController.text.trim()
+        deliveryPhone: (widget.orderType == OrderType.delivery ||
+                widget.orderType == OrderType.takeaway)
+            ? (phone.isNotEmpty ? phone : null)
             : null,
         notes: _notesController.text.trim().isNotEmpty
             ? _notesController.text.trim()
@@ -467,11 +469,20 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
               autofocus: true,
             ),
             const SizedBox(height: 16),
+            _sectionLabel('NUMÉRO DE TÉLÉPHONE (OPTIONNEL)'),
+            const SizedBox(height: 8),
+            _field(
+              controller: _phoneController,
+              hint: 'ex. 06 12 34 56 78',
+              icon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 16),
             _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
             const SizedBox(height: 8),
             _field(
               controller: _notesController,
-              hint: 'ex. Sans sel sur les frites, allergie...',
+              hint: 'ex. Sans sel sur les frites, prêt à 12h30...',
               icon: Icons.chat_bubble_outline_rounded,
             ),
           ],
