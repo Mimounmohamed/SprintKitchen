@@ -43,14 +43,27 @@ class MenuService {
     final extrasCategoryIds =
         active.where((c) => _isExtrasCategory(c.name)).map((c) => c.id).toSet();
 
-    final sauceOptions = _optionsFrom(
+    final sauceFromCategory = _optionsFrom(
       rawProducts.where((p) => sauceCategoryIds.contains(p.categoryId)),
       outOfStock: ingredientInfo.outOfStockIngredients,
     );
-    final extrasOptions = _optionsFrom(
+    final extrasFromCategory = _optionsFrom(
       rawProducts.where((p) => extrasCategoryIds.contains(p.categoryId)),
       outOfStock: ingredientInfo.outOfStockIngredients,
     );
+
+    // Fallback if no specific products are in "Sauces" or "Extras" category:
+    final sauceOptions = sauceFromCategory.isNotEmpty
+        ? sauceFromCategory
+        : _defaultSauceOptions
+            .where((o) => !ingredientInfo.outOfStockIngredients.contains(_norm(o.label)))
+            .toList();
+
+    final extrasOptions = extrasFromCategory.isNotEmpty
+        ? extrasFromCategory
+        : _defaultExtraOptions
+            .where((o) => !ingredientInfo.outOfStockIngredients.contains(_norm(o.label)))
+            .toList();
 
     final products = rawProducts
         .map((p) => _withDynamicGroups(
@@ -191,6 +204,8 @@ class MenuService {
 
     final groups = <CustomizationGroup>[];
     var hasCuisson = false;
+    var hasSauce = false;
+    var hasSupplements = false;
 
     for (final g in p.customizationGroups) {
       final name = _norm(g.name);
@@ -202,10 +217,16 @@ class MenuService {
         }
       } else if (name.contains('sauce')) {
         // Product keeps its sauce step, but the choices come from "Sauces".
-        if (sauceOptions.isNotEmpty) groups.add(_withOptions(g, sauceOptions));
+        if (sauceOptions.isNotEmpty) {
+          groups.add(_withOptions(g, sauceOptions));
+          hasSauce = true;
+        }
       } else if (name.contains('suppl') || name.contains('extra')) {
         // Choices come from the "Extras" category.
-        if (extrasOptions.isNotEmpty) groups.add(_withOptions(g, extrasOptions));
+        if (extrasOptions.isNotEmpty) {
+          groups.add(_withOptions(g, extrasOptions));
+          hasSupplements = true;
+        }
       } else {
         groups.add(g);
       }
@@ -213,6 +234,20 @@ class MenuService {
 
     // Meat product without a cuisson step configured: add the standard one.
     if (hasMeat && !hasCuisson) groups.insert(0, _defaultCuisson);
+
+    // If product has ingredients or is in food categories (burgers, sandwichs, menus),
+    // ensure standard Sauces and Suppléments & Extras are available!
+    final bool isFoodItem = p.ingredients.isNotEmpty ||
+        p.customizationGroups.isNotEmpty;
+
+    if (isFoodItem) {
+      if (!hasSauce && sauceOptions.isNotEmpty) {
+        groups.add(_defaultSauces(sauceOptions));
+      }
+      if (!hasSupplements && extrasOptions.isNotEmpty) {
+        groups.add(_defaultExtras(extrasOptions));
+      }
+    }
 
     return MenuItem(
       id: p.id,
@@ -239,6 +274,51 @@ class MenuService {
       CustomizationOption(label: 'Bien cuit'),
     ],
   );
+
+  static CustomizationGroup _defaultSauces(List<CustomizationOption> options) {
+    return CustomizationGroup(
+      name: 'Choix de la sauce',
+      type: 'multi',
+      isRequired: false,
+      minChoices: 0,
+      maxChoices: 3,
+      stepNumber: 1,
+      options: options,
+    );
+  }
+
+  static const List<CustomizationOption> _defaultSauceOptions = [
+    CustomizationOption(label: 'Algérienne', isDefault: true),
+    CustomizationOption(label: 'Mayonnaise'),
+    CustomizationOption(label: 'Ketchup'),
+    CustomizationOption(label: 'Barbecue'),
+    CustomizationOption(label: 'Samouraï'),
+    CustomizationOption(label: 'Biggy'),
+    CustomizationOption(label: 'Blanche'),
+    CustomizationOption(label: 'Andalouse'),
+  ];
+
+  static const List<CustomizationOption> _defaultExtraOptions = [
+    CustomizationOption(label: 'Cheddar', priceModifier: 50),
+    CustomizationOption(label: 'Gouda', priceModifier: 50),
+    CustomizationOption(label: 'Bacon', priceModifier: 80),
+    CustomizationOption(label: 'Oignons Frits', priceModifier: 40),
+    CustomizationOption(label: 'Double Steak', priceModifier: 150),
+    CustomizationOption(label: 'Œuf', priceModifier: 50),
+    CustomizationOption(label: 'Galette de pomme de terre', priceModifier: 70),
+  ];
+
+  static CustomizationGroup _defaultExtras(List<CustomizationOption> options) {
+    return CustomizationGroup(
+      name: 'Suppléments & Extras',
+      type: 'multi',
+      isRequired: false,
+      minChoices: 0,
+      maxChoices: 10,
+      stepNumber: 2,
+      options: options,
+    );
+  }
 
   CustomizationGroup _withOptions(
       CustomizationGroup g, List<CustomizationOption> options) {
