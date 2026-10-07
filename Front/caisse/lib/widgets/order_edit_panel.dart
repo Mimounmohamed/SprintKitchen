@@ -61,6 +61,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
   List<MenuCategory> _categories = [];
   bool _loadingMenu = true;
   bool _saving = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -229,6 +230,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     if (updatedLine != null && mounted) {
       setState(() {
         _lines[index] = updatedLine;
+        _errorMessage = null;
       });
     }
   }
@@ -237,6 +239,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     final removed = _lines[index];
     setState(() {
       _lines.removeAt(index);
+      _errorMessage = null;
     });
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -252,6 +255,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
             if (mounted) {
               setState(() {
                 _lines.insert(index, removed);
+                _errorMessage = null;
               });
             }
           },
@@ -268,6 +272,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     } else {
       setState(() {
         current.quantity = newQty;
+        _errorMessage = null;
       });
     }
   }
@@ -284,6 +289,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
       );
       setState(() {
         _lines.add(lineWithId);
+        _errorMessage = null;
       });
     }
   }
@@ -321,6 +327,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
 
     if (details != null && mounted) {
       setState(() {
+        _errorMessage = null;
         if (details.orderType != null) {
           _orderType = details.orderType!;
         }
@@ -402,6 +409,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     if (result != null && mounted) {
       setState(() {
         _clientName = result.isEmpty ? null : result;
+        _errorMessage = null;
       });
     }
   }
@@ -466,6 +474,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     if (result != null && mounted) {
       setState(() {
         _deliveryPhone = result.isEmpty ? null : result;
+        _errorMessage = null;
       });
     }
   }
@@ -529,6 +538,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     if (result != null && mounted) {
       setState(() {
         _deliveryAddress = result.isEmpty ? null : result;
+        _errorMessage = null;
       });
     }
   }
@@ -593,6 +603,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     if (result != null && mounted) {
       setState(() {
         _tableNumber = result.isEmpty ? null : result;
+        _errorMessage = null;
       });
     }
   }
@@ -662,6 +673,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     if (result != null && mounted) {
       setState(() {
         _notes = result.isEmpty ? null : result;
+        _errorMessage = null;
       });
     }
   }
@@ -1019,12 +1031,9 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     if (_saving) return;
 
     if (_lines.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('La commande doit contenir au moins un article.'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+      setState(() {
+        _errorMessage = 'La commande doit contenir au moins un article.';
+      });
       return;
     }
     // Verify essential attributes before saving modifications
@@ -1065,7 +1074,10 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
       if (stillMissing) return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _errorMessage = null;
+    });
 
     try {
       final sessionDiff = _computeChanges();
@@ -1104,16 +1116,12 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
       widget.onClose();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e is ApiException ? e.message : 'Erreur lors de la mise à jour : $e',
-          ),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+      setState(() {
+        _saving = false;
+        _errorMessage = e is ApiException
+            ? e.message
+            : 'Erreur lors de la mise à jour : $e';
+      });
     }
   }
 
@@ -1920,7 +1928,93 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
         border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          if (_errorMessage != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFCA5A5), width: 1.2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        color: Color(0xFFDC2626),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF991B1B),
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () => setState(() => _errorMessage = null),
+                        borderRadius: BorderRadius.circular(4),
+                        child: const Padding(
+                          padding: EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Color(0xFF991B1B),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_errorMessage!.toLowerCase().contains('table')) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: InkWell(
+                        onTap: () => _openOrderDetailsDialog(),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.edit_outlined, size: 13, color: Color(0xFF991B1B)),
+                              SizedBox(width: 4),
+                              Text(
+                                'Changer la table',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF991B1B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
           SizedBox(
             width: double.infinity,
             height: 52,
