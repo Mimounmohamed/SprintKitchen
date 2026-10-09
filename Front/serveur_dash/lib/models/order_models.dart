@@ -91,6 +91,43 @@ class HistoryOrderLine {
   }
 }
 
+class OrderModification {
+  final String action; // 'deleted', 'added', 'modified', 'table', 'note', 'general'
+  final String text;
+  final String? details;
+
+  const OrderModification({
+    required this.action,
+    required this.text,
+    this.details,
+  });
+
+  factory OrderModification.fromJson(dynamic j) {
+    if (j is String) {
+      final s = j.trim();
+      String act = 'modified';
+      if (s.toLowerCase().startsWith('supprim') || s.contains('❌')) {
+        act = 'deleted';
+      } else if (s.toLowerCase().startsWith('ajout') || s.contains('➕')) {
+        act = 'added';
+      } else if (s.toLowerCase().startsWith('table')) {
+        act = 'table';
+      } else if (s.toLowerCase().startsWith('note')) {
+        act = 'note';
+      }
+      return OrderModification(action: act, text: s);
+    }
+    if (j is Map) {
+      return OrderModification(
+        action: j['action']?.toString() ?? 'modified',
+        text: j['text']?.toString() ?? '',
+        details: j['details']?.toString(),
+      );
+    }
+    return const OrderModification(action: 'modified', text: '');
+  }
+}
+
 /// A past order as shown in the history table. Mirrors Back/models/Order.js.
 class HistoryOrder {
   const HistoryOrder({
@@ -112,6 +149,7 @@ class HistoryOrder {
     this.notes,
     this.lines = const [],
     this.isEdited = false,
+    this.modificationSummary = const [],
   });
 
   final String id;
@@ -134,6 +172,7 @@ class HistoryOrder {
   final String? notes;
   final List<HistoryOrderLine> lines;
   final bool isEdited;
+  final List<OrderModification> modificationSummary;
 
   /// Formatted client and/or table display for the "CLIENT / TABLE" column.
   String? get displayClient {
@@ -199,7 +238,10 @@ class HistoryOrder {
       lines: (json['items'] as List<dynamic>? ?? [])
           .map((e) => HistoryOrderLine.fromJson(e as Map<String, dynamic>))
           .toList(),
-      isEdited: json['isEdited'] == true,
+      isEdited: json['isEdited'] == true || (json['modificationSummary'] is List && (json['modificationSummary'] as List).isNotEmpty),
+      modificationSummary: (json['modificationSummary'] as List<dynamic>? ?? [])
+          .map((m) => OrderModification.fromJson(m))
+          .toList(),
     );
   }
 }
