@@ -378,7 +378,7 @@ class _EncaissementModalState extends State<EncaissementModal> {
         _methodCard(
           method: PaymentMethod.carte,
           icon: Icons.credit_card,
-          title: 'Carte Bancaire (CB)',
+          title: 'CIB',
           subtitle: 'Terminal Pinpad connecté',
           trailing: _fmtEuros(widget.total),
         ),

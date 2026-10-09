@@ -1069,7 +1069,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF111827))),
             ],
           ),
-          Text('SprintKitchen OS v2.4.0-PROD',
+          Text("Bobo's OS v1.00",
               style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFF6B7280))),
         ],
       ),

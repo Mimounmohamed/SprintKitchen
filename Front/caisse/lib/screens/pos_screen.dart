@@ -581,7 +581,7 @@ class _PosScreenState extends State<PosScreen> {
       deliveryAddress: receiptDeliveryAddress,
       deliveryPhone: receiptDeliveryPhone,
       notes: receiptNotes,
-      paymentMethod: result.method == PaymentMethod.especes ? 'Espèces' : 'Carte Bancaire',
+      paymentMethod: result.method == PaymentMethod.especes ? 'Espèces' : 'CIB',
       amountReceived: result.amountReceived,
       change: result.change,
       serverName: widget.posteLabel,

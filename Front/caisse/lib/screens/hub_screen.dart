@@ -12,9 +12,9 @@ import 'pos_screen.dart';
 class HubScreen extends StatefulWidget {
   const HubScreen({
     super.key,
-    this.posteLabel = 'Poste Caisse #01',
+    this.posteLabel = 'Poste Caisse',
     this.userLabel = 'Admin — Caisse 01',
-    this.appVersion = "Bobo's OS Caisse v2.4.0",
+    this.appVersion = "Bobo's OS Caisse v1.00",
     this.isConnected = true,
   });
 
@@ -54,34 +54,11 @@ class _HubScreenState extends State<HubScreen> {
     }
   }
 
-  String _formatCurrency(double val) {
-    final rounded = val.round().toString();
-    final buffer = StringBuffer();
-    for (int i = 0; i < rounded.length; i++) {
-      if (i > 0 && (rounded.length - i) % 3 == 0) {
-        buffer.write(' ');
-      }
-      buffer.write(rounded[i]);
-    }
-    return buffer.toString();
-  }
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final mobile = constraints.maxWidth < 900;
-
-        // KPI Formatted values
-        final caFmt = _kpi != null
-            ? '${_formatCurrency(_kpi!.revenueToday)} DA'
-            : (_isLoadingKpi ? '—' : '0 DA');
-
-        final vsPct = _kpi?.vsLastYear != null
-            ? '${_kpi!.vsLastYear! >= 0 ? "+" : ""}${_kpi!.vsLastYear}% vs N-1'
-            : 'vs N-1';
-
-        final vsPctPositive = (_kpi?.vsLastYear ?? 0) >= 0;
 
         final ticketsFmt = _kpi != null
             ? '${_kpi!.ticketsToday}'
@@ -96,9 +73,6 @@ class _HubScreenState extends State<HubScreen> {
         if (mobile) {
           return _buildMobileLayout(
             context: context,
-            caFmt: caFmt,
-            vsPct: vsPct,
-            vsPctPositive: vsPctPositive,
             ticketsFmt: ticketsFmt,
             ruptureFmt: ruptureFmt,
             ruptureWarn: ruptureWarn,
@@ -108,9 +82,6 @@ class _HubScreenState extends State<HubScreen> {
 
         return _buildDesktopLayout(
           context: context,
-          caFmt: caFmt,
-          vsPct: vsPct,
-          vsPctPositive: vsPctPositive,
           ticketsFmt: ticketsFmt,
           ruptureFmt: ruptureFmt,
           ruptureWarn: ruptureWarn,
@@ -127,9 +98,6 @@ class _HubScreenState extends State<HubScreen> {
 
   Widget _buildDesktopLayout({
     required BuildContext context,
-    required String caFmt,
-    required String vsPct,
-    required bool vsPctPositive,
     required String ticketsFmt,
     required String ruptureFmt,
     required bool ruptureWarn,
@@ -176,42 +144,16 @@ class _HubScreenState extends State<HubScreen> {
                         color: AppColors.ink,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.brown,
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Text(
-                        'HUB',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFFF5F0E6),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: AppColors.gold,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
                   ],
                 ),
 
                 // Top right status pill
-                HubPill(
+                const HubPill(
                   dot: true,
                   dotColor: AppColors.green,
-                  bg: const Color(0xFFF1F0EC),
+                  bg: Color(0xFFF1F0EC),
                   color: AppColors.ink,
-                  text: '${widget.posteLabel} — En direct',
+                  text: 'Poste Caisse',
                 ),
               ],
             ),
@@ -269,37 +211,14 @@ class _HubScreenState extends State<HubScreen> {
                               ],
                             ),
                             const SizedBox(height: 10),
-                            Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 14,
-                              runSpacing: 8,
-                              children: [
-                                Text(
-                                  'Portail Caisse & Ventes',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.ink,
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F0EC),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    widget.posteLabel,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.muted,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              'Portail Caisse & Ventes',
+                              style: GoogleFonts.inter(
+                                fontSize: 34,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.ink,
+                                letterSpacing: -0.5,
+                              ),
                             ),
                             const SizedBox(height: 10),
                             ConstrainedBox(
@@ -318,19 +237,11 @@ class _HubScreenState extends State<HubScreen> {
                       ),
                       const SizedBox(width: 24),
 
-                      // Right: 3 KPI cards
+                      // Right: KPI cards
                       Wrap(
                         spacing: 12,
                         runSpacing: 12,
                         children: [
-                          HubKpiCard(
-                            label: "Chiffre d'affaires",
-                            value: caFmt,
-                            valueColor: AppColors.green,
-                            sub: vsPct,
-                            subColor:
-                                vsPctPositive ? AppColors.green : AppColors.red,
-                          ),
                           HubKpiCard(
                             label: "Tickets Clôturés",
                             value: ticketsFmt,
@@ -344,7 +255,7 @@ class _HubScreenState extends State<HubScreen> {
                               value: ruptureFmt,
                               valueColor:
                                   ruptureWarn ? AppColors.orange : AppColors.ink,
-                              sub: "Ingrédients (86 list)",
+                              sub: "Ingrédients",
                               subColor:
                                   ruptureWarn ? AppColors.orange : AppColors.muted,
                             ),
@@ -427,9 +338,6 @@ class _HubScreenState extends State<HubScreen> {
 
   Widget _buildMobileLayout({
     required BuildContext context,
-    required String caFmt,
-    required String vsPct,
-    required bool vsPctPositive,
     required String ticketsFmt,
     required String ruptureFmt,
     required bool ruptureWarn,
@@ -480,32 +388,6 @@ class _HubScreenState extends State<HubScreen> {
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.3,
                           color: AppColors.ink,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.brown,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'HUB',
-                          style: GoogleFonts.inter(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFFF5F0E6),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: AppColors.gold,
-                          shape: BoxShape.circle,
                         ),
                       ),
                     ],
@@ -573,7 +455,7 @@ class _HubScreenState extends State<HubScreen> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'EN DIRECT',
+                          'POSTE CAISSE',
                           style: GoogleFonts.inter(
                             fontSize: 9.5,
                             fontWeight: FontWeight.w700,
@@ -585,72 +467,33 @@ class _HubScreenState extends State<HubScreen> {
                     const SizedBox(height: 8),
 
                     // Title row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'PORTAIL CAISSE',
-                              style: GoogleFonts.bebasNeue(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.ink,
-                                height: 1.05,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Bienvenue sur le Hub de Caisse mobile',
-                              style: GoogleFonts.inter(
-                                fontSize: 11.5,
-                                color: AppColors.muted,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 9, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F0EC),
-                            borderRadius: BorderRadius.circular(999),
+                        Text(
+                          'PORTAIL CAISSE',
+                          style: GoogleFonts.bebasNeue(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink,
+                            height: 1.05,
                           ),
-                          child: Text(
-                            widget.posteLabel,
-                            style: GoogleFonts.inter(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.muted,
-                            ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Bienvenue sur le Hub de Caisse mobile',
+                          style: GoogleFonts.inter(
+                            fontSize: 11.5,
+                            color: AppColors.muted,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
 
-                    // KPI strip — 3 columns
+                    // KPI strip — 2 columns
                     Row(
                       children: [
-                        Expanded(
-                          child: HubMobileKpiCard(
-                            label: 'C.A. JOUR',
-                            value: caFmt,
-                            valueColor: AppColors.green,
-                            sub: vsPct,
-                            subColor:
-                                vsPctPositive ? AppColors.green : AppColors.red,
-                            icon: Icon(
-                              Icons.trending_up_rounded,
-                              size: 14,
-                              color:
-                                  vsPctPositive ? AppColors.green : AppColors.red,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
                         Expanded(
                           child: HubMobileKpiCard(
                             label: 'TICKETS',
@@ -666,7 +509,7 @@ class _HubScreenState extends State<HubScreen> {
                             value: ruptureFmt,
                             valueColor:
                                 ruptureWarn ? AppColors.orange : AppColors.ink,
-                            sub: '86 List',
+                            sub: 'Ingrédients',
                             subColor:
                                 ruptureWarn ? AppColors.orange : AppColors.muted,
                             borderColor:
@@ -769,7 +612,7 @@ class _HubScreenState extends State<HubScreen> {
             'Prenez les commandes sur place, à emporter ou livraison et procédez à l\'encaissement.',
         checklist: const [
           ChecklistItem(text: 'Prise de commande rapide & menus'),
-          ChecklistItem(text: 'Paiements : Espèces, CIB, Carte'),
+          ChecklistItem(text: 'Paiements : Espèces, CIB'),
         ],
         highlight: true,
         cta: 'OUVRIR LA CAISSE POS',
@@ -810,7 +653,7 @@ class _HubScreenState extends State<HubScreen> {
         },
       ),
 
-      // 3. Stock & 86 List
+      // 3. Stock & Ingrédients
       HubModuleCard(
         mobile: mobile,
         icon: Icons.inventory_2_outlined,
@@ -830,24 +673,24 @@ class _HubScreenState extends State<HubScreen> {
                 small: true,
                 bg: const Color(0xFFF1F0EC),
                 color: AppColors.muted,
-                text: 'STOCK & 86 LIST',
+                text: 'STOCK & INGRÉDIENTS',
               ),
         eyebrow: 'Stocks & Ingrédients',
-        title: 'Stock & 86 List',
+        title: 'Stock & Ingrédients',
         description:
-            'Contrôlez les ruptures d\'ingrédients en temps réel et signalez les produits épuisés (86).',
+            'Contrôlez les ruptures d\'ingrédients en temps réel et signalez les produits épuisés.',
         checklist: [
           ChecklistItem(
             warn: ruptureWarn,
             text: ruptureWarn
-                ? '$ruptureCount Alerte${ruptureCount > 1 ? "s" : ""} de stock critique (86)'
+                ? '$ruptureCount Alerte${ruptureCount > 1 ? "s" : ""} de stock critique'
                 : 'Niveaux de stock sous contrôle',
           ),
           const ChecklistItem(
             text: 'Disponibilité des ingrédients en temps réel',
           ),
         ],
-        cta: 'GÉRER LES STOCKS & 86',
+        cta: 'GÉRER LES STOCKS',
         ctaStyle: CtaStyle.secondary,
         onClick: () {
           Navigator.of(context).push(
@@ -906,7 +749,7 @@ class _HubScreenState extends State<HubScreen> {
             ),
             const SizedBox(width: 12),
             Text(
-              'Articles & Ingrédients Épuisés (86)',
+              'Articles & Ingrédients Épuisés',
               style: GoogleFonts.inter(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -924,7 +767,7 @@ class _HubScreenState extends State<HubScreen> {
               Text(
                 items.isEmpty
                     ? 'Aucun ingrédient n\'est actuellement en rupture de stock.'
-                    : 'Les ingrédients suivants sont signalés en rupture (86 list) :',
+                    : 'Les ingrédients suivants sont signalés en rupture :',
                 style: GoogleFonts.inter(fontSize: 13, color: AppColors.muted),
               ),
               const SizedBox(height: 14),

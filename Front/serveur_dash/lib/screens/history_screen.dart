@@ -1184,7 +1184,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           Spacer(),
           Text(
-            'SprintKitchen OS v2.4.0-PROD',
+            "Bobo's OS v1.00",
             style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
         ],
