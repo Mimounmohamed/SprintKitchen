@@ -16,16 +16,43 @@ exports.getFamilies = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /* POST /api/ingredient-families */
 exports.createFamily = async (req, res, next) => {
   try {
-    const { name, emoji, displayOrder } = req.body;
-    if (!name) return res.status(400).json({ success: false, message: 'name is required' });
+    const { emoji, displayOrder } = req.body;
+    const name = req.body.name ? req.body.name.trim() : '';
+    if (!name) return res.status(400).json({ success: false, message: 'Le nom de la famille est requis.' });
+
+    const existing = await IngredientFamily.findOne({
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+      isActive: true,
+    });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "Une famille d'ingrédients avec ce nom existe déjà.",
+      });
+    }
+
+    // Check if an inactive family exists with the same name, reactivate it if so
+    let inactive = await IngredientFamily.findOne({
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+      isActive: false,
+    });
+    if (inactive) {
+      inactive.isActive = true;
+      if (emoji) inactive.emoji = emoji;
+      if (displayOrder !== undefined) inactive.displayOrder = displayOrder;
+      await inactive.save();
+      return res.status(201).json({ success: true, data: inactive });
+    }
 
     let baseSlug = slugify(name);
     let slug     = baseSlug;
     let counter  = 1;
-    // Deduplicate slug
+    // Deduplicate slug if necessary
     while (await IngredientFamily.findOne({ slug })) {
       slug = `${baseSlug}_${counter++}`;
     }
@@ -43,6 +70,26 @@ exports.createFamily = async (req, res, next) => {
 /* PUT /api/ingredient-families/:id */
 exports.updateFamily = async (req, res, next) => {
   try {
+    if (req.body.name) {
+      const name = req.body.name.trim();
+      if (!name) {
+        return res.status(400).json({ success: false, message: 'Le nom de la famille est requis.' });
+      }
+
+      const existing = await IngredientFamily.findOne({
+        _id: { $ne: req.params.id },
+        name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+        isActive: true,
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: "Une famille d'ingrédients avec ce nom existe déjà.",
+        });
+      }
+      req.body.name = name;
+    }
+
     const family = await IngredientFamily.findByIdAndUpdate(
       req.params.id,
       req.body,

@@ -30,10 +30,17 @@ exports.createPayment = async (req, res) => {
       receiptPrinted: req.body.receiptPrinted || false,
     });
 
-    // Send order to kitchen (en attente de préparation)
-    order.status = 'en_attente';
-    order.kdsStatus = 'pending';
-    order.kdsSentAt = new Date();
+    // If order was already prepared by kitchen (e.g. table order à encaisser), payment completes it.
+    // Otherwise send order to kitchen (en attente de préparation)
+    if (order.status === 'a_encaisser' || order.kdsStatus === 'ready' || order.kdsStatus === 'served') {
+      order.status = 'terminee';
+      order.completedAt = new Date();
+      order.kdsStatus = 'served';
+    } else {
+      order.status = 'en_attente';
+      order.kdsStatus = 'pending';
+      order.kdsSentAt = new Date();
+    }
     await order.save();
 
     res.status(201).json({ success: true, data: payment, change });

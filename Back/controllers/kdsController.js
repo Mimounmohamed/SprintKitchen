@@ -1,4 +1,5 @@
 const Order = require('../models/Order');
+const Payment = require('../models/Payment');
 
 /**
  * GET /api/kds/orders
@@ -72,9 +73,18 @@ exports.updateKdsStatus = async (req, res) => {
       order.kdsReadyAt = new Date();
       order.status     = 'a_encaisser';
     } else if (kdsStatus === 'served') {
-      // Handed to customer → archive
-      order.status      = 'terminee';
-      order.completedAt = new Date();
+      // Handed to customer / finished in kitchen
+      // Table orders (and unpaid orders) MUST go to a_encaisser so cashier can encaisse them.
+      const hasTable = Boolean(order.tableNumber || (order.orderType === 'sur_place' && order.buzzerNumber));
+      const isPaid = await Payment.exists({ orderId: order._id, isRefunded: { $ne: true } });
+
+      if (hasTable && !isPaid) {
+        order.kdsReadyAt = order.kdsReadyAt || new Date();
+        order.status = 'a_encaisser';
+      } else {
+        order.status      = 'terminee';
+        order.completedAt = new Date();
+      }
     }
 
     await order.save();

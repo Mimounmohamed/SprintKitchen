@@ -138,7 +138,7 @@ function MobileToggleBtn({ ingredient, onToggle, toggling }) {
 }
 
 /* ── IngredientModal ── */
-function IngredientModal({ ingredient, families, defaultFamily, mobile, onClose, onSaved, onDeleted }) {
+function IngredientModal({ ingredient, ingredients = [], families, defaultFamily, mobile, onClose, onSaved, onDeleted }) {
   const isEdit = !!ingredient;
   const [name,   setName]   = React.useState(ingredient?.name   || "");
   const [family, setFamily] = React.useState(ingredient?.family || defaultFamily || families[0]?.slug || "");
@@ -159,18 +159,23 @@ function IngredientModal({ ingredient, families, defaultFamily, mobile, onClose,
   };
 
   const handleSave = async () => {
-    if (!name.trim()) { setError("Le nom est requis."); return; }
+    const trimmed = name.trim();
+    if (!trimmed) { setError("Le nom est requis."); return; }
+    if (ingredients?.some(i => i._id !== ingredient?._id && i.name?.trim().toLowerCase() === trimmed.toLowerCase())) {
+      setError("Un ingrédient avec ce nom existe déjà.");
+      return;
+    }
     setSaving(true); setError("");
     try {
       let result;
       if (isEdit) {
         result = await ingredientService.update(ingredient._id, {
-          name: name.trim(), family, unit: unit.trim(), notes: notes.trim(),
+          name: trimmed, family, unit: unit.trim(), notes: notes.trim(),
         });
         onSaved(result.data.data);
       } else {
         result = await ingredientService.create({
-          name: name.trim(), family, unit: unit.trim(), notes: notes.trim(),
+          name: trimmed, family, unit: unit.trim(), notes: notes.trim(),
         });
         onSaved(result.data.data, true);
       }
@@ -308,7 +313,7 @@ function IngredientModal({ ingredient, families, defaultFamily, mobile, onClose,
 }
 
 /* ── FamilyModal ── */
-function FamilyModal({ family, mobile, onClose, onSaved, onDeleted }) {
+function FamilyModal({ family, families = [], mobile, onClose, onSaved, onDeleted }) {
   const isEdit = !!family;
   const [emoji, setEmoji] = React.useState(family?.emoji || "📦");
   const [name,  setName]  = React.useState(family?.name  || "");
@@ -327,16 +332,21 @@ function FamilyModal({ family, mobile, onClose, onSaved, onDeleted }) {
   };
 
   const handleSave = async () => {
-    if (!name.trim()) { setError("Le nom est requis."); return; }
+    const trimmed = name.trim();
+    if (!trimmed) { setError("Le nom est requis."); return; }
+    if (families?.some(f => f._id !== family?._id && f.name?.trim().toLowerCase() === trimmed.toLowerCase())) {
+      setError("Une famille avec ce nom existe déjà.");
+      return;
+    }
     setSaving(true); setError("");
     try {
       let result;
       if (isEdit) {
-        result = await ingredientFamilyService.update(family._id, { name: name.trim(), emoji });
+        result = await ingredientFamilyService.update(family._id, { name: trimmed, emoji });
         onSaved({ ...family, ...result.data.data });
       } else {
-        const slug = slugify(name.trim());
-        result = await ingredientFamilyService.create({ name: name.trim(), slug, emoji });
+        const slug = slugify(trimmed);
+        result = await ingredientFamilyService.create({ name: trimmed, slug, emoji });
         onSaved(result.data.data, true);
       }
       onClose();
@@ -1418,6 +1428,7 @@ export default function InventairePage() {
       {ingModal && (
         <IngredientModal
           ingredient={ingModal.ingredient || null}
+          ingredients={ingredients}
           families={families}
           defaultFamily={activeFamily}
           mobile={mobile}
@@ -1429,6 +1440,7 @@ export default function InventairePage() {
       {famModal && (
         <FamilyModal
           family={famModal.family || null}
+          families={families}
           mobile={mobile}
           onClose={() => setFamModal(null)}
           onSaved={handleFamSaved}

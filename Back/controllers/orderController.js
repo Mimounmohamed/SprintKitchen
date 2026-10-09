@@ -174,7 +174,6 @@ exports.createOrder = async (req, res) => {
           storeId: data.storeId,
           orderType: 'sur_place',
           status: { $nin: ['terminee', 'annulee'] },
-          kdsStatus: { $ne: 'served' },
           $or: [
             { tableNumber: table },
             { buzzerNumber: `Table ${table}` },
@@ -564,7 +563,6 @@ exports.updateOrder = async (req, res) => {
             storeId: order.storeId,
             orderType: 'sur_place',
             status: { $nin: ['terminee', 'annulee'] },
-            kdsStatus: { $ne: 'served' },
             $or: [
               { tableNumber: table },
               { buzzerNumber: `Table ${table}` },
@@ -720,7 +718,6 @@ exports.getOccupiedTables = async (req, res) => {
     const filter = {
       orderType: 'sur_place',
       status: { $nin: ['terminee', 'annulee'] },
-      kdsStatus: { $ne: 'served' },
     };
     if (req.query.storeId) filter.storeId = req.query.storeId;
 

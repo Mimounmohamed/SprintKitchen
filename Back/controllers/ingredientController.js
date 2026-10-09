@@ -45,9 +45,44 @@ exports.getIngredient = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /* POST /api/ingredients */
 exports.createIngredient = async (req, res, next) => {
   try {
+    const name = req.body.name ? req.body.name.trim() : '';
+    if (!name) {
+      return res.status(400).json({ success: false, message: "Le nom de l'ingrédient est requis." });
+    }
+
+    const existingFilter = {
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+      isActive: true,
+    };
+    if (req.body.storeId) existingFilter.storeId = req.body.storeId;
+
+    const existing = await Ingredient.findOne(existingFilter);
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un ingrédient avec ce nom existe déjà.',
+      });
+    }
+
+    // Check if an inactive ingredient exists with the same name, reactivate it if so
+    const inactiveFilter = {
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+      isActive: false,
+    };
+    if (req.body.storeId) inactiveFilter.storeId = req.body.storeId;
+    const inactive = await Ingredient.findOne(inactiveFilter);
+    if (inactive) {
+      Object.assign(inactive, req.body, { name, isActive: true });
+      await inactive.save();
+      return res.status(201).json({ success: true, data: inactive });
+    }
+
+    req.body.name = name;
     const item = await Ingredient.create(req.body);
     res.status(201).json({ success: true, data: item });
   } catch (err) { next(err); }
@@ -56,6 +91,29 @@ exports.createIngredient = async (req, res, next) => {
 /* PUT /api/ingredients/:id */
 exports.updateIngredient = async (req, res, next) => {
   try {
+    if (req.body.name) {
+      const name = req.body.name.trim();
+      if (!name) {
+        return res.status(400).json({ success: false, message: "Le nom de l'ingrédient est requis." });
+      }
+
+      const existingFilter = {
+        _id: { $ne: req.params.id },
+        name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+        isActive: true,
+      };
+      if (req.body.storeId) existingFilter.storeId = req.body.storeId;
+
+      const existing = await Ingredient.findOne(existingFilter);
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: 'Un ingrédient avec ce nom existe déjà.',
+        });
+      }
+      req.body.name = name;
+    }
+
     const item = await Ingredient.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!item) return res.status(404).json({ success: false, message: 'Ingredient not found' });
     res.json({ success: true, data: item });

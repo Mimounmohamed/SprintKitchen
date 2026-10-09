@@ -746,7 +746,7 @@ class OrderDetailsPanel extends StatelessWidget {
       ),
       child: Column(
         children: [
-          if (order.status == 'en_attente') ...[
+          if (order.status == 'en_attente' || order.status == 'a_encaisser') ...[
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -761,10 +761,19 @@ class OrderDetailsPanel extends StatelessWidget {
                   ),
                   elevation: 0,
                 ),
-                icon: const Icon(Icons.check_circle_outline, size: 22),
-                label: const Text(
-                  'MARQUER COMME TERMINÉE (PRÊTE)',
-                  style: TextStyle(
+                icon: Icon(
+                  order.status == 'a_encaisser'
+                      ? Icons.payments_outlined
+                      : Icons.check_circle_outline,
+                  size: 22,
+                ),
+                label: Text(
+                  order.status == 'a_encaisser'
+                      ? (order.tableNumber != null && order.tableNumber!.isNotEmpty
+                          ? 'ENCAISSEMENT TERMINÉ (LIBÉRER TABLE ${order.tableNumber})'
+                          : 'ENCAISSEMENT TERMINÉ (VALIDER)')
+                      : 'MARQUER COMME TERMINÉE (PRÊTE)',
+                  style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 13,
                       letterSpacing: 0.5),

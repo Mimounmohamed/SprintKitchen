@@ -919,7 +919,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (o.status == 'en_attente') ...[
+                  if (o.status == 'en_attente' || o.status == 'a_encaisser') ...[
                     _finishButton(o),
                     const SizedBox(width: 8),
                   ],
@@ -1082,6 +1082,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _finishButton(HistoryOrder o) {
+    final isAEncaisser = o.status == 'a_encaisser';
     return InkWell(
       onTap: () => _markOrderTerminee(o),
       borderRadius: BorderRadius.circular(6),
@@ -1094,10 +1095,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.check, size: 14, color: Colors.white),
+            Icon(isAEncaisser ? Icons.payments_outlined : Icons.check,
+                size: 14, color: Colors.white),
             const SizedBox(width: 4),
             Text(
-              'Terminer',
+              isAEncaisser ? 'Encaisser' : 'Terminer',
               style: _os(12, FontWeight.w600, Colors.white, lineHeight: 16),
             ),
           ],
@@ -1225,7 +1227,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF059669),
-          content: Text('Commande #${o.ticketNumber} marquée comme terminée !'),
+          content: Text(
+            o.tableNumber != null && o.tableNumber!.isNotEmpty
+                ? 'Commande #${o.ticketNumber} encaissée ! La Table ${o.tableNumber} est maintenant libre.'
+                : 'Commande #${o.ticketNumber} marquée comme terminée !',
+          ),
         ),
       );
       _loadSummary();
@@ -1259,7 +1265,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
         context,
         o,
         onMarkTerminee:
-            o.status == 'en_attente' ? () => _markOrderTerminee(o) : null,
+            (o.status == 'en_attente' || o.status == 'a_encaisser')
+                ? () => _markOrderTerminee(o)
+                : null,
         onModifyOrder:
             o.status != 'terminee' && o.status != 'annulee'
                 ? () {

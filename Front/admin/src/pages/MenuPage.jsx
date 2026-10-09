@@ -86,7 +86,8 @@ function IngredientPicker({ tags, onChange }) {
       if (q.trim()) params.search = q.trim();
       const res = await ingredientService.getAll(params);
       const all = res.data?.data || [];
-      setResults(all.filter(i => !tags.includes(i.name)));
+      const lowerTags = tags.map(t => t.trim().toLowerCase());
+      setResults(all.filter(i => !lowerTags.includes(i.name.trim().toLowerCase())));
       setShowDrop(true);
     } catch { setResults([]); }
     finally  { setLoading(false); }
@@ -110,7 +111,11 @@ function IngredientPicker({ tags, onChange }) {
   }, []);
 
   const select = (ing) => {
-    onChange([...tags, ing.name]);
+    const ingName = ing.name.trim();
+    const alreadyExists = tags.some(t => t.trim().toLowerCase() === ingName.toLowerCase());
+    if (!alreadyExists) {
+      onChange([...tags, ingName]);
+    }
     setQuery("");
     setResults([]);
     setShowDrop(false);
@@ -157,6 +162,25 @@ function IngredientPicker({ tags, onChange }) {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onFocus={() => setShowDrop(true)}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const q = query.trim();
+                if (!q) return;
+                const lowerTags = tags.map(t => t.trim().toLowerCase());
+                if (lowerTags.includes(q.toLowerCase())) {
+                  setQuery("");
+                  setShowDrop(false);
+                  return;
+                }
+                const matched = results.find(r => r.name.trim().toLowerCase() === q.toLowerCase());
+                const nameToAdd = matched ? matched.name.trim() : q;
+                onChange([...tags, nameToAdd]);
+                setQuery("");
+                setResults([]);
+                setShowDrop(false);
+              }
+            }}
             placeholder={tags.length === 0 ? "Rechercher un ingrédient…" : "Ajouter…"}
             style={{
               border: "none", outline: "none", fontSize: 13, fontFamily: "inherit",
@@ -247,8 +271,19 @@ function ArticleDrawer({ product, categories, onClose, onSave }) {
     }
     setSaving(true); setError("");
     try {
-      if (isEdit) await productService.update(product._id, form);
-      else        await productService.create(form);
+      const seen = new Set();
+      const uniqueIngredients = [];
+      for (const item of (form.ingredients || [])) {
+        const trimmed = (typeof item === "string" ? item : item?.name || "").trim();
+        const lower = trimmed.toLowerCase();
+        if (trimmed && !seen.has(lower)) {
+          seen.add(lower);
+          uniqueIngredients.push(trimmed);
+        }
+      }
+      const payload = { ...form, ingredients: uniqueIngredients };
+      if (isEdit) await productService.update(product._id, payload);
+      else        await productService.create(payload);
       onSave();
     } catch (e) {
       setError(e.response?.data?.message || "Erreur lors de la sauvegarde.");
@@ -438,7 +473,7 @@ function ArticleDrawer({ product, categories, onClose, onSave }) {
 /* ── Category Modal ──────────────────────────────────────────────────────────── */
 const POS_COLORS = ["#F2B705","#2FAE5C","#2E5BD9","#E040FB","#2E2117","#E0533D","#00BCD4","#FF9800"];
 
-function CategoryModal({ category, onClose, onSave }) {
+function CategoryModal({ category, categories = [], onClose, onSave }) {
   const isEdit = !!category;
   const mobile = window.innerWidth < 900;
   const [form, setForm] = useState({
@@ -471,11 +506,16 @@ function CategoryModal({ category, onClose, onSave }) {
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const handleSave = async () => {
-    if (!form.name) { setError("Le nom est obligatoire."); return; }
+    const trimmed = form.name.trim();
+    if (!trimmed) { setError("Le nom est obligatoire."); return; }
+    if (categories?.some(c => c._id !== category?._id && c.name?.trim().toLowerCase() === trimmed.toLowerCase())) {
+      setError("Une catégorie avec ce nom existe déjà.");
+      return;
+    }
     setSaving(true); setError("");
     try {
-      if (isEdit) await categoryService.update(category._id, form);
-      else        await categoryService.create(form);
+      if (isEdit) await categoryService.update(category._id, { ...form, name: trimmed });
+      else        await categoryService.create({ ...form, name: trimmed });
       onSave();
     } catch (e) {
       setError(e.response?.data?.message || "Erreur lors de la sauvegarde.");
@@ -1326,6 +1366,7 @@ export default function MenuPage() {
       {catModal && (
         <CategoryModal
           category={catModal === "new" ? null : catModal}
+          categories={categories}
           onClose={() => setCatModal(null)}
           onSave={() => { setCatModal(null); fetchCategories(); fetchProducts(); }}
         />

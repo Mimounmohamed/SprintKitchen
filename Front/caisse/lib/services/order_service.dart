@@ -177,10 +177,9 @@ class OrderService {
       for (final item in list) {
         if (item is! Map<String, dynamic>) continue;
         final status = item['status']?.toString().toLowerCase().trim() ?? '';
-        final kdsStatus = item['kdsStatus']?.toString().toLowerCase().trim() ?? '';
 
-        // If completed or cancelled, the table is free
-        if (status == 'terminee' || status == 'annulee' || kdsStatus == 'served') {
+        // Table only becomes free once order is paid/terminee or annulee
+        if (status == 'terminee' || status == 'annulee') {
           continue;
         }
 

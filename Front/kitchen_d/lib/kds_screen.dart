@@ -593,7 +593,9 @@ class _KdsState extends State<KdsScreen> {
     if (order.status == OrderStatus.attente) {
       nextKds = 'in_progress';
     } else {
-      nextKds = 'served';
+      final isTable = (order.tableNumber != null && order.tableNumber!.isNotEmpty) ||
+          order.mode == OrderMode.surPlace;
+      nextKds = isTable ? 'ready' : 'served';
     }
 
     // Optimistic UI update

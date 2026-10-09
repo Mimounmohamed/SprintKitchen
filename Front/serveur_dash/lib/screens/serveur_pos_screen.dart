@@ -42,12 +42,24 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
   bool _submitting = false;
   String? _orderNotes;
   String? _tableNumber;
+  Set<String> _occupiedTables = {};
 
   @override
   void initState() {
     super.initState();
     _ticketNumber = widget.ticketNumber;
     _loadMenu();
+    _loadOccupiedTables();
+  }
+
+  Future<void> _loadOccupiedTables() async {
+    try {
+      final list = await _orderService.getOccupiedTables();
+      if (!mounted) return;
+      setState(() {
+        _occupiedTables = list.map((t) => t.tableNumber.trim()).toSet();
+      });
+    } catch (_) {}
   }
 
   @override
@@ -411,7 +423,9 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
         _ticketLines.clear();
         _selectedLineIndex = null;
         _orderNotes = null;
+        _tableNumber = null;
       });
+      _loadOccupiedTables();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         showCloseIcon: true,
         closeIconColor: Colors.white,
@@ -447,21 +461,60 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
               itemBuilder: (context, i) {
                 final t = '${i + 1}';
                 final selected = _tableNumber == t;
+                final isOccupied = _occupiedTables.contains(t);
                 return GestureDetector(
-                  onTap: () => setState(() => _tableNumber = selected ? null : t),
-                  child: Container(
-                    width: 36, height: 32,
-                    decoration: BoxDecoration(
-                      color: selected ? const Color(0xFF2E1F0F) : const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: selected ? const Color(0xFF2E1F0F) : const Color(0xFFE5E7EB)),
-                    ),
-                    child: Center(
-                      child: Text('T$t', style: TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w700,
-                        color: selected ? const Color(0xFFFBBF24) : const Color(0xFF374151),
-                      )),
-                    ),
+                  onTap: () {
+                    if (isOccupied) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: const Color(0xFFDC2626),
+                          content: Text('Table $t est déjà occupée par une commande active.'),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+                    setState(() => _tableNumber = selected ? null : t);
+                  },
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 36, height: 32,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? const Color(0xFF2E1F0F)
+                              : (isOccupied ? const Color(0xFFFEE2E2) : const Color(0xFFF3F4F6)),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: selected
+                                ? const Color(0xFF2E1F0F)
+                                : (isOccupied ? const Color(0xFFFCA5A5) : const Color(0xFFE5E7EB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text('T$t', style: TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w700,
+                            color: selected
+                                ? const Color(0xFFFBBF24)
+                                : (isOccupied ? const Color(0xFFDC2626) : const Color(0xFF374151)),
+                          )),
+                        ),
+                      ),
+                      if (isOccupied)
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFDC2626),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 );
               },

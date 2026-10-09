@@ -50,10 +50,29 @@ exports.getProduct = async (req, res) => {
   }
 };
 
+const dedupeIngredients = (ingredients) => {
+  if (!Array.isArray(ingredients)) return ingredients;
+  const seen = new Set();
+  return ingredients.reduce((acc, item) => {
+    if (typeof item === 'string') {
+      const trimmed = item.trim();
+      const lower = trimmed.toLowerCase();
+      if (trimmed && !seen.has(lower)) {
+        seen.add(lower);
+        acc.push(trimmed);
+      }
+    }
+    return acc;
+  }, []);
+};
+
 // @desc  Create product
 // @route POST /api/products
 exports.createProduct = async (req, res) => {
   try {
+    if (req.body.ingredients) {
+      req.body.ingredients = dedupeIngredients(req.body.ingredients);
+    }
     const product = await Product.create(req.body);
     res.status(201).json({ success: true, data: product });
   } catch (err) {
@@ -65,6 +84,9 @@ exports.createProduct = async (req, res) => {
 // @route PUT /api/products/:id
 exports.updateProduct = async (req, res) => {
   try {
+    if (req.body.ingredients) {
+      req.body.ingredients = dedupeIngredients(req.body.ingredients);
+    }
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
