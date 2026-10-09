@@ -122,25 +122,24 @@ class _HubScreenState extends State<HubScreen> {
                 Row(
                   children: [
                     Container(
-                      width: 38,
-                      height: 38,
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.gold, width: 2),
+                        border: Border.all(color: AppColors.gold, width: 2.5),
                         image: const DecorationImage(
                           image: AssetImage('assets/images/bobo_portrait.jpg'),
                           fit: BoxFit.cover,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 14),
                     Text(
-                      "BOBO'S",
-                      style: GoogleFonts.inter(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.3,
+                      "Bobo's",
+                      style: GoogleFonts.pacifico(
+                        fontSize: 22,
                         color: AppColors.ink,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ],
@@ -367,25 +366,24 @@ class _HubScreenState extends State<HubScreen> {
                   Row(
                     children: [
                       Container(
-                        width: 30,
-                        height: 30,
+                        width: 38,
+                        height: 38,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.gold, width: 1.5),
+                          border: Border.all(color: AppColors.gold, width: 2.0),
                           image: const DecorationImage(
                             image: AssetImage('assets/images/bobo_portrait.jpg'),
                             fit: BoxFit.cover,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 7),
+                      const SizedBox(width: 9),
                       Text(
-                        "BOBO'S",
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
+                        "Bobo's",
+                        style: GoogleFonts.pacifico(
+                          fontSize: 18,
                           color: AppColors.ink,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ],

@@ -8,7 +8,7 @@ void main() {
     await tester.pump();
 
     // Verify brand and primary action exist
-    expect(find.text("BOBO'S"), findsWidgets);
+    expect(find.text("Bobo's"), findsWidgets);
     expect(find.text('HUB'), findsNothing);
     expect(find.text('OUVRIR LA CAISSE POS'), findsOneWidget);
   });

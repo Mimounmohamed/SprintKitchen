@@ -1042,11 +1042,11 @@ class _PosScreenState extends State<PosScreen> {
           ),
           const SizedBox(width: 14),
           Container(
-            width: 32,
-            height: 32,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFFACC15), width: 1.5),
+              border: Border.all(color: const Color(0xFFFACC15), width: 2.0),
               image: const DecorationImage(
                 image: AssetImage('assets/images/bobo_portrait.jpg'),
                 fit: BoxFit.cover,
@@ -1055,11 +1055,10 @@ class _PosScreenState extends State<PosScreen> {
           ),
           const SizedBox(width: 10),
           Text(
-            "BOBO'S",
-            style: GoogleFonts.bebasNeue(
-              fontWeight: FontWeight.w400,
-              fontSize: 24,
-              letterSpacing: 1.5,
+            "Bobo's",
+            style: GoogleFonts.pacifico(
+              fontSize: 22,
+              letterSpacing: 0.5,
               color: const Color(0xFF111827),
             ),
           ),
