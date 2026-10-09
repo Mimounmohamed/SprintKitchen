@@ -22,7 +22,6 @@ class MyApp extends StatelessWidget {
           primary: AppColors.brandDark,
           secondary: AppColors.gold,
         ),
-        fontFamily: 'Roboto',
       ),
       home: const HubScreen(),
     );

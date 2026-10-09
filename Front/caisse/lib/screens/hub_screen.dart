@@ -125,13 +125,12 @@ class _HubScreenState extends State<HubScreen> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: AppColors.brown,
-                        borderRadius: BorderRadius.circular(9),
-                      ),
-                      child: const Icon(
-                        Icons.menu_book_rounded,
-                        color: AppColors.gold,
-                        size: 20,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.gold, width: 2),
+                        image: const DecorationImage(
+                          image: AssetImage('assets/images/bobo_portrait.jpg'),
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -371,13 +370,12 @@ class _HubScreenState extends State<HubScreen> {
                         width: 30,
                         height: 30,
                         decoration: BoxDecoration(
-                          color: AppColors.brown,
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: const Icon(
-                          Icons.menu_book_rounded,
-                          color: AppColors.gold,
-                          size: 15,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.gold, width: 1.5),
+                          image: const DecorationImage(
+                            image: AssetImage('assets/images/bobo_portrait.jpg'),
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 7),

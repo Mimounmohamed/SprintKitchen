@@ -63,12 +63,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - google_fonts/
-
-  fonts:
-    - family: Bebas Neue
-      fonts:
-        - asset: google_fonts/BebasNeue-Regular.ttf
+    - assets/images/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

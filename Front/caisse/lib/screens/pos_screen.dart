@@ -1045,12 +1045,12 @@ class _PosScreenState extends State<PosScreen> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: const Color(0xFF583926),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Center(
-              child: Icon(Icons.restaurant_rounded,
-                  color: Color(0xFFFACC15), size: 17),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFFACC15), width: 1.5),
+              image: const DecorationImage(
+                image: AssetImage('assets/images/bobo_portrait.jpg'),
+                fit: BoxFit.cover,
+              ),
             ),
           ),
           const SizedBox(width: 10),
