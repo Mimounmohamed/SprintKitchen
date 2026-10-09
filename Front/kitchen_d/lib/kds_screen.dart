@@ -719,7 +719,7 @@ class _KdsState extends State<KdsScreen> {
   /* ── Header ── */
   Widget _buildHeader(R r) {
     final connected = _error == null;
-    final iconSize  = r.w < 800 ? 32.0 : 36.0;
+    final logoSize  = r.w < 800 ? 38.0 : 44.0;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: r.fs(18), vertical: r.w < 800 ? 8 : 11),
       decoration: BoxDecoration(
@@ -728,18 +728,37 @@ class _KdsState extends State<KdsScreen> {
       ),
       child: Row(children: [
         Container(
-          width: iconSize, height: iconSize,
-          decoration: BoxDecoration(color: C.brown, borderRadius: BorderRadius.circular(8)),
-          child: Icon(Icons.restaurant, color: C.yellow, size: r.fs(17)),
+          width: logoSize,
+          height: logoSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFFFACC15), width: 2.0),
+            image: const DecorationImage(
+              image: AssetImage('assets/images/bobo_portrait.jpg'),
+              fit: BoxFit.cover,
+            ),
+          ),
         ),
-        SizedBox(width: r.fs(8)),
-        Text('SPRINTKITCHEN', style: TextStyle(fontWeight: FontWeight.w800,
-            fontSize: r.fs(14), letterSpacing: 0.2, color: C.ink)),
+        SizedBox(width: r.fs(10)),
+        Text(
+          "Bobo's",
+          style: GoogleFonts.pacifico(
+            fontSize: r.fs(22),
+            letterSpacing: 0.5,
+            color: C.ink,
+          ),
+        ),
         Expanded(
           child: Center(
-            child: Text('\u00c9CRAN CUISINE \u2013 POSTE PRINCIPAL',
-              style: GoogleFonts.bebasNeue(fontSize: r.fs(22),
-                  color: const Color(0xFF1C1917), fontWeight: FontWeight.w400, letterSpacing: 0.8)),
+            child: Text(
+              'ÉCRAN CUISINE – POSTE PRINCIPAL',
+              style: GoogleFonts.bebasNeue(
+                fontSize: r.fs(22),
+                color: const Color(0xFF1C1917),
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.8,
+              ),
+            ),
           ),
         ),
         Container(

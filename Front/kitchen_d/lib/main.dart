@@ -19,7 +19,7 @@ class SprintKitchenKdsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SprintKitchen KDS',
+      title: "Bobo's KDS",
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

@@ -214,15 +214,15 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: const Color(0xFFF2B705).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.receipt_long_rounded,
-              color: Color(0xFF2E1F0F),
-              size: 22,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFFACC15), width: 1.5),
+              image: const DecorationImage(
+                image: AssetImage('assets/images/bobo_portrait.jpg'),
+                fit: BoxFit.cover,
+              ),
             ),
           ),
           const SizedBox(width: 14),

@@ -94,7 +94,18 @@ class _KitchenReceiptPreviewDialogState extends State<KitchenReceiptPreviewDialo
               color: const Color(0xFF1F2937),
               child: Row(
                 children: [
-                  const Icon(Icons.restaurant_menu, color: Color(0xFFF2B705), size: 22),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFFACC15), width: 1.5),
+                      image: const DecorationImage(
+                        image: AssetImage('assets/images/bobo_portrait.jpg'),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
