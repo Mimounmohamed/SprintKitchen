@@ -867,17 +867,21 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
                   Text(
                     'TOTAL :',
                     style: GoogleFonts.bebasNeue(
-                      color: const Color(0xFF1F2937),
-                      fontSize: 26,
-                      letterSpacing: 1.0,
+                      color: const Color(0xFF292524),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w400,
+                      height: 32 / 24,
+                      letterSpacing: 0.6,
                     ),
                   ),
                   Text(
                     '${_total.toStringAsFixed(2).replaceAll('.', ',')} DA',
                     style: GoogleFonts.bebasNeue(
-                      color: const Color(0xFF1F2937),
-                      fontSize: 28,
-                      letterSpacing: 1.0,
+                      color: const Color(0xFF292524),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w400,
+                      height: 32 / 24,
+                      letterSpacing: 0.6,
                     ),
                   ),
                 ],
