@@ -8,7 +8,7 @@ void main() {
     await tester.pump();
 
     // Verify brand and primary action exist
-    expect(find.text('SPRINTKITCHEN'), findsWidgets);
+    expect(find.text("BOBO'S"), findsWidgets);
     expect(find.text('HUB'), findsWidgets);
     expect(find.text('OUVRIR LA CAISSE POS'), findsOneWidget);
   });
