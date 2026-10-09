@@ -1,6 +1,15 @@
 import '../models/pos_models.dart';
 import 'api_client.dart';
 
+class _IngredientInfo {
+  const _IngredientInfo({
+    required this.meatIngredients,
+    required this.outOfStockIngredients,
+  });
+  final Set<String> meatIngredients;
+  final Set<String> outOfStockIngredients;
+}
+
 class MenuService {
   MenuService({ApiClient? client}) : _client = client ?? ApiClient();
   final ApiClient _client;
@@ -11,20 +20,20 @@ class MenuService {
   /// Fetches categories + all active products and groups them into the
   /// [MenuCategory] list the POS screen renders.
   ///
-  /// Customization groups are made dynamic here, once, so every place that
-  /// opens the personnalisation modal (add + edit) gets the same rules:
-  ///  - "Cuisson" only for products containing a `viandes` ingredient.
+  /// Customization groups and availability are dynamic:
+  ///  - Any product with an épuisé/out-of-stock ingredient is automatically marked as ÉPUISÉ.
+  ///  - "Cuisson" only for products containing red meat (viande, steak, bœuf) — never poultry.
   ///  - "Choix de la sauce" options = products of the "Sauces" category.
   ///  - "Suppléments & Extras" options = products of the "Extras" category.
   Future<List<MenuCategory>> fetchMenu() async {
     final results = await Future.wait<Object>([
       _fetchCategories(),
       _fetchAllProducts(),
-      _fetchMeatIngredients(),
+      _fetchIngredientInfo(),
     ]);
     final categories = results[0] as List<Category>;
     final rawProducts = results[1] as List<MenuItem>;
-    final meatIngredients = results[2] as Set<String>;
+    final ingredientInfo = results[2] as _IngredientInfo;
 
     // Sauces / Extras are looked up among ALL active categories, even if
     // they are hidden from the POS sidebar.
@@ -34,15 +43,33 @@ class MenuService {
     final extrasCategoryIds =
         active.where((c) => _isExtrasCategory(c.name)).map((c) => c.id).toSet();
 
-    final sauceOptions = _optionsFrom(
-        rawProducts.where((p) => sauceCategoryIds.contains(p.categoryId)));
-    final extrasOptions = _optionsFrom(
-        rawProducts.where((p) => extrasCategoryIds.contains(p.categoryId)));
+    final sauceFromCategory = _optionsFrom(
+      rawProducts.where((p) => sauceCategoryIds.contains(p.categoryId)),
+      outOfStock: ingredientInfo.outOfStockIngredients,
+    );
+    final extrasFromCategory = _optionsFrom(
+      rawProducts.where((p) => extrasCategoryIds.contains(p.categoryId)),
+      outOfStock: ingredientInfo.outOfStockIngredients,
+    );
+
+    // Fallback if no specific products are in "Sauces" or "Extras" category:
+    final sauceOptions = sauceFromCategory.isNotEmpty
+        ? sauceFromCategory
+        : _defaultSauceOptions
+            .where((o) => !ingredientInfo.outOfStockIngredients.contains(_norm(o.label)))
+            .toList();
+
+    final extrasOptions = extrasFromCategory.isNotEmpty
+        ? extrasFromCategory
+        : _defaultExtraOptions
+            .where((o) => !ingredientInfo.outOfStockIngredients.contains(_norm(o.label)))
+            .toList();
 
     final products = rawProducts
         .map((p) => _withDynamicGroups(
               p,
-              meatIngredients: meatIngredients,
+              meatIngredients: ingredientInfo.meatIngredients,
+              outOfStockIngredients: ingredientInfo.outOfStockIngredients,
               sauceOptions: sauceOptions,
               extrasOptions: extrasOptions,
             ))
@@ -97,22 +124,51 @@ class MenuService {
     return all;
   }
 
-  /// Normalized names of every ingredient in the `viandes` family.
-  /// Never throws: if the call fails, only the literal "viande" check is used.
-  Future<Set<String>> _fetchMeatIngredients() async {
+  /// Fetches ingredients to track:
+  /// 1. Red meat ingredients (for cooking level)
+  /// 2. Out-of-stock / épuisé ingredients (to automatically disable products)
+  Future<_IngredientInfo> _fetchIngredientInfo() async {
     try {
       final json = await _client.get('/ingredients', query: {'limit': '500'});
       final list = (json is Map && json['data'] is List)
           ? json['data'] as List
           : (json is List ? json : const []);
-      return list
-          .whereType<Map>()
-          .where((i) => _norm(i['family']?.toString() ?? '') == _meatFamily)
-          .map((i) => _norm(i['name']?.toString() ?? ''))
-          .where((n) => n.isNotEmpty)
-          .toSet();
+
+      final meat = <String>{};
+      final outOfStock = <String>{};
+
+      for (final raw in list) {
+        if (raw is! Map) continue;
+        final name = _norm(raw['name']?.toString() ?? '');
+        if (name.isEmpty) continue;
+
+        final family = _norm(raw['family']?.toString() ?? '');
+        final avail = raw['availability']?.toString() ?? 'available';
+        final isOnList86 = raw['isOnList86'] == true;
+
+        // 1. Red meat tracking (excluding poultry)
+        if (family == _meatFamily &&
+            !name.contains('poulet') &&
+            !name.contains('chicken') &&
+            !name.contains('dinde')) {
+          meat.add(name);
+        }
+
+        // 2. Out-of-stock tracking (epuise or bloque or on 86 list)
+        if (avail != 'available' || isOnList86) {
+          outOfStock.add(name);
+        }
+      }
+
+      return _IngredientInfo(
+        meatIngredients: meat,
+        outOfStockIngredients: outOfStock,
+      );
     } catch (_) {
-      return <String>{};
+      return const _IngredientInfo(
+        meatIngredients: {},
+        outOfStockIngredients: {},
+      );
     }
   }
 
@@ -121,31 +177,56 @@ class MenuService {
   MenuItem _withDynamicGroups(
     MenuItem p, {
     required Set<String> meatIngredients,
+    required Set<String> outOfStockIngredients,
     required List<CustomizationOption> sauceOptions,
     required List<CustomizationOption> extrasOptions,
   }) {
+    // A product is out of stock if it was manually set to epuise
+    // OR if ANY of its ingredients is currently out of stock.
+    final bool hasEpuisedIngredient = p.ingredients.any((i) {
+      final n = _norm(i);
+      return outOfStockIngredients.contains(n);
+    });
+
+    final bool isAvailable = p.available && !hasEpuisedIngredient;
+
+    // Cooking level only applies to red meat (viande, steak, bœuf).
     final hasMeat = p.ingredients.any((i) {
       final n = _norm(i);
-      return meatIngredients.contains(n) || n.contains('viande');
+      if (n.contains('poulet') || n.contains('chicken') || n.contains('dinde')) {
+        return false;
+      }
+      return n.contains('viande') ||
+          n.contains('boeuf') ||
+          n.contains('steak') ||
+          meatIngredients.contains(n);
     });
 
     final groups = <CustomizationGroup>[];
     var hasCuisson = false;
+    var hasSauce = false;
+    var hasSupplements = false;
 
     for (final g in p.customizationGroups) {
       final name = _norm(g.name);
       if (name.contains('cuisson')) {
-        // Cooking level only makes sense for meat.
+        // Cooking level only for red meat.
         if (hasMeat) {
           groups.add(g);
           hasCuisson = true;
         }
       } else if (name.contains('sauce')) {
         // Product keeps its sauce step, but the choices come from "Sauces".
-        if (sauceOptions.isNotEmpty) groups.add(_withOptions(g, sauceOptions));
+        if (sauceOptions.isNotEmpty) {
+          groups.add(_withOptions(g, sauceOptions));
+          hasSauce = true;
+        }
       } else if (name.contains('suppl') || name.contains('extra')) {
         // Choices come from the "Extras" category.
-        if (extrasOptions.isNotEmpty) groups.add(_withOptions(g, extrasOptions));
+        if (extrasOptions.isNotEmpty) {
+          groups.add(_withOptions(g, extrasOptions));
+          hasSupplements = true;
+        }
       } else {
         groups.add(g);
       }
@@ -154,12 +235,26 @@ class MenuService {
     // Meat product without a cuisson step configured: add the standard one.
     if (hasMeat && !hasCuisson) groups.insert(0, _defaultCuisson);
 
+    // If product has ingredients or is in food categories (burgers, sandwichs, menus),
+    // ensure standard Sauces and Suppléments & Extras are available!
+    final bool isFoodItem = p.ingredients.isNotEmpty ||
+        p.customizationGroups.isNotEmpty;
+
+    if (isFoodItem) {
+      if (!hasSauce && sauceOptions.isNotEmpty) {
+        groups.add(_defaultSauces(sauceOptions));
+      }
+      if (!hasSupplements && extrasOptions.isNotEmpty) {
+        groups.add(_defaultExtras(extrasOptions));
+      }
+    }
+
     return MenuItem(
       id: p.id,
       name: p.name,
       price: p.price,
       categoryId: p.categoryId,
-      available: p.available,
+      available: isAvailable,
       description: p.description,
       customizationGroups: groups,
       ingredients: p.ingredients,
@@ -180,6 +275,51 @@ class MenuService {
     ],
   );
 
+  static CustomizationGroup _defaultSauces(List<CustomizationOption> options) {
+    return CustomizationGroup(
+      name: 'Choix de la sauce',
+      type: 'multi',
+      isRequired: false,
+      minChoices: 0,
+      maxChoices: 3,
+      stepNumber: 1,
+      options: options,
+    );
+  }
+
+  static const List<CustomizationOption> _defaultSauceOptions = [
+    CustomizationOption(label: 'Algérienne', isDefault: true),
+    CustomizationOption(label: 'Mayonnaise'),
+    CustomizationOption(label: 'Ketchup'),
+    CustomizationOption(label: 'Barbecue'),
+    CustomizationOption(label: 'Samouraï'),
+    CustomizationOption(label: 'Biggy'),
+    CustomizationOption(label: 'Blanche'),
+    CustomizationOption(label: 'Andalouse'),
+  ];
+
+  static const List<CustomizationOption> _defaultExtraOptions = [
+    CustomizationOption(label: 'Cheddar', priceModifier: 50),
+    CustomizationOption(label: 'Gouda', priceModifier: 50),
+    CustomizationOption(label: 'Bacon', priceModifier: 80),
+    CustomizationOption(label: 'Oignons Frits', priceModifier: 40),
+    CustomizationOption(label: 'Double Steak', priceModifier: 150),
+    CustomizationOption(label: 'Œuf', priceModifier: 50),
+    CustomizationOption(label: 'Galette de pomme de terre', priceModifier: 70),
+  ];
+
+  static CustomizationGroup _defaultExtras(List<CustomizationOption> options) {
+    return CustomizationGroup(
+      name: 'Suppléments & Extras',
+      type: 'multi',
+      isRequired: false,
+      minChoices: 0,
+      maxChoices: 10,
+      stepNumber: 2,
+      options: options,
+    );
+  }
+
   CustomizationGroup _withOptions(
       CustomizationGroup g, List<CustomizationOption> options) {
     return CustomizationGroup(
@@ -194,13 +334,17 @@ class MenuService {
   }
 
   /// One option per available product (label = name, price = basePrice).
-  List<CustomizationOption> _optionsFrom(Iterable<MenuItem> products) {
+  List<CustomizationOption> _optionsFrom(
+    Iterable<MenuItem> products, {
+    required Set<String> outOfStock,
+  }) {
     final seen = <String>{};
     final options = <CustomizationOption>[];
     for (final p in products) {
       if (!p.available) continue;
       final label = p.name.trim();
       if (label.isEmpty || !seen.add(label.toLowerCase())) continue;
+      if (outOfStock.contains(_norm(label))) continue;
       options.add(CustomizationOption(label: label, priceModifier: p.price));
     }
     return options;

@@ -184,7 +184,6 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-
     // Preserve all attributes: if user entered text, use it; otherwise retain previous value without erasing!
     final enteredTable = _tableController.text.trim();
     final table = enteredTable.isNotEmpty
@@ -560,7 +559,7 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
               icon: Icons.person_outline,
             ),
             const SizedBox(height: 14),
-            _sectionLabel('TÉLÉPHONE (OPTIONNEL)'),
+            _sectionLabel('NUMÉRO DE TÉLÉPHONE (OPTIONNEL)'),
             const SizedBox(height: 6),
             _field(
               controller: _phoneController,
@@ -573,7 +572,7 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
             const SizedBox(height: 6),
             _field(
               controller: _notesController,
-              hint: 'ex. Sans sel sur les frites, allergie...',
+              hint: 'ex. Sans sel sur les frites, prêt à 12h30...',
               icon: Icons.chat_bubble_outline_rounded,
             ),
           ],

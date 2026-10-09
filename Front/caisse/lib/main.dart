@@ -12,7 +12,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SprintKitchen',
+      title: "Bobo's",
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

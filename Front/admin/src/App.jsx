@@ -6,6 +6,7 @@ import HistoriquePage   from './pages/HistoriquePage'
 import StatistiquesPage from './pages/StatistiquesPage'
 import InventairePage   from './pages/InventairePage'
 import LoginPage        from './pages/LoginPage'
+import { authService }  from './services'
 
 function RequireAuth({ children }) {
   return localStorage.getItem('sk_token') ? children : <Navigate to="/login" replace />;
@@ -75,6 +76,18 @@ class ErrorBoundary extends React.Component {
 
 export default function App() {
   const [ready, setReady] = useState(true);
+
+  // Sliding session: on each visit, exchange the stored token for a fresh
+  // 365-day one, so the admin stays logged in as long as the panel is used.
+  // A truly invalid token gets a 401 and the api interceptor sends to /login.
+  useEffect(() => {
+    if (!localStorage.getItem('sk_token')) return;
+    authService.getMe()
+      .then(res => {
+        if (res.data?.token) localStorage.setItem('sk_token', res.data.token);
+      })
+      .catch(() => { /* network error: keep the current token */ });
+  }, []);
 
   if (!ready) return (
     <div style={{

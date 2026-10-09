@@ -17,7 +17,7 @@ class ServeurApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SprintKitchen Serveur',
+      title: "Bobo's Serveur",
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E1F0F)),

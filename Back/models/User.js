@@ -4,7 +4,10 @@ const bcrypt = require('bcryptjs');
 const UserSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true },
+    // Login identifier for the admin panel (e.g. "saitama"). Optional so
+    // existing email-only accounts (used by the caisse/serveur apps) keep working.
+    username: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+    email: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
     role: {
       type: String,
