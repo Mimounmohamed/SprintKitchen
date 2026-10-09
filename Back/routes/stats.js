@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router  = express.Router();
 const {
   getRapportZ,
@@ -9,6 +9,7 @@ const {
   getKpis,
   getPaymentMethods,
   getSummary,
+  getKitchenStats,
 } = require('../controllers/statsController');
 const protect = require('../middleware/auth');
 
@@ -20,6 +21,7 @@ router.get('/by-channel',      protect, getByChannel);
 router.get('/sales-trend',     protect, getSalesTrend);
 router.get('/kpis',            protect, getKpis);
 router.get('/payment-methods', protect, getPaymentMethods);
+router.get('/kitchen',         protect, getKitchenStats);
 router.get('/summary',         protect, getSummary);   // one-shot for the stats page
 
 module.exports = router;

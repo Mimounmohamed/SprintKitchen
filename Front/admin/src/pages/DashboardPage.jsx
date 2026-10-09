@@ -41,9 +41,12 @@ function ModuleCard({ icon, iconBg, iconColor, pill, eyebrow, title, description
       background:C.cardBg, borderRadius:16,
       border:`1px solid ${C.border}`,
       borderTop:highlight?`3px solid ${C.yellow}`:`1px solid ${C.border}`,
-      padding:mobile?"20px 18px 18px":"28px 26px 24px",
+      padding:mobile?"20px 18px 18px":"28px 24px 24px",
       display:"flex", flexDirection:"column", gap:mobile?14:18,
       boxShadow:highlight?"0 6px 28px rgba(242,183,5,0.12)":"0 1px 4px rgba(28,25,23,0.04)",
+      minWidth: 0,
+      width: "100%",
+      boxSizing: "border-box",
     }}>
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
         <div style={{ width:mobile?42:52, height:mobile?42:52, borderRadius:13, background:iconBg, color:iconColor, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
@@ -53,7 +56,7 @@ function ModuleCard({ icon, iconBg, iconColor, pill, eyebrow, title, description
       </div>
       <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
         <span style={{ fontSize:10.5, fontWeight:700, letterSpacing:"0.07em", color:C.muted, textTransform:"uppercase" }}>{eyebrow}</span>
-        <h3 style={{ margin:0, fontSize:mobile?20:22, fontWeight:800, lineHeight:1.2, color:C.ink }}>{title}</h3>
+        <h3 style={{ margin:0, fontSize:mobile?20:21, fontWeight:800, lineHeight:1.2, color:C.ink }}>{title}</h3>
         <p style={{ margin:"3px 0 0", fontSize:mobile?13:13.5, color:C.muted, lineHeight:1.6 }}>{description}</p>
       </div>
       <ul style={{ listStyle:"none", margin:0, padding:0, display:"flex", flexDirection:"column", gap:mobile?6:8 }}>
@@ -64,21 +67,27 @@ function ModuleCard({ icon, iconBg, iconColor, pill, eyebrow, title, description
         display:"flex", alignItems:"center", justifyContent:"space-between",
         border:ctaStyle==="outline"?`1px solid ${C.border}`:"none",
         cursor:"pointer", borderRadius:11,
-        padding:ctaStyle==="primary"?"12px 12px 12px 18px":"14px 18px",
-        fontSize:mobile?12:12.5, fontWeight:700,
-        letterSpacing:"0.05em", textTransform:"uppercase", fontFamily:"inherit",
+        padding: "10px 14px 10px 18px",
+        minHeight: mobile ? 48 : 52,
+        height: mobile ? 48 : 52,
+        fontSize:mobile?11.5:12, fontWeight:700,
+        letterSpacing:"0.04em", textTransform:"uppercase", fontFamily:"inherit",
         background:ctaBg, color:ctaColor, transition:"opacity .15s",
         boxSizing:"border-box",
       }}
         onMouseEnter={e=>(e.currentTarget.style.opacity=".85")}
         onMouseLeave={e=>(e.currentTarget.style.opacity="1")}
         onClick={onClick}>
-        {cta}
+        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cta}</span>
         {ctaStyle==="primary" ? (
-          <span style={{ width:34, height:34, borderRadius:9, background:"#583926", display:"flex", alignItems:"center", justifyContent:"center", color:"#F5F0E6", flexShrink:0 }}>
+          <span style={{ width:32, height:32, borderRadius:8, background:"#583926", display:"flex", alignItems:"center", justifyContent:"center", color:"#F5F0E6", flexShrink:0, marginLeft:8 }}>
             {ctaIcon}
           </span>
-        ) : ctaIcon}
+        ) : (
+          <span style={{ width:32, height:32, borderRadius:8, background:"rgba(255,255,255,0.08)", display:"flex", alignItems:"center", justifyContent:"center", color:"#F5F0E6", flexShrink:0, marginLeft:8 }}>
+            {ctaIcon}
+          </span>
+        )}
       </button>
     </div>
   );
@@ -147,15 +156,13 @@ export default function SprintKitchenAdminHub() {
         <button style={{ background:"none", border:"none", cursor:"pointer", padding:4, color:C.ink, display:"flex" }}>
           <MenuIcon size={22}/>
         </button>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <img
             src="/bobo_portrait.jpg"
             alt="Bobo's"
-            style={{ width:32, height:32, borderRadius:"50%", objectFit:"cover", border:`1.5px solid ${C.yellow}` }}
+            style={{ width:38, height:38, borderRadius:"50%", objectFit:"cover", border:`2px solid #FACC15` }}
           />
-          <span style={{ fontSize:15, fontWeight:900, letterSpacing:"0.03em" }}>BOBO'S</span>
-          <span style={{ background:C.brown, color:"#F5F0E6", fontSize:9, fontWeight:700, padding:"2px 6px", borderRadius:4 }}>HUB</span>
-          <Circle size={6} fill={C.yellow} color={C.yellow}/>
+          <span style={{ fontFamily:"'Pacifico', cursive", fontSize:19, color:"#111827", letterSpacing:"0.5px" }}>Bobo's</span>
         </div>
         <button onClick={handleLogout} title="Se déconnecter"
           style={{ width:34, height:34, borderRadius:"50%", background:"#E8E4DF", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
@@ -254,10 +261,11 @@ export default function SprintKitchenAdminHub() {
         />
       </main>
 
-      <footer style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:"12px 16px", borderTop:`1px solid ${C.border}` }}>
+      <footer style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderTop:`1px solid ${C.border}` }}>
         <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:11, fontWeight:600, color:C.ink }}>
           <Circle size={6} fill={C.green} color={C.green}/> Connecté
         </span>
+        <span style={{ fontSize:11, color:C.muted }}>Bobo's Admin v1.00</span>
       </footer>
     </div>
   );
@@ -270,11 +278,9 @@ export default function SprintKitchenAdminHub() {
           <img
             src="/bobo_portrait.jpg"
             alt="Bobo's"
-            style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.yellow}` }}
+            style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", border:`2.5px solid #FACC15` }}
           />
-          <span style={{ fontSize:18, fontWeight:900, letterSpacing:"0.04em" }}>BOBO'S</span>
-          <span style={{ background:C.brown, color:"#F5F0E6", fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:5 }}>HUB</span>
-          <Circle size={7} fill={C.yellow} color={C.yellow}/>
+          <span style={{ fontFamily:"'Pacifico', cursive", fontSize:22, color:"#111827", letterSpacing:"0.5px" }}>Bobo's</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
           <Pill dot dotColor={C.green} bg="#F1F0EC" color={C.ink}>Admin</Pill>
@@ -295,7 +301,7 @@ export default function SprintKitchenAdminHub() {
               <span style={{ fontSize:11, fontWeight:600, letterSpacing:"0.05em", color:C.muted }}>PORTAIL OPÉRATIONNEL &amp; DIRECTION</span>
               <span style={{ color:C.muted }}>·</span>
               <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:11, fontWeight:700, color:C.green }}>
-                <Circle size={6} fill={C.green} color={C.green}/> SPRINTKITCHEN BACK-OFFICE
+                <Circle size={6} fill={C.green} color={C.green}/> BOBO'S BACK-OFFICE
               </span>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:12, flexWrap:"wrap" }}>
@@ -303,7 +309,7 @@ export default function SprintKitchenAdminHub() {
               
             </div>
             <p style={{ margin:0, color:C.muted, fontSize:14.5, maxWidth:520, lineHeight:1.6 }}>
-              Bienvenue sur le Hub de Gestion • Vue centralisée du restaurant, contrôle des menus et indicateurs financiers.
+              Bienvenue sur le portail de gestion • Vue centralisée du restaurant, contrôle des menus et indicateurs financiers.
             </p>
           </div>
           <div style={{ display:"flex", gap:12, flexShrink:0, flexWrap:"wrap" }}>
@@ -315,7 +321,7 @@ export default function SprintKitchenAdminHub() {
 
         <div style={{ height:1, background:C.border, marginBottom:28 }}/>
 
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:18 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0, 1fr))", gap:18, width:"100%" }}>
           <ModuleCard
             icon={<Book size={24}/>} iconBg={C.brown} iconColor={C.yellow}
             pill={<Pill small dot dotColor="#C98A1A" bg={C.yellowBg} color="#946200">CATALOGUE &amp; PRIX</Pill>}
@@ -359,7 +365,7 @@ export default function SprintKitchenAdminHub() {
         <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, fontWeight:600 }}>
           <Circle size={7} fill={C.green} color={C.green}/> Connecté <span style={{ color:C.muted }}>·</span>
         </div>
-        <span style={{ fontSize:12, color:C.muted }}>Bobo's Admin v2.4.0</span>
+        <span style={{ fontSize:12, color:C.muted }}>Bobo's Admin v1.00</span>
       </footer>
     </div>
   );

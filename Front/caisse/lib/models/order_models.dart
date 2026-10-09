@@ -139,6 +139,9 @@ class HistoryOrder {
     required this.id,
     required this.ticketNumber,
     required this.createdAt,
+    this.kdsSentAt,
+    this.kdsReadyAt,
+    this.completedAt,
     required this.status,
     required this.orderType,
     required this.totalTTC,
@@ -160,6 +163,9 @@ class HistoryOrder {
   final String id;
   final String ticketNumber;
   final DateTime createdAt;
+  final DateTime? kdsSentAt;
+  final DateTime? kdsReadyAt;
+  final DateTime? completedAt;
   final String status;
 
   /// 'sur_place' | 'a_emporter' | 'livraison'
@@ -178,6 +184,47 @@ class HistoryOrder {
   final List<HistoryOrderLine> lines;
   final bool isEdited;
   final List<OrderModification> modificationSummary;
+
+  DateTime? get finishedAt => kdsReadyAt ?? completedAt;
+
+  Duration? get prepDuration {
+    final end = finishedAt;
+    if (end == null) return null;
+    final start = kdsSentAt ?? createdAt;
+    final diff = end.difference(start);
+    return diff.isNegative ? Duration.zero : diff;
+  }
+
+  String? get prepDurationString {
+    final d = prepDuration;
+    if (d == null) {
+      if (status == 'en_attente' || status == 'a_encaisser') {
+        final elapsed = DateTime.now().difference(kdsSentAt ?? createdAt);
+        final m = elapsed.inMinutes;
+        return m > 0 ? '$m min' : '< 1 min';
+      }
+      return null;
+    }
+    final totalSec = d.inSeconds;
+    if (totalSec < 60) return '${totalSec}s';
+    final m = d.inMinutes;
+    final s = totalSec % 60;
+    if (m >= 60) {
+      final h = m ~/ 60;
+      final remM = m % 60;
+      return '${h}h ${remM.toString().padLeft(2, '0')}m';
+    }
+    return s > 0 ? '${m}m ${s.toString().padLeft(2, '0')}s' : '$m min';
+  }
+
+  String? get finishedTimeString {
+    final f = finishedAt;
+    if (f == null) return null;
+    final dt = f.toLocal();
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
 
   /// Formatted client and/or table display for the "CLIENT / TABLE" column.
   String? get displayClient {
@@ -222,10 +269,22 @@ class HistoryOrder {
       if (parts.isNotEmpty) dAddress = parts.join(', ');
     }
 
+    final rawSent = json['kdsSentAt'];
+    final DateTime? kdsSentAt = rawSent != null ? DateTime.tryParse(rawSent.toString())?.toLocal() : null;
+
+    final rawReady = json['kdsReadyAt'];
+    final DateTime? kdsReadyAt = rawReady != null ? DateTime.tryParse(rawReady.toString())?.toLocal() : null;
+
+    final rawCompleted = json['completedAt'];
+    final DateTime? completedAt = rawCompleted != null ? DateTime.tryParse(rawCompleted.toString())?.toLocal() : null;
+
     return HistoryOrder(
       id: json['_id'] as String,
       ticketNumber: json['ticketNumber'] as String? ?? '',
       createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
+      kdsSentAt: kdsSentAt,
+      kdsReadyAt: kdsReadyAt,
+      completedAt: completedAt,
       status: json['status'] as String? ?? '',
       orderType: json['orderType'] as String? ?? 'sur_place',
       totalTTC: (json['totalTTC'] as num?)?.toDouble() ?? 0,

@@ -30,6 +30,8 @@ class PrintableReceiptData {
     this.change,
     this.isEdited = false,
     this.modifications = const [],
+    this.prepDuration,
+    this.finishedTimeString,
     this.storeName = "BOBO'S",
     this.storeSubtitle = 'RESTAURANT & FAST-FOOD',
     this.storeAddress = '14 Rue de la République, 75001 Paris',
@@ -57,6 +59,8 @@ class PrintableReceiptData {
   final double? change;
   final bool isEdited;
   final List<String> modifications;
+  final String? prepDuration;
+  final String? finishedTimeString;
   final String storeName;
   final String storeSubtitle;
   final String storeAddress;
@@ -142,6 +146,8 @@ class PrintableReceiptData {
       change: change,
       isEdited: o.isEdited,
       modifications: mods,
+      prepDuration: o.prepDurationString,
+      finishedTimeString: o.finishedTimeString,
     );
   }
 
@@ -370,6 +376,15 @@ class ReceiptPrinterService {
                   style: const pw.TextStyle(fontSize: 8),
                 ),
               ),
+              if (data.prepDuration != null) ...[
+                pw.SizedBox(height: 1),
+                pw.Center(
+                  child: pw.Text(
+                    'Préparé en ${data.prepDuration}',
+                    style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
+                  ),
+                ),
+              ],
               pw.SizedBox(height: 4),
 
               // Mode & Table Box
@@ -647,6 +662,15 @@ class ReceiptPrinterService {
                   style: const pw.TextStyle(fontSize: 8),
                 ),
               ),
+              if (data.finishedTimeString != null || data.prepDuration != null) ...[
+                pw.SizedBox(height: 1),
+                pw.Center(
+                  child: pw.Text(
+                    'Fin : ${data.finishedTimeString ?? "—"}${data.prepDuration != null ? " • Durée : ${data.prepDuration}" : ""}',
+                    style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                  ),
+                ),
+              ],
               if (data.clientName != null && data.clientName!.isNotEmpty)
                 pw.Center(
                   child: pw.Text(

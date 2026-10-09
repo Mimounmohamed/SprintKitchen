@@ -657,8 +657,8 @@ export default function InventairePage() {
             src="/bobo_portrait.jpg"
             alt="Bobo's"
             style={{
-              width: 34,
-              height: 34,
+              width: 38,
+              height: 38,
               borderRadius: "50%",
               objectFit: "cover",
               border: `2px solid ${C.yellow}`,
@@ -667,14 +667,14 @@ export default function InventairePage() {
 
           <span
             style={{
-              fontFamily: FONT_TITLE,
+              fontFamily: "'Pacifico', cursive",
               fontSize: 22,
-              letterSpacing: '1.2px',
+              letterSpacing: '0.5px',
               color: '#111827',
               lineHeight: 1,
             }}
           >
-            BOBO'S
+            Bobo's
           </span>
         </div>
 
@@ -1421,7 +1421,7 @@ export default function InventairePage() {
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: C.ink }}>
           <Circle size={6} fill={C.green} color={C.green} /> Connecté
         </span>
-        <span style={{ fontSize: 11.5, color: C.muted }}>SprintKitchen OS v2.4.0-PROD</span>
+        <span style={{ fontSize: 11.5, color: C.muted }}>Bobo's OS v1.00</span>
       </footer>
 
       {/* ── MODALS ── */}

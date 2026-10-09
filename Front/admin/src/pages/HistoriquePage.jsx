@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   MessageSquare,
   Clock,
+  Timer,
   User,
   Phone,
   MapPin,
@@ -157,6 +158,42 @@ function getClientOrTable(ord) {
   return 'Client Passant';
 }
 
+function getOrderDuration(ord) {
+  if (!ord) return null;
+  const start = ord.kdsSentAt || ord.createdAt;
+  const end = ord.kdsReadyAt || ord.completedAt;
+  if (!end) {
+    if ((ord.status === 'en_attente' || ord.status === 'a_encaisser' || ord.status === 'en_cours') && start) {
+      const elapsedSec = Math.max(0, Math.round((Date.now() - new Date(start).getTime()) / 1000));
+      const m = Math.floor(elapsedSec / 60);
+      return {
+        label: m > 0 ? `${m} min` : '< 1 min',
+        inProgress: true,
+      };
+    }
+    return null;
+  }
+  if (!start) return null;
+  const sec = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000));
+  if (sec < 60) {
+    return { label: `${sec}s`, inProgress: false };
+  }
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+    return {
+      label: `${h}h ${String(remM).padStart(2, '0')}m`,
+      inProgress: false,
+    };
+  }
+  return {
+    label: s > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${m} min`,
+    inProgress: false,
+  };
+}
+
 /* ── Print Utilities ───────────────────────────────────────────────────────────── */
 function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
   const ord = detail || order;
@@ -218,6 +255,15 @@ function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
           <h2>BON DE CUISINE</h2>
           <div style="font-size:16px;font-weight:bold;margin:4px 0">COMMANDE #${ord.ticketNumber}</div>
           <div>${dateStr}</div>
+          ${(() => {
+            const dur = getOrderDuration(ord);
+            const fin = ord.kdsReadyAt || ord.completedAt;
+            if (fin || dur) {
+              const finStr = fin ? fmtTime(fin) : '';
+              return `<div style="font-size:11px;font-weight:bold;margin-top:4px">${finStr ? `Fin : ${finStr}` : ''}${dur?.label ? ` • Durée : ${dur.label}` : ''}</div>`;
+            }
+            return '';
+          })()}
           <div style="display:inline-block;padding:3px 10px;border:1px solid #000;border-radius:12px;font-weight:bold;margin-top:4px">${mode.label.toUpperCase()}</div>
         </div>
         ${notesHtml}
@@ -251,6 +297,10 @@ function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
           <div style="font-size:11px;color:#444">FAST FOOD GOURMET</div>
           <div style="font-size:16px;font-weight:bold;margin:6px 0">TICKET #${ord.ticketNumber}</div>
           <div>${dateStr}</div>
+          ${(() => {
+            const dur = getOrderDuration(ord);
+            return dur?.label && !dur.inProgress ? `<div style="font-size:10px;color:#555;margin-top:2px">Préparé en ${dur.label}</div>` : '';
+          })()}
           <div style="font-size:11px;margin-top:2px">Mode : ${mode.label} • ${ord.registerId?.name || 'Caisse 01'}</div>
           ${ord.clientName ? `<div style="font-size:11px">Client : ${ord.clientName}</div>` : ''}
           ${(() => {
@@ -273,7 +323,7 @@ function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
         <hr/>
         <div class="center" style="margin-top:10px;font-size:11px">
           Merci de votre visite et à très bientôt !<br/>
-          SprintKitchen OS v2.4.0
+          Bobo's OS v1.00
         </div>
       </body>
     </html>
@@ -463,6 +513,29 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
               >
                 {statusStyle.label}
               </span>
+              {(() => {
+                const dur = getOrderDuration(ord);
+                if (!dur) return null;
+                return (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '3px 10px',
+                      borderRadius: 20,
+                      background: dur.inProgress ? '#FFFBEB' : '#ECFDF5',
+                      color: dur.inProgress ? '#92400E' : '#065F46',
+                      border: `1px solid ${dur.inProgress ? '#FDE68A' : '#A7F3D0'}`,
+                    }}
+                  >
+                    <Timer size={12} color={dur.inProgress ? '#D97706' : '#059669'} />
+                    {dur.inProgress ? `En cours: ${dur.label}` : `Durée: ${dur.label}`}
+                  </span>
+                );
+              })()}
             </div>
 
             <button
@@ -630,6 +703,52 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {addressDisplay}
                       </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.4px',
+                        color: COLORS.stone400,
+                        textTransform: 'uppercase',
+                        marginBottom: 6,
+                      }}
+                    >
+                      DURÉE DE PRÉPARATION
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: COLORS.ink }}>
+                      <Timer size={13} color={COLORS.stone400} />
+                      {(() => {
+                        const dur = getOrderDuration(ord);
+                        if (!dur) return '—';
+                        return dur.inProgress ? `${dur.label} (en cours)` : dur.label;
+                      })()}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.4px',
+                        color: COLORS.stone400,
+                        textTransform: 'uppercase',
+                        marginBottom: 6,
+                      }}
+                    >
+                      HEURE DE FIN CUISINE
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: COLORS.ink }}>
+                      <CheckCircle2 size={13} color={COLORS.stone400} />
+                      {(() => {
+                        const end = ord.kdsReadyAt || ord.completedAt;
+                        if (!end) return 'Non terminée';
+                        return `${fmtDate(end)} à ${fmtTime(end)}`;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1983,8 +2102,8 @@ export default function HistoriquePage() {
             src="/bobo_portrait.jpg"
             alt="Bobo's"
             style={{
-              width: 34,
-              height: 34,
+              width: 38,
+              height: 38,
               borderRadius: "50%",
               objectFit: "cover",
               border: `2px solid ${COLORS.gold}`,
@@ -1993,14 +2112,14 @@ export default function HistoriquePage() {
 
           <span
             style={{
-              fontFamily: FONT_TITLE,
+              fontFamily: "'Pacifico', cursive",
               fontSize: 22,
-              letterSpacing: '1.2px',
+              letterSpacing: '0.5px',
               color: '#111827',
               lineHeight: 1,
             }}
           >
-            BOBO'S
+            Bobo's
           </span>
         </div>
 
@@ -2310,6 +2429,7 @@ export default function HistoriquePage() {
                   >
                     <th style={{ padding: '0 20px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>DATE</th>
                     <th style={{ padding: '0 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>HEURE</th>
+                    <th style={{ padding: '0 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>DURÉE</th>
                     <th style={{ padding: '0 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>NUMÉRO</th>
                     <th style={{ padding: '0 24px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>MONTANT</th>
                     <th style={{ padding: '0 20px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: COLORS.stone600, letterSpacing: '0.6px' }}>CLIENT / TABLE</th>
@@ -2348,6 +2468,34 @@ export default function HistoriquePage() {
                         {/* HEURE */}
                         <td style={{ padding: '0 16px', fontSize: 14, fontWeight: 400, color: COLORS.stone600 }}>
                           {fmtTime(o.createdAt)}
+                        </td>
+
+                        {/* DURÉE */}
+                        <td style={{ padding: '0 16px' }}>
+                          {(() => {
+                            const dur = getOrderDuration(o);
+                            if (!dur) return <span style={{ color: COLORS.stone400, fontSize: 13 }}>—</span>;
+                            return (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  padding: '3px 8px',
+                                  borderRadius: 4,
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  background: dur.inProgress ? '#FFFBEB' : '#ECFDF5',
+                                  color: dur.inProgress ? '#92400E' : '#065F46',
+                                  border: `1px solid ${dur.inProgress ? '#FDE68A' : '#A7F3D0'}`,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <Timer size={12} color={dur.inProgress ? '#D97706' : '#059669'} />
+                                {dur.label}
+                              </span>
+                            );
+                          })()}
                         </td>
 
                         {/* NUMÉRO */}
@@ -2638,7 +2786,7 @@ export default function HistoriquePage() {
           <span style={{ fontWeight: 600, color: '#1F2937' }}>Connecté</span>
         </div>
         <div style={{ fontSize: 12, color: '#6B7280' }}>
-          SprintKitchen OS v2.4.0-PROD
+          Bobo's OS v1.00
         </div>
       </footer>
 

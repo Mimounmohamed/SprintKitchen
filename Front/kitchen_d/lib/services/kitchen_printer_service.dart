@@ -140,10 +140,17 @@ class KitchenPrinterService {
 
               pw.Center(
                 child: pw.Text(
-                  'Heure : ${_fmtDate(order.createdAt)}',
+                  'Heure de commande : ${_fmtDate(order.createdAt)}',
                   style: const pw.TextStyle(fontSize: 8.5),
                 ),
               ),
+              if (order.finishedAt != null)
+                pw.Center(
+                  child: pw.Text(
+                    'Terminée à : ${_fmtDate(order.finishedAt!)} (${order.prepDurationString ?? ''})',
+                    style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                  ),
+                ),
               if (order.clientName != null && order.clientName!.trim().isNotEmpty)
                 pw.Center(
                   child: pw.Text(

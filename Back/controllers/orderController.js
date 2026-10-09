@@ -194,6 +194,9 @@ exports.createOrder = async (req, res) => {
     }
 
     const order = new Order(data);
+    if (!order.kdsSentAt) {
+      order.kdsSentAt = new Date();
+    }
     if (data.items && Array.isArray(data.items) && data.items.length > 0) {
       order.initialItems = data.items;
     }

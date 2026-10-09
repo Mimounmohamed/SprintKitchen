@@ -12,6 +12,64 @@ function regF(q) { return q.registerId ? { registerId: q.registerId } : {}; }
 
 const PAID_ORDER_STATUSES = ['terminee', 'en_attente'];
 
+async function calculateKitchenStats(matchFilter, from, to) {
+  const kitchenOrders = await Order.find({
+    ...matchFilter,
+    createdAt: { $gte: from, $lte: to },
+    status: { $nin: ['annulee'] },
+    $or: [
+      { kdsReadyAt: { $exists: true, $ne: null } },
+      { completedAt: { $exists: true, $ne: null } },
+    ],
+  }).select('ticketNumber createdAt kdsSentAt kdsReadyAt completedAt status');
+
+  let totalPrepSeconds = 0;
+  let validKitchenCount = 0;
+  let fastestOrder = null;
+  let slowestOrder = null;
+  let under5m = 0;
+  let between5And10m = 0;
+  let between10And15m = 0;
+  let over15m = 0;
+
+  for (const ko of kitchenOrders) {
+    const start = ko.kdsSentAt || ko.createdAt;
+    const end = ko.kdsReadyAt || ko.completedAt;
+    if (!start || !end) continue;
+    const durationSec = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000);
+    if (durationSec >= 0 && durationSec <= 86400) {
+      validKitchenCount++;
+      totalPrepSeconds += durationSec;
+      if (durationSec < 300) under5m++;
+      else if (durationSec < 600) between5And10m++;
+      else if (durationSec < 900) between10And15m++;
+      else over15m++;
+
+      if (!fastestOrder || durationSec < fastestOrder.durationSec) {
+        fastestOrder = { ticketNumber: ko.ticketNumber, durationSec };
+      }
+      if (!slowestOrder || durationSec > slowestOrder.durationSec) {
+        slowestOrder = { ticketNumber: ko.ticketNumber, durationSec };
+      }
+    }
+  }
+
+  const avgPrepTimeSeconds = validKitchenCount > 0 ? Math.round(totalPrepSeconds / validKitchenCount) : 0;
+
+  return {
+    avgPrepTimeSeconds,
+    ordersPreparedCount: validKitchenCount,
+    fastestOrder,
+    slowestOrder,
+    distribution: [
+      { label: '< 5 min', count: under5m, percent: validKitchenCount > 0 ? Math.round((under5m / validKitchenCount) * 100) : 0, color: '#059669' },
+      { label: '5 - 10 min', count: between5And10m, percent: validKitchenCount > 0 ? Math.round((between5And10m / validKitchenCount) * 100) : 0, color: '#FACC15' },
+      { label: '10 - 15 min', count: between10And15m, percent: validKitchenCount > 0 ? Math.round((between10And15m / validKitchenCount) * 100) : 0, color: '#F97316' },
+      { label: '> 15 min', count: over15m, percent: validKitchenCount > 0 ? Math.round((over15m / validKitchenCount) * 100) : 0, color: '#EF4444' },
+    ],
+  };
+}
+
 /* ── GET /api/stats/rapport-z ─────────────────────────────── */
 exports.getRapportZ = async (req, res, next) => {
   try {
@@ -19,7 +77,7 @@ exports.getRapportZ = async (req, res, next) => {
     const rf = regF(req.query);
     const baseMatch = { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } };
 
-    const [[totals], payBreak, [annulees], repasCount] = await Promise.all([
+    const [[totals], payBreak, [annulees], repasCount, kitchenStats] = await Promise.all([
       Order.aggregate([
         { $match: baseMatch },
         { $group: { _id: null, totalTTC: { $sum: '$totalTTC' }, totalHT: { $sum: '$subtotalHT' }, totalTVA: { $sum: '$tvaAmount' }, ticketCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
@@ -34,6 +92,7 @@ exports.getRapportZ = async (req, res, next) => {
         { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$totalTTC' } } },
       ]),
       Order.countDocuments({ ...rf, status: 'repas_employe', createdAt: { $gte: from, $lte: to } }),
+      calculateKitchenStats(rf, from, to),
     ]);
 
     res.json({
@@ -48,6 +107,7 @@ exports.getRapportZ = async (req, res, next) => {
         annulees:    { count: annulees?.count ?? 0, amount: Math.round((annulees?.amount ?? 0) * 100) / 100 },
         repasEmployeCount: repasCount,
         paymentBreakdown: payBreak.map(p => ({ method: p._id, total: Math.round(p.total * 100) / 100, count: p.count })),
+        kitchen: kitchenStats,
       },
     });
   } catch (err) { next(err); }
@@ -189,13 +249,14 @@ exports.getSummary = async (req, res, next) => {
     const rf = regF(req.query);
     const baseMatch = { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } };
 
-    const [totalsArr, byHourArr, topPArr, byChanArr, payArr, annArr] = await Promise.all([
+    const [totalsArr, byHourArr, topPArr, byChanArr, payArr, annArr, kitchenStats] = await Promise.all([
       Order.aggregate([{ $match: baseMatch }, { $group: { _id: null, totalTTC: { $sum: '$totalTTC' }, totalHT: { $sum: '$subtotalHT' }, totalTVA: { $sum: '$tvaAmount' }, ticketCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } }]),
       Order.aggregate([{ $match: baseMatch }, { $group: { _id: { $hour: { date: '$createdAt', timezone: 'Africa/Algiers' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 } } }, { $sort: { _id: 1 } }, { $project: { _id: 0, hour: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1 } }]),
       Order.aggregate([{ $match: baseMatch }, { $unwind: '$items' }, { $group: { _id: '$items.productId', productName: { $first: '$items.productName' }, qty: { $sum: '$items.quantity' }, revenue: { $sum: '$items.lineTotal' } } }, { $sort: { qty: -1 } }, { $limit: 10 }, { $project: { _id: 0, productId: '$_id', productName: 1, qty: 1, revenue: { $round: ['$revenue', 2] } } }]),
       Order.aggregate([{ $match: baseMatch }, { $group: { _id: '$orderType', revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } }, { $project: { _id: 0, channel: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1, avgBasket: { $round: ['$avgBasket', 2] } } }, { $sort: { revenue: -1 } }]),
       Payment.aggregate([{ $match: { ...rf, isRefunded: { $ne: true }, createdAt: { $gte: from, $lte: to } } }, { $group: { _id: '$method', total: { $sum: '$amountDue' }, count: { $sum: 1 } } }, { $sort: { total: -1 } }]),
       Order.aggregate([{ $match: { ...rf, status: 'annulee', createdAt: { $gte: from, $lte: to } } }, { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$totalTTC' } } }]),
+      calculateKitchenStats(rf, from, to),
     ]);
 
     const t   = totalsArr[0]  ?? {};
@@ -218,11 +279,22 @@ exports.getSummary = async (req, res, next) => {
           avgBasket:   Math.round((t.avgBasket  ?? 0) * 100) / 100,
           annulees:    { count: ann.count ?? 0, amount: Math.round((ann.amount ?? 0) * 100) / 100 },
         },
+        kitchen: kitchenStats,
         salesByHour,
         topProducts: topPArr.map(p => ({ ...p, percent: tq > 0 ? Math.round((p.qty / tq) * 100) : 0 })),
         byChannel:   byChanArr.map(c => ({ ...c, percent: tr > 0 ? Math.round((c.revenue / tr) * 100) : 0 })),
         paymentMethods: payArr.map(p => ({ method: p._id, total: Math.round(p.total * 100) / 100, count: p.count, percent: gp > 0 ? Math.round((p.total / gp) * 100) : 0 })),
       },
     });
+  } catch (err) { next(err); }
+};
+
+/* ── GET /api/stats/kitchen ────────────────────────────────── */
+exports.getKitchenStats = async (req, res, next) => {
+  try {
+    const { from, to } = parseDateRange(req.query);
+    const rf = regF(req.query);
+    const data = await calculateKitchenStats(rf, from, to);
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 };

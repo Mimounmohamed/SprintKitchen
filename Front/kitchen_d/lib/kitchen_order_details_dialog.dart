@@ -309,6 +309,52 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                         ),
                       ),
                     ],
+                    if (widget.order.status == OrderStatus.terminee || widget.order.finishedAt != null) ...[
+                      if (widget.order.finishedTimeString != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF059669)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Fin : ${widget.order.finishedTimeString!}',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF374151)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (widget.order.prepDurationString != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFA7F3D0)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.timer_outlined, size: 12, color: Color(0xFF059669)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Préparée en ${widget.order.prepDurationString!}',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
                 Text(
@@ -576,6 +622,45 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
               ),
             ],
           ),
+          if (widget.order.status == OrderStatus.terminee || widget.order.finishedAt != null) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Divider(height: 1, color: Color(0xFFF3F4F6)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _infoCell(
+                      Icons.check_circle_outline_rounded,
+                      'HEURE DE FIN CUISINE',
+                      widget.order.finishedAt != null
+                          ? '${_fmtDate(widget.order.finishedAt!)} \u00e0 ${_fmtTime(widget.order.finishedAt!)}'
+                          : 'Termin\u00e9e',
+                      dotColor: const Color(0xFF22A45D),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _infoCell(
+                      Icons.timer_rounded,
+                      'TEMPS DE PR\u00c9PARATION',
+                      widget.order.prepDurationString != null
+                          ? widget.order.prepDurationString!
+                          : 'N/A',
+                      dotColor: const Color(0xFF059669),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 10),
             child: Divider(height: 1, color: Color(0xFFF3F4F6)),

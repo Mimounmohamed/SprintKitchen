@@ -68,8 +68,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.',
   ];
 
-  // Column flex: DATE, HEURE, NUMÉRO, MONTANT, CLIENT / TABLE, MODE, ACTIONS
-  static const _flex = [2, 2, 2, 2, 4, 2, 3];
+  // Column flex: DATE, HEURE, DURÉE, NUMÉRO, MONTANT, CLIENT / TABLE, MODE, ACTIONS
+  static const _flex = [2, 2, 2, 2, 2, 4, 2, 3];
 
   final HistoryService _service = HistoryService();
   final LayerLink _calendarLink = LayerLink();
@@ -794,18 +794,60 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           _cell(0, h('DATE')),
           _cell(1, h('HEURE')),
-          _cell(2, h('NUMÉRO')),
+          _cell(2, h('DURÉE')),
+          _cell(3, h('NUMÉRO')),
           _cell(
-            3,
+            4,
             Padding(
               padding: const EdgeInsets.only(right: 24),
               child: h('MONTANT', align: TextAlign.right),
             ),
             align: Alignment.centerRight,
           ),
-          _cell(4, h('CLIENT / TABLE')),
-          _cell(5, h('MODE')),
-          _cell(6, h('ACTIONS'), align: Alignment.center),
+          _cell(5, h('CLIENT / TABLE')),
+          _cell(6, h('MODE')),
+          _cell(7, h('ACTIONS'), align: Alignment.center),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDurationCell(HistoryOrder o) {
+    final dur = o.prepDurationString;
+    if (dur == null) {
+      return Text(
+        '—',
+        style: _os(13, FontWeight.w400, _stone500, lineHeight: 18),
+      );
+    }
+    final isDone = o.finishedAt != null;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: isDone ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: isDone ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isDone ? Icons.timer_outlined : Icons.hourglass_top_rounded,
+            size: 13,
+            color: isDone ? const Color(0xFF059669) : const Color(0xFFD97706),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            dur,
+            style: _os(
+              12,
+              FontWeight.w600,
+              isDone ? const Color(0xFF065F46) : const Color(0xFF92400E),
+              lineHeight: 16,
+            ),
+          ),
         ],
       ),
     );
@@ -858,6 +900,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             _cell(
               2,
+              _buildDurationCell(o),
+            ),
+            _cell(
+              3,
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -890,7 +936,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
             _cell(
-              3,
+              4,
               Padding(
                 padding: const EdgeInsets.only(right: 24),
                 child: Text(
@@ -903,7 +949,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               align: Alignment.centerRight,
             ),
             _cell(
-              4,
+              5,
               Text(
                 client ?? 'Client Passant',
                 overflow: TextOverflow.ellipsis,
@@ -913,9 +959,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     : _os(14, FontWeight.w500, _ink, lineHeight: 20),
               ),
             ),
-            _cell(5, _modeChip(mode)),
+            _cell(6, _modeChip(mode)),
             _cell(
-              6,
+              7,
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

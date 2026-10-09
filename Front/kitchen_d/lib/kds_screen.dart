@@ -255,6 +255,8 @@ class KitchenOrder {
   final String ticketNumber;
   final OrderMode mode;
   final DateTime createdAt;
+  final DateTime? kdsSentAt;
+  final DateTime? finishedAt;
   final List<KdsItem> items;
   OrderStatus status;
   String? note;
@@ -274,6 +276,8 @@ class KitchenOrder {
     required this.ticketNumber,
     required this.mode,
     required this.createdAt,
+    this.kdsSentAt,
+    this.finishedAt,
     required this.items,
     required this.status,
     this.note,
@@ -288,6 +292,36 @@ class KitchenOrder {
     this.isEdited = false,
     this.modificationSummary = const [],
   });
+
+  Duration? get prepDuration {
+    if (finishedAt == null) return null;
+    final start = kdsSentAt ?? createdAt;
+    final diff = finishedAt!.difference(start);
+    return diff.isNegative ? Duration.zero : diff;
+  }
+
+  String? get finishedTimeString {
+    if (finishedAt == null) return null;
+    final dt = finishedAt!.toLocal();
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  String? get prepDurationString {
+    final d = prepDuration;
+    if (d == null) return null;
+    final totalSec = d.inSeconds;
+    if (totalSec < 60) return '${totalSec}s';
+    final m = d.inMinutes;
+    final s = totalSec % 60;
+    if (m >= 60) {
+      final h = m ~/ 60;
+      final remM = m % 60;
+      return '${h}h ${remM.toString().padLeft(2, '0')}m';
+    }
+    return s > 0 ? '${m}m ${s.toString().padLeft(2, '0')}s' : '$m min';
+  }
 
   factory KitchenOrder.fromJson(Map<String, dynamic> j) {
     final rawMode = j['orderType'] as String? ?? 'sur_place';
@@ -320,6 +354,12 @@ class KitchenOrder {
         .toList();
 
     final ts = j['kdsSentAt'] ?? j['createdAt'];
+    final rawSent = j['kdsSentAt'];
+    final DateTime? kdsSentAt = rawSent != null ? DateTime.tryParse(rawSent.toString()) : null;
+
+    final rawReady = j['kdsReadyAt'] ?? j['completedAt'] ?? (rawStatus == 'terminee' || rawKds == 'served' ? j['updatedAt'] : null);
+    final DateTime? finishedAt = rawReady != null ? DateTime.tryParse(rawReady.toString()) : null;
+
     final rawTicket = j['ticketNumber']?.toString() ?? '?';
     final ticketNumber = rawTicket.startsWith('#') ? rawTicket : '#$rawTicket';
 
@@ -356,6 +396,8 @@ class KitchenOrder {
       createdAt:    ts != null
           ? DateTime.tryParse(ts as String) ?? DateTime.now()
           : DateTime.now(),
+      kdsSentAt:    kdsSentAt,
+      finishedAt:   finishedAt,
       items:        items,
       status:       status,
       note:         note,
@@ -560,7 +602,7 @@ class _KdsState extends State<KdsScreen> {
         final active = _orders.where((o) => o.status != OrderStatus.terminee).toList();
         final done = _orders.where((o) => o.status == OrderStatus.terminee).toList();
         active.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        done.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        done.sort((a, b) => (b.finishedAt ?? b.createdAt).compareTo(a.finishedAt ?? a.createdAt));
         return [...active, ...done];
       case _Tab.attente:
         final list = _orders.where((o) => o.status == OrderStatus.attente).toList();
@@ -572,7 +614,7 @@ class _KdsState extends State<KdsScreen> {
         return list;
       case _Tab.terminees:
         final list = _orders.where((o) => o.status == OrderStatus.terminee).toList();
-        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        list.sort((a, b) => (b.finishedAt ?? b.createdAt).compareTo(a.finishedAt ?? a.createdAt));
         return list;
     }
   }
@@ -952,7 +994,10 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
     switch (widget.order.status) {
       case OrderStatus.attente:     return (label: 'COMMENCER',        bg: C.yellow, fg: C.brown);
       case OrderStatus.preparation: return (label: 'TERMINER \u2713',  bg: C.green,  fg: Colors.white);
-      case OrderStatus.terminee:    return (label: 'TERMIN\u00c9 \u2713', bg: const Color(0xFFEBE8E1), fg: C.muted);
+      case OrderStatus.terminee:
+        final dur = widget.order.prepDurationString;
+        final lbl = dur != null ? 'TERMIN\u00c9 \u2713 ($dur)' : 'TERMIN\u00c9 \u2713';
+        return (label: lbl, bg: const Color(0xFFEBE8E1), fg: C.muted);
     }
   }
 
@@ -1050,7 +1095,7 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
                 children: [
                   Icon(
                     widget.order.status == OrderStatus.terminee
-                        ? Icons.check_circle_outline_rounded
+                        ? Icons.check_circle_rounded
                         : Icons.access_time_rounded,
                     size: r.fs(12),
                     color: _timerColor,
@@ -1058,18 +1103,49 @@ class _OrderCardState extends State<_OrderCard> with SingleTickerProviderStateMi
                   SizedBox(width: r.fs(4)),
                   Flexible(
                     child: Text(
-                      widget.order.note ?? _elapsedLabel,
+                      widget.order.status == OrderStatus.terminee
+                          ? (widget.order.finishedTimeString != null
+                              ? 'Fin: ${widget.order.finishedTimeString}'
+                              : (widget.order.note ?? 'Termin\u00e9e'))
+                          : (widget.order.note ?? _elapsedLabel),
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: r.fs(11.5),
                         fontWeight: FontWeight.w700,
                         color: _timerColor,
-                        fontFeatures: widget.order.note == null
+                        fontFeatures: (widget.order.status != OrderStatus.terminee && widget.order.note == null)
                             ? const [FontFeature.tabularFigures()]
                             : null,
                       ),
                     ),
                   ),
+                  if (widget.order.status == OrderStatus.terminee &&
+                      (widget.order.prepDurationString != null || _elapsedLabel.isNotEmpty)) ...[
+                    SizedBox(width: r.fs(5)),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: r.fs(5), vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F8EF),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFFA7F3D0), width: 0.8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.timer_outlined, size: r.fs(10), color: const Color(0xFF059669)),
+                          SizedBox(width: r.fs(3)),
+                          Text(
+                            widget.order.prepDurationString ?? _elapsedLabel,
+                            style: TextStyle(
+                              fontSize: r.fs(9.5),
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF059669),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

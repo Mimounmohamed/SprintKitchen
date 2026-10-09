@@ -94,6 +94,8 @@ export const statsService = {
   getKpis:           (params) => api.get('/stats/kpis',            { params }),
   /** Payment method breakdown */
   getPaymentMethods: (params) => api.get('/stats/payment-methods', { params }),
+  /** Kitchen prep time stats */
+  getKitchenStats:   (params) => api.get('/stats/kitchen',         { params }),
 };
 
 // ── Ingredients (Inventaire / Liste 86) ───────────────────────────────────────

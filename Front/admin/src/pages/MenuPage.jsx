@@ -916,8 +916,8 @@ export default function MenuPage() {
             src="/bobo_portrait.jpg"
             alt="Bobo's"
             style={{
-              width: 34,
-              height: 34,
+              width: 38,
+              height: 38,
               borderRadius: "50%",
               objectFit: "cover",
               border: `2px solid ${C.yellow}`,
@@ -926,14 +926,14 @@ export default function MenuPage() {
 
           <span
             style={{
-              fontFamily: FONT_TITLE,
+              fontFamily: "'Pacifico', cursive",
               fontSize: 22,
-              letterSpacing: '1.2px',
+              letterSpacing: '0.5px',
               color: '#111827',
               lineHeight: 1,
             }}
           >
-            BOBO'S
+            Bobo's
           </span>
         </div>
 
@@ -1351,7 +1351,7 @@ export default function MenuPage() {
         <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, fontWeight:600 }}>
           <Circle size={7} fill={C.green} color={C.green}/> Connecté {!mobile && <><span style={{ color:C.muted }}>·</span></>}
         </div>
-        {!mobile && <span style={{ fontSize:12, color:C.muted }}>SprintKitchen OS Admin v2.4.0-PROD</span>}
+        {!mobile && <span style={{ fontSize:12, color:C.muted }}>Bobo's OS Admin v1.00</span>}
       </footer>
 
       {/* Drawers & Modals (unchanged) */}

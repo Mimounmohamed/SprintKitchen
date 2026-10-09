@@ -25,11 +25,12 @@ exports.getKdsOrders = async (req, res) => {
       createdAt: { $gte: todayStart, $lte: todayEnd },
     })
       .select(
-        'ticketNumber orderType status kdsStatus kdsSentAt isEdited editedAt modificationSummary ' +
-        'items notes createdAt clientName buzzerNumber tableNumber'
+        'ticketNumber orderType status kdsStatus kdsSentAt kdsReadyAt completedAt isEdited editedAt modificationSummary ' +
+        'items notes createdAt clientName buzzerNumber tableNumber totalTTC subtotalHT tvaRate tvaAmount registerId'
       )
+      .populate('registerId', 'name')
       .sort({ createdAt: 1 }) // oldest first = FIFO
-      .limit(60);
+      .limit(100);
 
     res.json({ success: true, data: orders });
   } catch (err) {
@@ -68,22 +69,27 @@ exports.updateKdsStatus = async (req, res) => {
 
     if (kdsStatus === 'in_progress') {
       // Kitchen started — order stays visible on KDS as en_attente
+      if (!order.kdsSentAt) {
+        order.kdsSentAt = order.createdAt || new Date();
+      }
     } else if (kdsStatus === 'ready') {
       // Kitchen done → notify cashier
-      order.kdsReadyAt = new Date();
+      order.kdsReadyAt = order.kdsReadyAt || new Date();
       order.status     = 'a_encaisser';
     } else if (kdsStatus === 'served') {
       // Handed to customer / finished in kitchen
+      // Always record when kitchen completed the preparation
+      order.kdsReadyAt = order.kdsReadyAt || new Date();
+
       // Table orders (and unpaid orders) MUST go to a_encaisser so cashier can encaisse them.
       const hasTable = Boolean(order.tableNumber || (order.orderType === 'sur_place' && order.buzzerNumber));
       const isPaid = await Payment.exists({ orderId: order._id, isRefunded: { $ne: true } });
 
       if (hasTable && !isPaid) {
-        order.kdsReadyAt = order.kdsReadyAt || new Date();
         order.status = 'a_encaisser';
       } else {
         order.status      = 'terminee';
-        order.completedAt = new Date();
+        order.completedAt = order.completedAt || new Date();
       }
     }
 

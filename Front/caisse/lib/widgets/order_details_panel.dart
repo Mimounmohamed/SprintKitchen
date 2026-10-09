@@ -173,6 +173,49 @@ class OrderDetailsPanel extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (order.prepDurationString != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: order.finishedAt != null
+                              ? const Color(0xFFECFDF5)
+                              : const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: order.finishedAt != null
+                                ? const Color(0xFFA7F3D0)
+                                : const Color(0xFFFDE68A),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              order.finishedAt != null
+                                  ? Icons.timer_outlined
+                                  : Icons.hourglass_top_rounded,
+                              size: 13,
+                              color: order.finishedAt != null
+                                  ? const Color(0xFF059669)
+                                  : const Color(0xFFD97706),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              order.finishedAt != null
+                                  ? 'Durée: ${order.prepDurationString!}'
+                                  : 'En cours: ${order.prepDurationString!}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: order.finishedAt != null
+                                    ? const Color(0xFF065F46)
+                                    : const Color(0xFF92400E),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -305,6 +348,36 @@ class OrderDetailsPanel extends StatelessWidget {
                   (order.deliveryAddress != null && order.deliveryAddress!.isNotEmpty)
                       ? order.deliveryAddress!
                       : '—',
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(height: 1, color: Color(0xFFF3F4F6)),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _infoCell(
+                  Icons.timer_outlined,
+                  'DURÉE DE PRÉPARATION',
+                  order.prepDurationString != null
+                      ? (order.finishedAt != null
+                          ? order.prepDurationString!
+                          : '${order.prepDurationString!} (en cours)')
+                      : '—',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _infoCell(
+                  Icons.check_circle_outline,
+                  'HEURE DE FIN',
+                  order.finishedTimeString != null
+                      ? '${_fmtDate(order.finishedAt!)} à ${order.finishedTimeString!}'
+                      : 'Non terminée',
                 ),
               ),
             ],

@@ -71,8 +71,8 @@ export default function LoginPage() {
               }}
             />
             <div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: "#F5F0E6", letterSpacing: "0.05em" }}>
-                BOBO'S
+              <div style={{ fontFamily: "'Pacifico', cursive", fontSize: 22, color: "#F5F0E6", letterSpacing: "0.5px" }}>
+                Bobo's
               </div>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.yellow, letterSpacing: "0.08em" }}>
                 PORTAIL ADMINISTRATEUR

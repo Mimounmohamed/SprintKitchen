@@ -90,5 +90,25 @@ void main() {
       expect(orderServed.status, OrderStatus.terminee);
       expect(orderServed.note, 'TERMINÉ');
     });
+
+    test('KitchenOrder.fromJson parses completion time and calculates prep duration', () {
+      final json = {
+        '_id': '10',
+        'ticketNumber': '010',
+        'orderType': 'sur_place',
+        'status': 'terminee',
+        'kdsStatus': 'served',
+        'createdAt': '2026-10-09T14:00:00.000Z',
+        'kdsSentAt': '2026-10-09T14:00:00.000Z',
+        'kdsReadyAt': '2026-10-09T14:06:24.000Z',
+        'items': [],
+      };
+
+      final order = KitchenOrder.fromJson(json);
+      expect(order.finishedAt, isNotNull);
+      expect(order.prepDuration, const Duration(minutes: 6, seconds: 24));
+      expect(order.prepDurationString, '6m 24s');
+      expect(order.finishedTimeString, isNotNull);
+    });
   });
 }
