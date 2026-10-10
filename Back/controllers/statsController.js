@@ -20,8 +20,9 @@ async function calculateKitchenStats(matchFilter, from, to) {
     $or: [
       { kdsReadyAt: { $exists: true, $ne: null } },
       { completedAt: { $exists: true, $ne: null } },
+      { status: { $in: ['a_encaisser', 'terminee'] } },
     ],
-  }).select('ticketNumber createdAt kdsSentAt kdsReadyAt completedAt status');
+  }).select('ticketNumber createdAt updatedAt kdsSentAt kdsReadyAt completedAt status');
 
   let totalPrepSeconds = 0;
   let validKitchenCount = 0;
@@ -34,7 +35,7 @@ async function calculateKitchenStats(matchFilter, from, to) {
 
   for (const ko of kitchenOrders) {
     const start = ko.kdsSentAt || ko.createdAt;
-    const end = ko.kdsReadyAt || ko.completedAt;
+    const end = ko.kdsReadyAt || ko.completedAt || ko.updatedAt;
     if (!start || !end) continue;
     const durationSec = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000);
     if (durationSec >= 0 && durationSec <= 86400) {

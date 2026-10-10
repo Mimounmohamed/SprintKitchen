@@ -158,12 +158,23 @@ function getClientOrTable(ord) {
   return 'Client Passant';
 }
 
+function getOrderFinishedAt(ord) {
+  if (!ord) return null;
+  return (
+    ord.kdsReadyAt ||
+    ord.completedAt ||
+    (ord.status === 'a_encaisser' || ord.status === 'terminee'
+      ? ord.updatedAt || ord.editedAt
+      : null)
+  );
+}
+
 function getOrderDuration(ord) {
   if (!ord) return null;
   const start = ord.kdsSentAt || ord.createdAt;
-  const end = ord.kdsReadyAt || ord.completedAt;
+  const end = getOrderFinishedAt(ord);
   if (!end) {
-    if ((ord.status === 'en_attente' || ord.status === 'a_encaisser' || ord.status === 'en_cours') && start) {
+    if ((ord.status === 'en_attente' || ord.status === 'en_cours') && start) {
       const elapsedSec = Math.max(0, Math.round((Date.now() - new Date(start).getTime()) / 1000));
       const m = Math.floor(elapsedSec / 60);
       return {
@@ -175,6 +186,9 @@ function getOrderDuration(ord) {
   }
   if (!start) return null;
   const sec = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000));
+  if (sec === 0) {
+    return { label: '< 1 min', inProgress: false };
+  }
   if (sec < 60) {
     return { label: `${sec}s`, inProgress: false };
   }
@@ -257,7 +271,7 @@ function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
           <div>${dateStr}</div>
           ${(() => {
             const dur = getOrderDuration(ord);
-            const fin = ord.kdsReadyAt || ord.completedAt;
+            const fin = getOrderFinishedAt(ord);
             if (fin || dur) {
               const finStr = fin ? fmtTime(fin) : '';
               return `<div style="font-size:11px;font-weight:bold;margin-top:4px">${finStr ? `Fin : ${finStr}` : ''}${dur?.label ? ` • Durée : ${dur.label}` : ''}</div>`;
@@ -340,66 +354,353 @@ function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
   }, 350);
 }
 
-function printSessionCloture({ summary, range }) {
-  const fromStr = fmtDate(range.start);
-  const toStr = fmtDate(range.end);
+const STATUS_META = {
+  terminee: { label: 'Payée / Terminée', bg: '#ECFDF5', fg: '#065F46', border: '#A7F3D0' },
+  a_encaisser: { label: 'À Encaisser', bg: '#FEF3C7', fg: '#92400E', border: '#FDE68A' },
+  en_attente: { label: 'En Attente', bg: '#EFF6FF', fg: '#1E40AF', border: '#BFDBFE' },
+  repas_employe: { label: 'Repas Employé', bg: '#F3E8FF', fg: '#6B21A8', border: '#E9D5FF' },
+  annulee: { label: 'Annulée', bg: '#FEF2F2', fg: '#991B1B', border: '#FECACA' },
+};
+
+async function printSessionCloture({ summary, range }) {
+  const w = window.open('', '_blank', 'width=980,height=780');
+  if (!w) return;
+
+  w.document.write(`
+    <!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/>
+    <title>Chargement du rapport de clôture...</title>
+    <style>body{font-family:'Helvetica Neue',Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#2E2117;font-weight:700;}</style>
+    </head><body>Génération du rapport de clôture détaillé en cours...</body></html>
+  `);
+
+  let allOrders = [];
+  try {
+    const fromIso = range.start.getFullYear() <= 2020 ? undefined : range.start.toISOString();
+    const toIso = new Date(
+      range.end.getFullYear(),
+      range.end.getMonth(),
+      range.end.getDate(),
+      23, 59, 59, 999
+    ).toISOString();
+
+    const res = await orderService.getAll({
+      from: fromIso,
+      to: toIso,
+      page: 1,
+      limit: 1000,
+    });
+    allOrders = res?.data?.data || [];
+  } catch (err) {
+    console.error('Erreur chargement commandes clôture:', err);
+  }
+
+  const isAllHistory = range.start.getFullYear() <= 2020;
+  const periodLabel = isAllHistory
+    ? "Tout l'historique"
+    : `Du ${fmtDate(range.start)} au ${fmtDate(range.end)}`;
   const nowStr = fmtDate(new Date()) + ' à ' + fmtTime(new Date());
 
-  const counts = summary?.counts || { en_attente: 0, a_encaisser: 0, terminee: 0, repas_employe: 0 };
+  const counts = summary?.counts || {
+    en_attente: 0,
+    a_encaisser: 0,
+    terminee: 0,
+    repas_employe: 0,
+    annulee: 0,
+  };
   const totalRev = summary?.totalTerminee || 0;
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8"/>
-        <title>Clôture de Caisse - Rapport</title>
-        <style>
-          @page { size: 80mm auto; margin: 0; }
-          body { font-family: monospace; width: 72mm; margin: 0 auto; padding: 12px 0; font-size: 12px; line-height: 1.35; }
-          .center { text-align: center; }
-          .bold { font-weight: bold; }
-          hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-          h2 { font-size: 18px; margin: 0; }
-          .row { display: flex; justify-content: space-between; margin: 3px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="center">
-          <h2>SPRINTKITCHEN</h2>
-          <div style="font-weight:bold;margin:4px 0">RAPPORT DE CLÔTURE DE SESSION</div>
-          <div style="font-size:11px;color:#444">Période : du ${fromStr} au ${toStr}</div>
-          <div style="font-size:10px;color:#666">Édité le ${nowStr}</div>
-        </div>
-        <hr/>
-        <div class="bold" style="margin-bottom:6px">RÉPARTITION DES COMMANDES</div>
-        <div class="row"><span>Commandes terminées :</span><span class="bold">${counts.terminee || 0}</span></div>
-        <div class="row"><span>Commandes en attente :</span><span>${counts.en_attente || 0}</span></div>
-        <div class="row"><span>Commandes à encaisser :</span><span>${counts.a_encaisser || 0}</span></div>
-        <div class="row"><span>Repas employés :</span><span>${counts.repas_employe || 0}</span></div>
-        <div class="row"><span>Commandes annulées :</span><span>${counts.annulee || 0}</span></div>
-        <hr/>
-        <div class="row" style="font-size:15px;font-weight:bold;margin:8px 0">
-          <span>TOTAL SESSION :</span>
-          <span>${fmtPrice(totalRev)}</span>
-        </div>
-        <hr/>
-        <div class="center" style="margin-top:12px;font-size:10px;color:#555">
-          Document généré par SprintKitchen OS Admin
-        </div>
-      </body>
-    </html>
-  `;
+  // Compute preparation time stats & channel/status breakdowns from allOrders
+  let prepSecSum = 0;
+  let prepCount = 0;
+  const byMode = {
+    sur_place: { label: 'Sur place', count: 0, total: 0 },
+    a_emporter: { label: 'À emporter', count: 0, total: 0 },
+    livraison: { label: 'Livraison', count: 0, total: 0 },
+  };
+  const byStatus = {
+    terminee: { label: 'Terminées (Payées)', count: 0, total: 0 },
+    a_encaisser: { label: 'À Encaisser', count: 0, total: 0 },
+    en_attente: { label: 'En Attente (Cuisine)', count: 0, total: 0 },
+    repas_employe: { label: 'Repas Employés', count: 0, total: 0 },
+    annulee: { label: 'Annulées', count: 0, total: 0 },
+  };
 
-  const w = window.open('', '_blank', 'width=380,height=600');
-  if (!w) return;
+  allOrders.forEach((o) => {
+    const st = byStatus[o.status] || byStatus.en_attente;
+    st.count += 1;
+    st.total += Number(o.totalTTC || 0);
+
+    if (o.status !== 'annulee') {
+      const mKey = byMode[o.orderType] ? o.orderType : 'sur_place';
+      byMode[mKey].count += 1;
+      byMode[mKey].total += Number(o.totalTTC || 0);
+    }
+
+    const start = o.kdsSentAt || o.createdAt;
+    const end = getOrderFinishedAt(o);
+    if (start && end) {
+      const sec = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000));
+      if (sec > 0 && sec < 14400) {
+        prepSecSum += sec;
+        prepCount += 1;
+      }
+    }
+  });
+
+  const avgPrepSec = prepCount > 0 ? Math.round(prepSecSum / prepCount) : 0;
+  const avgPrepLabel =
+    avgPrepSec <= 0
+      ? '—'
+      : avgPrepSec < 60
+      ? `${avgPrepSec}s`
+      : `${Math.floor(avgPrepSec / 60)}m ${String(avgPrepSec % 60).padStart(2, '0')}s`;
+
+  const totalAllTTC = allOrders
+    .filter((o) => o.status !== 'annulee')
+    .reduce((acc, o) => acc + Number(o.totalTTC || 0), 0);
+
+  const statusRowsHtml = Object.values(byStatus)
+    .map(
+      (s) => `
+      <tr>
+        <td><b>${s.label}</b></td>
+        <td>${s.count} commande${s.count > 1 ? 's' : ''}</td>
+        <td style="text-align:right;font-weight:700">${fmtPrice(s.total)}</td>
+      </tr>`
+    )
+    .join('');
+
+  const modeRowsHtml = Object.values(byMode)
+    .map(
+      (m) => `
+      <tr>
+        <td><b>${m.label}</b></td>
+        <td>${m.count} commande${m.count > 1 ? 's' : ''}</td>
+        <td style="text-align:right;font-weight:700">${fmtPrice(m.total)}</td>
+      </tr>`
+    )
+    .join('');
+
+  const ordersRowsHtml = allOrders.length === 0
+    ? `<tr><td colspan="8" style="text-align:center;padding:24px;color:#8B8378;">Aucune commande enregistrée sur cette période.</td></tr>`
+    : allOrders
+        .map((o) => {
+          const mode = getModeStyle(o.orderType);
+          const stMeta = STATUS_META[o.status] || {
+            label: o.status || 'Inconnu',
+            bg: '#F3F4F6',
+            fg: '#374151',
+            border: '#D1D5DB',
+          };
+          const dur = getOrderDuration(o);
+          const fin = getOrderFinishedAt(o);
+          const client = getClientOrTable(o);
+          const phone = o.delivery?.phone || o.clientPhone || '';
+          const address = [o.delivery?.address, o.delivery?.postalCode, o.delivery?.city]
+            .filter(Boolean)
+            .join(', ');
+          const registerName = o.registerId?.name || 'Caisse 01';
+
+          const itemsDetailHtml = (o.items || [])
+            .map((it) => {
+              const custs = (it.customizations || [])
+                .flatMap((c) => (c.selectedOptions || []).map((opt) => opt.label))
+                .join(', ');
+              const sans = (it.removedIngredients || []).map((r) => `Sans ${r}`).join(', ');
+              const subParts = [custs, sans, it.notes].filter(Boolean).join(' • ');
+              return `
+                <div style="margin-bottom:4px;line-height:1.35;">
+                  <div style="display:flex;justify-content:space-between;gap:8px;">
+                    <span><b>${it.quantity}×</b> ${it.productName}</span>
+                    <span style="color:#57534E;font-weight:600;white-space:nowrap;">${fmtPrice(it.lineTotal)}</span>
+                  </div>
+                  ${
+                    subParts
+                      ? `<div style="font-size:10.5px;color:#78716C;padding-left:10px;border-left:2px solid #F2B705;margin-top:1px;">${subParts}</div>`
+                      : ''
+                  }
+                </div>
+              `;
+            })
+            .join('');
+
+          const noteBanner = o.notes
+            ? `<div style="margin-top:4px;padding:3px 7px;background:#FEF3C7;border-left:2px solid #F59E0B;font-size:10.5px;color:#78350F;font-weight:600;">Note cuisine : ${o.notes}</div>`
+            : '';
+
+          return `
+            <tr>
+              <td style="font-weight:800;color:#452B1E;white-space:nowrap;">#${o.ticketNumber}</td>
+              <td style="white-space:nowrap;">
+                <div style="font-weight:600;">${fmtDate(o.createdAt)}</div>
+                <div style="font-size:10.5px;color:#78716C;">Début : ${fmtTime(o.createdAt)}</div>
+                ${fin ? `<div style="font-size:10.5px;color:#059669;font-weight:600;">Fin : ${fmtTime(fin)}</div>` : ''}
+              </td>
+              <td style="white-space:nowrap;">
+                ${
+                  dur
+                    ? `<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;background:${
+                        dur.inProgress ? '#FFFBEB' : '#ECFDF5'
+                      };color:${dur.inProgress ? '#92400E' : '#065F46'};border:1px solid ${
+                        dur.inProgress ? '#FDE68A' : '#A7F3D0'
+                      };">⏱ ${dur.label}</span>`
+                    : '—'
+                }
+              </td>
+              <td>
+                <div style="font-weight:700;color:#1C1917;">${client}</div>
+                <div style="font-size:10.5px;color:#78716C;">${registerName}</div>
+                ${phone ? `<div style="font-size:10.5px;color:#57534E;">Tél : ${phone}</div>` : ''}
+                ${address ? `<div style="font-size:10.5px;color:#57534E;">Adr : ${address}</div>` : ''}
+              </td>
+              <td style="white-space:nowrap;">
+                <span style="display:inline-block;padding:3px 8px;border-radius:12px;font-size:10.5px;font-weight:700;background:${mode.bg};color:${mode.fg};">
+                  ${mode.label}
+                </span>
+              </td>
+              <td style="white-space:nowrap;">
+                <span style="display:inline-block;padding:3px 8px;border-radius:6px;font-size:10.5px;font-weight:700;background:${stMeta.bg};color:${stMeta.fg};border:1px solid ${stMeta.border};">
+                  ${stMeta.label}
+                </span>
+              </td>
+              <td style="min-width:260px;">
+                ${itemsDetailHtml || '<span style="color:#8B8378;">Aucun article</span>'}
+                ${noteBanner}
+              </td>
+              <td style="text-align:right;font-weight:800;font-size:13px;white-space:nowrap;color:#1C1917;">
+                ${fmtPrice(o.totalTTC)}
+              </td>
+            </tr>
+          `;
+        })
+        .join('');
+
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/>
+    <title>Rapport de Clôture Bobo's — ${periodLabel}</title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #1C1917; padding: 28px; }
+      .header { background: #2E2117; color: #F5F0E6; padding: 20px 24px; border-radius: 10px; margin-bottom: 22px; display: flex; justify-content: space-between; align-items: center; }
+      .header h1 { font-size: 24px; letter-spacing: 1px; font-weight: 800; }
+      .header .sub { font-size: 10px; color: #F2B705; font-weight: 700; letter-spacing: 2px; margin-bottom: 4px; text-transform: uppercase; }
+      .header .meta { font-size: 11px; color: rgba(245,240,230,0.75); margin-top: 6px; }
+      .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 22px; }
+      .kpi { background: #F5F4F0; border-radius: 8px; padding: 12px 14px; border: 1px solid #E5E7EB; }
+      .kpi .label { font-size: 9px; font-weight: 700; color: #8B8378; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 5px; }
+      .kpi .value { font-size: 16px; font-weight: 800; color: #1C1917; }
+      .kpi .value.green { color: #059669; }
+      .kpi .value.amber { color: #D97706; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+      .section { margin-bottom: 22px; }
+      .section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #583926; text-transform: uppercase; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #F2B705; display: flex; justify-content: space-between; align-items: center; }
+      table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+      th { text-align: left; font-size: 9.5px; font-weight: 700; color: #8B8378; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 8px; border-bottom: 1.5px solid #E7E4DD; background: #FAFAF9; }
+      td { padding: 9px 8px; border-bottom: 1px solid #F0EDE8; font-size: 11.5px; vertical-align: top; }
+      tr { page-break-inside: avoid; }
+      .total-row td { border-top: 2px solid #2E2117; border-bottom: none; background: #F5F4F0; font-weight: 800; font-size: 13px; padding: 11px 8px; }
+      .footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #E7E4DD; font-size: 10px; color: #8B8378; display: flex; justify-content: space-between; }
+      @media print {
+        body { padding: 14px; }
+        @page { size: A4 portrait; margin: 10mm; }
+      }
+    </style></head><body>
+      <div class="header">
+        <div>
+          <div class="sub">RAPPORT DE CLÔTURE DE CAISSE &amp; DÉTAIL DES COMMANDES</div>
+          <h1>BOBO'S RESTAURATION</h1>
+          <div class="meta">Période : ${periodLabel} &nbsp;·&nbsp; Édité le ${nowStr}</div>
+        </div>
+        <div style="text-align:right; color:#F2B705; font-weight:800; font-size:18px;">
+          ${fmtPrice(totalRev)}<br/>
+          <span style="font-size:11px;color:rgba(245,240,230,0.8);font-weight:500;">
+            ${allOrders.length} commande${allOrders.length > 1 ? 's' : ''} au total (${counts.terminee || 0} payée${(counts.terminee || 0) > 1 ? 's' : ''})
+          </span>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi">
+          <div class="label">CA Encaissé (Payé)</div>
+          <div class="value green">${fmtPrice(totalRev)}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Total Toutes Commandes</div>
+          <div class="value">${fmtPrice(totalAllTTC)}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Commandes Payées</div>
+          <div class="value green">${counts.terminee || 0}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">À Encaisser / Attente</div>
+          <div class="value amber">${counts.a_encaisser || 0} / ${counts.en_attente || 0}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Temps Moyen Cuisine</div>
+          <div class="value">${avgPrepLabel}</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="section" style="margin-bottom:0;">
+          <div class="section-title"><span>Répartition par Statut</span></div>
+          <table>
+            <thead><tr><th>Statut</th><th>Volume</th><th style="text-align:right;">Montant TTC</th></tr></thead>
+            <tbody>${statusRowsHtml}</tbody>
+          </table>
+        </div>
+        <div class="section" style="margin-bottom:0;">
+          <div class="section-title"><span>Répartition par Mode</span></div>
+          <table>
+            <thead><tr><th>Mode</th><th>Commandes</th><th style="text-align:right;">Montant TTC</th></tr></thead>
+            <tbody>${modeRowsHtml}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          <span>Détail Complet des Commandes (${allOrders.length})</span>
+          <span style="color:#8B8378;font-size:10px;">Articles, Suppléments, Durées &amp; Montants</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Ticket</th>
+              <th>Date &amp; Heures</th>
+              <th>Durée</th>
+              <th>Client / Table</th>
+              <th>Mode</th>
+              <th>Statut</th>
+              <th>Détail des Articles</th>
+              <th style="text-align:right;">Total TTC</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ordersRowsHtml}
+            ${
+              allOrders.length > 0
+                ? `<tr class="total-row">
+                    <td colspan="7">TOTAL GÉNÉRAL (${allOrders.length} commandes — dont ${counts.terminee || 0} encaissées : ${fmtPrice(totalRev)})</td>
+                    <td style="text-align:right;color:#2E2117;">${fmtPrice(totalAllTTC)}</td>
+                  </tr>`
+                : ''
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="footer">
+        <span>Bobo's POS · Version 1.00 — Rapport de clôture détaillé officiel</span>
+        <span>${nowStr}</span>
+      </div>
+    </body></html>`;
+
+  w.document.open();
   w.document.write(html);
   w.document.close();
   w.focus();
-  setTimeout(() => {
-    w.print();
-    w.close();
-  }, 350);
+  setTimeout(() => w.print(), 500);
 }
 
 /* ── Order Details Panel (Slide-in Drawer) ───────────────────────────────────────── */
@@ -745,7 +1046,7 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: COLORS.ink }}>
                       <CheckCircle2 size={13} color={COLORS.stone400} />
                       {(() => {
-                        const end = ord.kdsReadyAt || ord.completedAt;
+                        const end = getOrderFinishedAt(ord);
                         if (!end) return 'Non terminée';
                         return `${fmtDate(end)} à ${fmtTime(end)}`;
                       })()}
@@ -882,7 +1183,9 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
                     paddingTop: 4,
                   }}
                 >
-                  <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.brandDark }}>TOTAL PAYÉ</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.brandDark }}>
+                    {ord.status === 'a_encaisser' ? 'TOTAL À ENCAISSER' : 'TOTAL PAYÉ'}
+                  </span>
                   <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.brandDark }}>
                     {fmtPrice(ord.totalTTC)}
                   </span>
@@ -912,6 +1215,28 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
                         ? `Rendu : ${fmtPrice(payment.change || 0)}`
                         : 'Paiement électronique'}
                       {payment._id && ` • Réf #${payment._id.slice(-6).toUpperCase()}`}
+                    </div>
+                  </div>
+                </div>
+              ) : ord.status === 'a_encaisser' ? (
+                <div
+                  style={{
+                    background: '#FFFBEB',
+                    border: '1px solid #FDE68A',
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <Timer size={20} color="#D97706" style={{ flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>
+                      En attente d'encaissement
+                    </div>
+                    <div style={{ fontSize: 12, color: '#B45309', marginTop: 1 }}>
+                      Commande prête en cuisine — cliquez sur « Payé » après encaissement
                     </div>
                   </div>
                 </div>
@@ -946,7 +1271,7 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
             gap: 10,
           }}
         >
-          {ord.status === 'en_attente' && (
+          {(ord.status === 'en_attente' || ord.status === 'a_encaisser') && (
             <button
               onClick={() => onMarkTerminee(ord)}
               style={{
@@ -967,7 +1292,12 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
                 gap: 8,
               }}
             >
-              <CheckCircle2 size={20} /> MARQUER COMME TERMINÉE (PRÊTE)
+              <CheckCircle2 size={20} />{' '}
+              {ord.status === 'a_encaisser'
+                ? ord.tableNumber
+                  ? `PAYÉ — ENCAISSEMENT TERMINÉ (LIBÉRER TABLE ${ord.tableNumber})`
+                  : 'PAYÉ — ENCAISSEMENT TERMINÉ'
+                : 'MARQUER COMME TERMINÉE (PRÊTE)'}
             </button>
           )}
 
@@ -2582,7 +2912,7 @@ export default function HistoriquePage() {
                         {/* ACTIONS */}
                         <td style={{ padding: '0 20px', textAlign: 'center' }}>
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                            {o.status === 'en_attente' && (
+                            {(o.status === 'en_attente' || o.status === 'a_encaisser') && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -2603,7 +2933,7 @@ export default function HistoriquePage() {
                                   fontFamily: FONT_BODY,
                                 }}
                               >
-                                <Check size={14} /> Terminer
+                                <Check size={14} /> {o.status === 'a_encaisser' ? 'Payé' : 'Terminer'}
                               </button>
                             )}
 

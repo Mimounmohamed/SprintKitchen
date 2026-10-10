@@ -624,9 +624,19 @@ exports.updateOrder = async (req, res) => {
     Object.assign(order, req.body);
     if (req.body.items) order.recalculateTotals();
 
-    // Flag order as edited whenever updated from POS/history
-    order.isEdited = true;
-    order.editedAt = new Date();
+    if (order.status === 'a_encaisser' && !order.kdsReadyAt) {
+      order.kdsReadyAt = new Date();
+    }
+    if (order.status === 'terminee') {
+      if (!order.kdsReadyAt) order.kdsReadyAt = new Date();
+      if (!order.completedAt) order.completedAt = new Date();
+    }
+
+    // Flag order as edited whenever items/notes/table updated from POS/history
+    if (sessionChanges.length > 0 || incomingSummary) {
+      order.isEdited = true;
+      order.editedAt = new Date();
+    }
     order.modificationSummary = finalSummary;
 
     await order.save();
@@ -645,7 +655,12 @@ exports.updateStatus = async (req, res) => {
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
     order.status = status;
+    if (status === 'a_encaisser') {
+      if (!order.kdsReadyAt) order.kdsReadyAt = new Date();
+      order.kdsStatus = 'ready';
+    }
     if (status === 'terminee') {
+      if (!order.kdsReadyAt) order.kdsReadyAt = new Date();
       order.completedAt = new Date();
       order.kdsStatus = 'served';
     }

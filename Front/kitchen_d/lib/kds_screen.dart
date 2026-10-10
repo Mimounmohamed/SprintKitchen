@@ -357,7 +357,14 @@ class KitchenOrder {
     final rawSent = j['kdsSentAt'];
     final DateTime? kdsSentAt = rawSent != null ? DateTime.tryParse(rawSent.toString()) : null;
 
-    final rawReady = j['kdsReadyAt'] ?? j['completedAt'] ?? (rawStatus == 'terminee' || rawKds == 'served' ? j['updatedAt'] : null);
+    final rawReady = j['kdsReadyAt'] ??
+        j['completedAt'] ??
+        (rawStatus == 'terminee' ||
+                rawStatus == 'a_encaisser' ||
+                rawKds == 'served' ||
+                rawKds == 'ready'
+            ? j['updatedAt']
+            : null);
     final DateTime? finishedAt = rawReady != null ? DateTime.tryParse(rawReady.toString()) : null;
 
     final rawTicket = j['ticketNumber']?.toString() ?? '?';

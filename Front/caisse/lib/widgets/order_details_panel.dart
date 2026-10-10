@@ -836,15 +836,15 @@ class OrderDetailsPanel extends StatelessWidget {
                 ),
                 icon: Icon(
                   order.status == 'a_encaisser'
-                      ? Icons.payments_outlined
+                      ? Icons.check_circle_outline
                       : Icons.check_circle_outline,
                   size: 22,
                 ),
                 label: Text(
                   order.status == 'a_encaisser'
                       ? (order.tableNumber != null && order.tableNumber!.isNotEmpty
-                          ? 'ENCAISSEMENT TERMINÉ (LIBÉRER TABLE ${order.tableNumber})'
-                          : 'ENCAISSEMENT TERMINÉ (VALIDER)')
+                          ? 'PAYÉ — ENCAISSEMENT TERMINÉ (LIBÉRER TABLE ${order.tableNumber})'
+                          : 'PAYÉ — ENCAISSEMENT TERMINÉ')
                       : 'MARQUER COMME TERMINÉE (PRÊTE)',
                   style: const TextStyle(
                       fontWeight: FontWeight.w800,

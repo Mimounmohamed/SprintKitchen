@@ -895,6 +895,410 @@ class ReceiptPrinterService {
     );
   }
 
+  /// Build and open A4 Clôture report with the Stats PDF design and all details of all orders.
+  static Future<void> printSessionClotureReport({
+    required List<HistoryOrder> orders,
+    required OrdersSummary? summary,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final doc = pw.Document();
+    final fontRegular = await PdfGoogleFonts.interRegular();
+    final fontBold = await PdfGoogleFonts.interBold();
+
+    String two(int n) => n.toString().padLeft(2, '0');
+    String fmtDate(DateTime d) => '${two(d.day)}/${two(d.month)}/${d.year}';
+    String fmtTime(DateTime d) => '${two(d.hour)}:${two(d.minute)}:${two(d.second)}';
+    String fmtPrice(num v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} DA';
+
+    final isAllHistory = from.year <= 2020;
+    final periodLabel = isAllHistory ? "Tout l'historique" : 'Du ${fmtDate(from)} au ${fmtDate(to)}';
+    final now = DateTime.now();
+    final nowStr = '${fmtDate(now)} à ${fmtTime(now)}';
+
+    final counts = summary?.counts ?? {};
+    final paidCount = counts['terminee'] ?? orders.where((o) => o.status == 'terminee').length;
+    final aEncaisserCount = counts['a_encaisser'] ?? orders.where((o) => o.status == 'a_encaisser').length;
+    final enAttenteCount = counts['en_attente'] ?? orders.where((o) => o.status == 'en_attente').length;
+    final totalRev = summary?.totalTerminee ??
+        orders.where((o) => o.status == 'terminee').fold<double>(0, (s, o) => s + o.totalTTC);
+    final totalAllTTC = orders
+        .where((o) => o.status != 'annulee')
+        .fold<double>(0, (s, o) => s + o.totalTTC);
+
+    int prepSecSum = 0;
+    int prepCount = 0;
+    for (final o in orders) {
+      final d = o.prepDuration;
+      if (d != null && d.inSeconds > 0 && d.inSeconds < 14400) {
+        prepSecSum += d.inSeconds;
+        prepCount += 1;
+      }
+    }
+    final avgPrepSec = prepCount > 0 ? (prepSecSum ~/ prepCount) : 0;
+    final avgPrepLabel = avgPrepSec <= 0
+        ? '—'
+        : (avgPrepSec < 60
+            ? '${avgPrepSec}s'
+            : '${avgPrepSec ~/ 60}m ${(avgPrepSec % 60).toString().padLeft(2, '0')}s');
+
+    String statusLabel(String st) {
+      switch (st) {
+        case 'terminee':
+          return 'Payée / Terminée';
+        case 'a_encaisser':
+          return 'À Encaisser';
+        case 'en_attente':
+          return 'En Attente';
+        case 'repas_employe':
+          return 'Repas Employé';
+        case 'annulee':
+          return 'Annulée';
+        default:
+          return st;
+      }
+    }
+
+    String modeLabel(String m) {
+      switch (m) {
+        case 'a_emporter':
+          return 'À emporter';
+        case 'livraison':
+          return 'Livraison';
+        default:
+          return 'Sur place';
+      }
+    }
+
+    const brandDark = PdfColor.fromInt(0xFF2E2117);
+    const gold = PdfColor.fromInt(0xFFF2B705);
+    const cream = PdfColor.fromInt(0xFFF5F0E6);
+    const kpiBg = PdfColor.fromInt(0xFFF5F4F0);
+    const borderCol = PdfColor.fromInt(0xFFE5E7EB);
+    const mutedCol = PdfColor.fromInt(0xFF8B8378);
+    const inkCol = PdfColor.fromInt(0xFF1C1917);
+    const greenCol = PdfColor.fromInt(0xFF059669);
+    const amberCol = PdfColor.fromInt(0xFFD97706);
+
+    pw.Widget buildKpi(String label, String val, {PdfColor valColor = inkCol}) {
+      return pw.Expanded(
+        child: pw.Container(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: pw.BoxDecoration(
+            color: kpiBg,
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+            border: pw.Border.all(color: borderCol, width: 0.8),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                label.toUpperCase(),
+                style: pw.TextStyle(font: fontBold, fontSize: 7, color: mutedCol),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                val,
+                style: pw.TextStyle(font: fontBold, fontSize: 11.5, color: valColor),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
+        footer: (ctx) => pw.Container(
+          margin: const pw.EdgeInsets.only(top: 12),
+          padding: const pw.EdgeInsets.only(top: 8),
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(top: pw.BorderSide(color: borderCol, width: 0.8)),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                "Bobo's POS · Version 1.00 — Rapport de clôture détaillé officiel",
+                style: const pw.TextStyle(fontSize: 8, color: mutedCol),
+              ),
+              pw.Text(
+                'Page ${ctx.pageNumber} / ${ctx.pagesCount} · $nowStr',
+                style: const pw.TextStyle(fontSize: 8, color: mutedCol),
+              ),
+            ],
+          ),
+        ),
+        build: (ctx) => [
+          // Header Banner (Same as Stats PDF)
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            decoration: const pw.BoxDecoration(
+              color: brandDark,
+              borderRadius: pw.BorderRadius.all(pw.Radius.circular(8)),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'RAPPORT DE CLÔTURE DE CAISSE & DÉTAIL DES COMMANDES',
+                      style: pw.TextStyle(font: fontBold, fontSize: 8, color: gold, letterSpacing: 1),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      "BOBO'S RESTAURATION",
+                      style: pw.TextStyle(font: fontBold, fontSize: 18, color: cream),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'Période : $periodLabel  ·  Édité le $nowStr',
+                      style: const pw.TextStyle(fontSize: 8.5, color: cream),
+                    ),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      fmtPrice(totalRev),
+                      style: pw.TextStyle(font: fontBold, fontSize: 15, color: gold),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      '${orders.length} commandes ($paidCount payées)',
+                      style: const pw.TextStyle(fontSize: 8.5, color: cream),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 14),
+
+          // KPIs Row
+          pw.Row(
+            children: [
+              buildKpi('CA Encaissé (Payé)', fmtPrice(totalRev), valColor: greenCol),
+              pw.SizedBox(width: 8),
+              buildKpi('Total Commandes', fmtPrice(totalAllTTC)),
+              pw.SizedBox(width: 8),
+              buildKpi('Commandes Payées', '$paidCount', valColor: greenCol),
+              pw.SizedBox(width: 8),
+              buildKpi('À Encaisser / Attente', '$aEncaisserCount / $enAttenteCount', valColor: amberCol),
+              pw.SizedBox(width: 8),
+              buildKpi('Temps Moyen Cuisine', avgPrepLabel),
+            ],
+          ),
+          pw.SizedBox(height: 16),
+
+          // Section Title
+          pw.Container(
+            padding: const pw.EdgeInsets.only(bottom: 4),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(bottom: pw.BorderSide(color: gold, width: 1.5)),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'DÉTAIL COMPLET DES COMMANDES (${orders.length})',
+                  style: pw.TextStyle(font: fontBold, fontSize: 9.5, color: const PdfColor.fromInt(0xFF583926)),
+                ),
+                pw.Text(
+                  'Articles, Suppléments, Durées & Montants',
+                  style: const pw.TextStyle(fontSize: 8, color: mutedCol),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 8),
+
+          // Table Header
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+            decoration: const pw.BoxDecoration(
+              color: kpiBg,
+              border: pw.Border(bottom: pw.BorderSide(color: borderCol, width: 1)),
+            ),
+            child: pw.Row(
+              children: [
+                pw.Expanded(flex: 2, child: pw.Text('TICKET', style: pw.TextStyle(font: fontBold, fontSize: 7.5, color: mutedCol))),
+                pw.Expanded(flex: 3, child: pw.Text('DATE & HEURES', style: pw.TextStyle(font: fontBold, fontSize: 7.5, color: mutedCol))),
+                pw.Expanded(flex: 2, child: pw.Text('DURÉE', style: pw.TextStyle(font: fontBold, fontSize: 7.5, color: mutedCol))),
+                pw.Expanded(flex: 3, child: pw.Text('CLIENT / TABLE', style: pw.TextStyle(font: fontBold, fontSize: 7.5, color: mutedCol))),
+                pw.Expanded(flex: 2, child: pw.Text('MODE / STATUT', style: pw.TextStyle(font: fontBold, fontSize: 7.5, color: mutedCol))),
+                pw.Expanded(flex: 6, child: pw.Text('DÉTAIL DES ARTICLES', style: pw.TextStyle(font: fontBold, fontSize: 7.5, color: mutedCol))),
+                pw.Expanded(flex: 2, child: pw.Text('TOTAL TTC', textAlign: pw.TextAlign.right, style: pw.TextStyle(font: fontBold, fontSize: 7.5, color: mutedCol))),
+              ],
+            ),
+          ),
+
+          // Order Rows
+          for (final o in orders)
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(bottom: pw.BorderSide(color: borderCol, width: 0.6)),
+              ),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Expanded(
+                    flex: 2,
+                    child: pw.Text(
+                      '#${o.ticketNumber}',
+                      style: pw.TextStyle(font: fontBold, fontSize: 8.5, color: brandDark),
+                    ),
+                  ),
+                  pw.Expanded(
+                    flex: 3,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(fmtDate(o.createdAt), style: pw.TextStyle(font: fontBold, fontSize: 8)),
+                        pw.Text('Début : ${fmtTime(o.createdAt)}', style: const pw.TextStyle(fontSize: 7.5, color: mutedCol)),
+                        if (o.finishedAt != null)
+                          pw.Text('Fin : ${fmtTime(o.finishedAt!)}', style: pw.TextStyle(font: fontBold, fontSize: 7.5, color: greenCol)),
+                      ],
+                    ),
+                  ),
+                  pw.Expanded(
+                    flex: 2,
+                    child: pw.Text(
+                      o.prepDurationString ?? '—',
+                      style: pw.TextStyle(font: fontBold, fontSize: 8, color: o.finishedAt != null ? greenCol : amberCol),
+                    ),
+                  ),
+                  pw.Expanded(
+                    flex: 3,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(o.displayClient ?? 'Client Passant', style: pw.TextStyle(font: fontBold, fontSize: 8, color: inkCol)),
+                        if (o.registerName != null)
+                          pw.Text(o.registerName!, style: const pw.TextStyle(fontSize: 7, color: mutedCol)),
+                        if (o.deliveryPhone != null && o.deliveryPhone!.isNotEmpty)
+                          pw.Text('Tél : ${o.deliveryPhone}', style: const pw.TextStyle(fontSize: 7, color: mutedCol)),
+                        if (o.deliveryAddress != null && o.deliveryAddress!.isNotEmpty)
+                          pw.Text(o.deliveryAddress!, style: const pw.TextStyle(fontSize: 7, color: mutedCol)),
+                      ],
+                    ),
+                  ),
+                  pw.Expanded(
+                    flex: 2,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(modeLabel(o.orderType), style: pw.TextStyle(font: fontBold, fontSize: 7.5, color: inkCol)),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          statusLabel(o.status),
+                          style: pw.TextStyle(
+                            font: fontBold,
+                            fontSize: 7.5,
+                            color: o.status == 'terminee' ? greenCol : amberCol,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  pw.Expanded(
+                    flex: 6,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        for (final l in o.lines) ...[
+                          pw.Row(
+                            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                            children: [
+                              pw.Expanded(
+                                child: pw.Text(
+                                  '${l.quantity}× ${l.name}',
+                                  style: pw.TextStyle(font: fontBold, fontSize: 8, color: inkCol),
+                                ),
+                              ),
+                              pw.Text(
+                                fmtPrice(l.lineTotal),
+                                style: const pw.TextStyle(fontSize: 7.5, color: mutedCol),
+                              ),
+                            ],
+                          ),
+                          if (l.options.isNotEmpty || l.removed.isNotEmpty || (l.notes != null && l.notes!.isNotEmpty))
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.only(left: 6, top: 1, bottom: 2),
+                              child: pw.Text(
+                                [
+                                  ...l.options,
+                                  ...l.removed.map((r) => 'Sans $r'),
+                                  if (l.notes != null && l.notes!.isNotEmpty) l.notes!,
+                                ].join(' • '),
+                                style: const pw.TextStyle(fontSize: 7, color: mutedCol),
+                              ),
+                            ),
+                        ],
+                        if (o.notes != null && o.notes!.trim().isNotEmpty)
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.only(top: 2),
+                            child: pw.Text(
+                              'Note cuisine : ${o.notes!.trim()}',
+                              style: pw.TextStyle(font: fontBold, fontSize: 7, color: amberCol),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  pw.Expanded(
+                    flex: 2,
+                    child: pw.Text(
+                      fmtPrice(o.totalTTC),
+                      textAlign: pw.TextAlign.right,
+                      style: pw.TextStyle(font: fontBold, fontSize: 8.5, color: inkCol),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Total Row
+          if (orders.isNotEmpty)
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+              decoration: const pw.BoxDecoration(
+                color: kpiBg,
+                border: pw.Border(top: pw.BorderSide(color: brandDark, width: 1.5)),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'TOTAL GÉNÉRAL (${orders.length} commandes — dont $paidCount encaissées : ${fmtPrice(totalRev)})',
+                    style: pw.TextStyle(font: fontBold, fontSize: 9, color: brandDark),
+                  ),
+                  pw.Text(
+                    fmtPrice(totalAllTTC),
+                    style: pw.TextStyle(font: fontBold, fontSize: 10, color: brandDark),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+
+    final bytes = await doc.save();
+    await Printing.layoutPdf(
+      onLayout: (format) => bytes,
+      name: 'Cloture_Caisse_${fmtDate(from).replaceAll('/', '-')}',
+    );
+  }
+
   // ────────────────────────── Divider Helpers ──────────────────────────
 
   static pw.Widget _dividerSolid({double width = 0.8}) {

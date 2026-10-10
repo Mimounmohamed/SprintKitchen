@@ -193,12 +193,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _loadOrders();
   }
 
-  void _comingSoon(String what) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$what : bientôt disponible.')),
-    );
-  }
-
   // ─────────────────────────── formatting ───────────────────────────
 
   /// Open Sans text style; [lineHeight] is in px (Figma) and converted to
@@ -534,7 +528,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         SizedBox(
           height: 44,
           child: OutlinedButton.icon(
-            onPressed: () => _comingSoon('Impression de la clôture'),
+            onPressed: _printCloture,
             icon: const Icon(Icons.print_outlined, size: 18),
             label: const Text(
               'Imprimer Clôture',
@@ -551,6 +545,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _printCloture() async {
+    try {
+      final allPage = await _service.fetchOrders(
+        from: _from,
+        to: _to,
+        page: 1,
+        limit: 1000,
+      );
+      await ReceiptPrinterService.printSessionClotureReport(
+        orders: allPage.orders,
+        summary: _summary,
+        from: _from,
+        to: _to,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text('Erreur lors de la génération de la clôture : $e'),
+        ),
+      );
+    }
   }
 
   Widget _buildTabPill(_Tab tab) {
@@ -1141,11 +1160,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(isAEncaisser ? Icons.payments_outlined : Icons.check,
-                size: 14, color: Colors.white),
+            const Icon(Icons.check, size: 14, color: Colors.white),
             const SizedBox(width: 4),
             Text(
-              isAEncaisser ? 'Encaisser' : 'Terminer',
+              isAEncaisser ? 'Payé' : 'Terminer',
               style: _os(12, FontWeight.w600, Colors.white, lineHeight: 16),
             ),
           ],

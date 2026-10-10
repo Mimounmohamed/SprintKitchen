@@ -9,7 +9,7 @@ class HistoryService {
   /// [from] / [to] are LOCAL times; they are sent as UTC ISO timestamps so
   /// "today" means today on the cashier's PC, not on the server.
   Future<OrdersPage> fetchOrders({
-    required String status,
+    String? status,
     required DateTime from,
     required DateTime to,
     String? search,
@@ -18,7 +18,7 @@ class HistoryService {
   }) async {
     final term = (search ?? '').replaceAll('#', '').trim();
     final json = await _client.get('/orders', query: {
-      'status': status,
+      if (status != null && status.isNotEmpty) 'status': status,
       'from': from.toUtc().toIso8601String(),
       'to': to.toUtc().toIso8601String(),
       'page': '$page',

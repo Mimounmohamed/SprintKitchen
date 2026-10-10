@@ -198,7 +198,7 @@ class HistoryOrder {
   String? get prepDurationString {
     final d = prepDuration;
     if (d == null) {
-      if (status == 'en_attente' || status == 'a_encaisser') {
+      if (status == 'en_attente' || status == 'en_cours') {
         final elapsed = DateTime.now().difference(kdsSentAt ?? createdAt);
         final m = elapsed.inMinutes;
         return m > 0 ? '$m min' : '< 1 min';
@@ -206,6 +206,7 @@ class HistoryOrder {
       return null;
     }
     final totalSec = d.inSeconds;
+    if (totalSec == 0) return '< 1 min';
     if (totalSec < 60) return '${totalSec}s';
     final m = d.inMinutes;
     final s = totalSec % 60;
@@ -259,6 +260,7 @@ class HistoryOrder {
   factory HistoryOrder.fromJson(Map<String, dynamic> json) {
     final register = json['registerId'];
     final delivery = json['delivery'];
+    final statusStr = json['status'] as String? ?? '';
 
     String? dAddress;
     if (delivery is Map) {
@@ -272,7 +274,11 @@ class HistoryOrder {
     final rawSent = json['kdsSentAt'];
     final DateTime? kdsSentAt = rawSent != null ? DateTime.tryParse(rawSent.toString())?.toLocal() : null;
 
-    final rawReady = json['kdsReadyAt'];
+    final rawReady = json['kdsReadyAt'] ??
+        json['completedAt'] ??
+        ((statusStr == 'a_encaisser' || statusStr == 'terminee')
+            ? (json['updatedAt'] ?? json['editedAt'])
+            : null);
     final DateTime? kdsReadyAt = rawReady != null ? DateTime.tryParse(rawReady.toString())?.toLocal() : null;
 
     final rawCompleted = json['completedAt'];
@@ -285,7 +291,7 @@ class HistoryOrder {
       kdsSentAt: kdsSentAt,
       kdsReadyAt: kdsReadyAt,
       completedAt: completedAt,
-      status: json['status'] as String? ?? '',
+      status: statusStr,
       orderType: json['orderType'] as String? ?? 'sur_place',
       totalTTC: (json['totalTTC'] as num?)?.toDouble() ?? 0,
       subtotalHT: (json['subtotalHT'] as num?)?.toDouble() ?? 0,
