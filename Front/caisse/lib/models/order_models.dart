@@ -285,26 +285,26 @@ class HistoryOrder {
     final DateTime? completedAt = rawCompleted != null ? DateTime.tryParse(rawCompleted.toString())?.toLocal() : null;
 
     return HistoryOrder(
-      id: json['_id'] as String,
-      ticketNumber: json['ticketNumber'] as String? ?? '',
-      createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
+      id: json['_id']?.toString() ?? '',
+      ticketNumber: json['ticketNumber']?.toString() ?? '',
+      createdAt: (DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now()).toLocal(),
       kdsSentAt: kdsSentAt,
       kdsReadyAt: kdsReadyAt,
       completedAt: completedAt,
       status: statusStr,
-      orderType: json['orderType'] as String? ?? 'sur_place',
+      orderType: json['orderType']?.toString() ?? 'sur_place',
       totalTTC: (json['totalTTC'] as num?)?.toDouble() ?? 0,
       subtotalHT: (json['subtotalHT'] as num?)?.toDouble() ?? 0,
       tvaAmount: (json['tvaAmount'] as num?)?.toDouble() ?? 0,
       // registerId is populated ({_id, name, type}) by GET /api/orders.
-      registerName: register is Map ? register['name'] as String? : null,
-      clientName: json['clientName'] as String?,
+      registerName: register is Map ? register['name']?.toString() : null,
+      clientName: json['clientName']?.toString(),
       tableNumber: json['tableNumber']?.toString(),
-      buzzerNumber: json['buzzerNumber'] as String?,
-      deliveryName: delivery is Map ? (delivery['fullName'] ?? delivery['name']) as String? : null,
+      buzzerNumber: json['buzzerNumber']?.toString(),
+      deliveryName: delivery is Map ? (delivery['fullName'] ?? delivery['name'])?.toString() : null,
       deliveryPhone: delivery is Map ? delivery['phone']?.toString() : null,
       deliveryAddress: dAddress,
-      notes: json['notes'] as String?,
+      notes: json['notes']?.toString(),
       lines: (json['items'] as List<dynamic>? ?? [])
           .map((e) => HistoryOrderLine.fromJson(e as Map<String, dynamic>))
           .toList(),

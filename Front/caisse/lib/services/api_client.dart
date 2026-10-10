@@ -17,7 +17,8 @@ class ApiException implements Exception {
 /// Thin wrapper around the backend's JSON API with automatic
 /// token authentication (matches the admin portal's silent login).
 class ApiClient {
-  ApiClient({http.Client? client}) : _client = client ?? http.Client();
+  ApiClient({http.Client? client}) : _client = client ?? _sharedClient;
+  static final http.Client _sharedClient = http.Client();
   final http.Client _client;
 
   static const _readTimeout = Duration(seconds: 10);

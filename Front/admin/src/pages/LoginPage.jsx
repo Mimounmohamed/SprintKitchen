@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
-
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { authService } from "../services";
 
 const C = {
   bg: "#F5F4F0", cardBg: "#FFFFFF", ink: "#1C1917", brown: "#2E2117",
@@ -23,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const val = username.trim();
-      const res = await axios.post(`${API}/auth/login`, { username: val, email: val, identifier: val, password });
+      const res = await authService.login({ username: val, email: val, identifier: val, password });
       const token = res.data?.token || res.data?.data?.token;
       if (!token) throw new Error("Token non reçu");
       localStorage.setItem("sk_token", token);

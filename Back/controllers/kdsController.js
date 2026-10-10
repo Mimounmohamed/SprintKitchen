@@ -131,7 +131,7 @@ exports.updateKdsItemStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Commande introuvable' });
     }
 
-    const item = order.items.id(itemId) || order.items[parseInt(itemId, 10)];
+    const item = order.items.id(itemId) || (/^\d+$/.test(itemId) ? order.items[Number(itemId)] : null);
     if (!item) {
       return res.status(404).json({ success: false, message: 'Article introuvable' });
     }
@@ -139,10 +139,10 @@ exports.updateKdsItemStatus = async (req, res) => {
     item.kdsStatus = kdsStatus;
 
     // Check if all items are ready -> automatically advance order if en_attente
-    const allReady = order.items.every(i => i.kdsStatus === 'ready' || i.kdsStatus === 'served');
+    const allReady = order.items.length > 0 && order.items.every(i => i.kdsStatus === 'ready' || i.kdsStatus === 'served');
     if (allReady && order.status === 'en_attente') {
       order.kdsStatus = 'ready';
-      order.kdsReadyAt = new Date();
+      order.kdsReadyAt = order.kdsReadyAt || new Date();
       order.status = 'a_encaisser';
     }
 

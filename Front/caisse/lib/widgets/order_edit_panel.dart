@@ -366,21 +366,11 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
         if (details.orderType != null) {
           _orderType = details.orderType!;
         }
-        if (details.tableNumber != null && details.tableNumber!.isNotEmpty) {
-          _tableNumber = details.tableNumber;
-        }
-        if (details.clientName != null) {
-          _clientName = details.clientName;
-        }
-        if (details.deliveryPhone != null) {
-          _deliveryPhone = details.deliveryPhone;
-        }
-        if (details.deliveryAddress != null) {
-          _deliveryAddress = details.deliveryAddress;
-        }
-        if (details.notes != null) {
-          _notes = details.notes!.isEmpty ? null : details.notes;
-        }
+        _tableNumber = details.tableNumber;
+        _clientName = details.clientName;
+        _deliveryPhone = details.deliveryPhone;
+        _deliveryAddress = details.deliveryAddress;
+        _notes = details.notes;
       });
     }
   }
@@ -440,6 +430,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
         ],
       ),
     );
+    controller.dispose();
 
     if (result != null && mounted) {
       setState(() {
@@ -505,6 +496,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
         ],
       ),
     );
+    controller.dispose();
 
     if (result != null && mounted) {
       setState(() {
@@ -569,6 +561,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
         ],
       ),
     );
+    controller.dispose();
 
     if (result != null && mounted) {
       setState(() {
@@ -634,6 +627,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
         ],
       ),
     );
+    controller.dispose();
 
     if (result != null && mounted) {
       setState(() {
@@ -704,6 +698,7 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
         ],
       ),
     );
+    controller.dispose();
 
     if (result != null && mounted) {
       setState(() {

@@ -22,6 +22,9 @@ exports.register = async (req, res) => {
     const username = clean(req.body.username) || undefined;
     const email = clean(req.body.email) || undefined;
 
+    if (!name || !String(name).trim() || !password) {
+      return res.status(400).json({ success: false, message: 'Name and password are required' });
+    }
     if (!username && !email) {
       return res.status(400).json({ success: false, message: 'Username or email is required' });
     }
@@ -32,11 +35,15 @@ exports.register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email already in use' });
     }
 
-    const user = await User.create({ name, username, email, passwordHash: password, role, storeId, pin });
+    const user = await User.create({ name: String(name).trim(), username, email, passwordHash: password, role, storeId, pin });
     const token = generateToken(user._id);
-    res.status(201).json({ success: true, token, user: { id: user._id, name, username, email, role: user.role } });
+    res.status(201).json({
+      success: true,
+      token,
+      user: { id: user._id, name: user.name, username, email, role: user.role, storeId: user.storeId },
+    });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 
@@ -75,6 +82,11 @@ exports.login = async (req, res) => {
 // @route   GET /api/auth/me
 // @access  Private
 exports.getMe = async (req, res) => {
-  const user = await User.findById(req.user.id).select('-passwordHash');
-  res.json({ success: true, data: user, token: generateToken(user._id) });
+  try {
+    const user = await User.findById(req.user.id).select('-passwordHash');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    res.json({ success: true, data: user, token: generateToken(user._id) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 };

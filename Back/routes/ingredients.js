@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router  = express.Router();
 const {
   getIngredients, getFamilies, getIngredient,
@@ -8,8 +8,9 @@ const {
 
 router.get('/families',              getFamilies);
 router.get('/',                      getIngredients);
-router.get('/:id',                   getIngredient);
+router.patch('/bulk-availability',   bulkAvailability);
 router.post('/bulk-availability',    bulkAvailability);
+router.get('/:id',                   getIngredient);
 router.post('/',                     createIngredient);
 router.put('/:id',                   updateIngredient);
 router.patch('/:id/availability',    updateAvailability);

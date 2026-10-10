@@ -156,28 +156,28 @@ const OrderSchema = new mongoose.Schema(
 );
 
 // ── Auto-generate ticketNumber before save ────────────────────────────────────
-OrderSchema.pre('save', async function (next) {
-  if (this.ticketNumber) return next();
-  try {
-    const counter = await Counter.findByIdAndUpdate(
-      'orderTicket',
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true }
-    );
-    this.ticketNumber = String(counter.seq).padStart(6, '0');
-    next();
-  } catch (err) {
-    next(err);
-  }
+OrderSchema.pre('save', async function () {
+  if (this.ticketNumber) return;
+  const counter = await Counter.findByIdAndUpdate(
+    'orderTicket',
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  this.ticketNumber = String(counter.seq).padStart(6, '0');
 });
 
 // ── Recalculate totals ────────────────────────────────────────────────────────
 OrderSchema.methods.recalculateTotals = function () {
-  this.totalTTC = this.items.reduce((sum, item) => sum + item.lineTotal, 0);
-  if (this.discount) {
+  this.totalTTC = (this.items || []).reduce((sum, item) => sum + (Number(item.lineTotal) || 0), 0);
+  if (
+    this.discount &&
+    this.discount.type &&
+    typeof this.discount.value === 'number' &&
+    !Number.isNaN(this.discount.value)
+  ) {
     if (this.discount.type === 'percent') {
-      this.totalTTC = this.totalTTC * (1 - this.discount.value / 100);
-    } else {
+      this.totalTTC = Math.max(0, this.totalTTC * (1 - this.discount.value / 100));
+    } else if (this.discount.type === 'fixed') {
       this.totalTTC = Math.max(0, this.totalTTC - this.discount.value);
     }
   }

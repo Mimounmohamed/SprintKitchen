@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, RefreshCw, Circle, UtensilsCrossed, Plus } from "lucide-react";
+import { ArrowLeft, Search, RefreshCw, Circle, Plus } from "lucide-react";
 import { ingredientService, ingredientFamilyService } from "../services";
 
 const C = {
@@ -161,6 +161,7 @@ function IngredientModal({ ingredient, ingredients = [], families, defaultFamily
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) { setError("Le nom est requis."); return; }
+    if (!family)  { setError("Veuillez d'abord créer ou choisir une famille."); return; }
     if (ingredients?.some(i => i._id !== ingredient?._id && i.name?.trim().toLowerCase() === trimmed.toLowerCase())) {
       setError("Un ingrédient avec ce nom existe déjà.");
       return;
@@ -569,8 +570,10 @@ export default function InventairePage() {
       if (saved.family === activeFamily) {
         setIngredients(prev => [...prev, saved]);
       }
-    } else {
+    } else if (saved.family === activeFamily) {
       setIngredients(prev => prev.map(i => i._id === saved._id ? saved : i));
+    } else {
+      setIngredients(prev => prev.filter(i => i._id !== saved._id));
     }
     setRefreshKey(k => k + 1);
   };
@@ -1037,6 +1040,7 @@ export default function InventairePage() {
         {/* ── Mobile family tabs ── */}
         {mobile && (
           <div
+            className="sk-fam-tabs"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1100,6 +1104,27 @@ export default function InventairePage() {
                 </button>
               );
             })}
+            <button
+              onClick={() => setModal({ type: 'family', data: null })}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '6px 12px',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+                background: C.cardBg,
+                color: C.muted,
+                border: `1px dashed ${C.borderDark}`,
+              }}
+            >
+              + Famille
+            </button>
           </div>
         )}
 
@@ -1223,7 +1248,7 @@ export default function InventairePage() {
                         style={{
                           fontSize: 14,
                           fontWeight: 700,
-                          color: epuise ? C.ink : C.ink,
+                          color: epuise ? '#A8978F' : C.ink,
                           textDecoration: epuise ? 'line-through' : 'none',
                           textDecorationColor: '#B5A9A2',
                           flex: 1,

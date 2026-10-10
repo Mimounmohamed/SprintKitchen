@@ -487,7 +487,10 @@ class ReceiptPrinterService {
                 for (final rem in it.removed)
                   pw.Padding(
                     padding: const pw.EdgeInsets.only(left: 22, top: 1),
-                    child: pw.Text('x $rem', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+                    child: pw.Text(
+                      'x Sans ${rem.replaceFirst(RegExp(r'^sans\s+', caseSensitive: false), '').trim()}',
+                      style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+                    ),
                   ),
                 // Item note
                 if (it.notes != null && it.notes!.trim().isNotEmpty)

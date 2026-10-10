@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Book, Clock, BarChart2, Package,
-  ArrowRight, ChevronRight, Check, AlertTriangle, Circle, User, TrendingUp, Menu as MenuIcon, LogOut,
+  ArrowRight, ChevronRight, Check, AlertTriangle, Circle, LogOut,
 } from "lucide-react";
 import { dashboardService } from "../services";
 
@@ -134,10 +134,6 @@ export default function SprintKitchenAdminHub() {
   const caFmt = kpi
     ? kpi.revenue.today.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " DA"
     : "—";
-  const vsPct = kpi?.revenue.vsLastYear != null
-    ? (kpi.revenue.vsLastYear >= 0 ? "+" : "") + kpi.revenue.vsLastYear + "% vs N-1"
-    : "vs N-1";
-  const vsPctPositive = (kpi?.revenue.vsLastYear ?? 0) >= 0;
   const ticketsFmt  = kpi ? String(kpi.tickets.today)   : "—";
   const ruptureFmt  = kpi ? String(kpi.rupture.count)   : "—";
   const ruptureWarn = (kpi?.rupture.count ?? 0) > 0;
@@ -153,9 +149,6 @@ export default function SprintKitchenAdminHub() {
     <div style={shell}>
       {/* Mobile header */}
       <header style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 16px", borderBottom:`1px solid ${C.border}`, background:C.cardBg, flexShrink:0 }}>
-        <button style={{ background:"none", border:"none", cursor:"pointer", padding:4, color:C.ink, display:"flex" }}>
-          <MenuIcon size={22}/>
-        </button>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <img
             src="/bobo_portrait.jpg"
@@ -235,7 +228,7 @@ export default function SprintKitchenAdminHub() {
         <ModuleCard mobile
           icon={<Clock size={20}/>} iconBg="#F1F0EC" iconColor={C.ink}
           pill={<Pill small bg="#F1F0EC" color={C.muted}>Archives</Pill>}
-          eyebrow="Commandes &amp; Reçus" title="Order History"
+          eyebrow="Commandes &amp; Reçus" title="Historique des Commandes"
           description="Consultez les tickets et gérez les remboursements."
           checklist={<><ChecklistItem>Réimpression tickets</ChecklistItem><ChecklistItem>Rapprochement</ChecklistItem></>}
           cta="CONSULTER L'HISTORIQUE" ctaIcon={<ChevronRight size={15}/>} ctaStyle="secondary"
@@ -246,7 +239,7 @@ export default function SprintKitchenAdminHub() {
           pill={<Pill small bg="#F1F0EC" color={C.muted}>Clôture Z</Pill>}
           eyebrow="Rapports &amp; Stats" title="Rapports &amp; Statistiques"
           description="Analysez les ventes et exportez vos données."
-          checklist={<><ChecklistItem>Marges &amp; Ventes</ChecklistItem><ChecklistItem>Export .CSV</ChecklistItem></>}
+          checklist={<><ChecklistItem>Marges &amp; Ventes</ChecklistItem><ChecklistItem>Export .PDF</ChecklistItem></>}
           cta="VOIR LES STATISTIQUES" ctaIcon={<ChevronRight size={15}/>} ctaStyle="secondary"
           onClick={() => navigate("/statistiques")}
         />
@@ -325,7 +318,7 @@ export default function SprintKitchenAdminHub() {
           <ModuleCard
             icon={<Book size={24}/>} iconBg={C.brown} iconColor={C.yellow}
             pill={<Pill small dot dotColor="#C98A1A" bg={C.yellowBg} color="#946200">CATALOGUE &amp; PRIX</Pill>}
-            eyebrow="Gestion du menu" title="Éditer le Menu / Catalog"
+            eyebrow="Gestion du menu" title="Éditer le Menu / Catalogue"
             description="Ajoutez de nouveaux articles, modifiez les prix, configurez les formules et mettez à jour les visuels."
             checklist={<><ChecklistItem>Modification des prix en temps réel</ChecklistItem><ChecklistItem>Gestion des catégories et options</ChecklistItem></>}
             highlight cta="MODIFIER LE MENU" ctaIcon={<ArrowRight size={16}/>} ctaStyle="primary"
@@ -363,7 +356,7 @@ export default function SprintKitchenAdminHub() {
 
       <footer style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 40px", borderTop:`1px solid ${C.border}`, flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, fontWeight:600 }}>
-          <Circle size={7} fill={C.green} color={C.green}/> Connecté <span style={{ color:C.muted }}>·</span>
+          <Circle size={7} fill={C.green} color={C.green}/> Connecté
         </div>
         <span style={{ fontSize:12, color:C.muted }}>Bobo's Admin v1.00</span>
       </footer>

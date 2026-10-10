@@ -18,14 +18,15 @@ const CategorySchema = new mongoose.Schema(
 );
 
 // Auto-generate slug from name
-CategorySchema.pre('save', function (next) {
+CategorySchema.pre('save', function () {
   if (this.isModified('name') && !this.slug) {
     this.slug = this.name
       .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, '-')
       .replace(/[^a-z0-9-]/g, '');
   }
-  next();
 });
 
 module.exports = mongoose.model('Category', CategorySchema);

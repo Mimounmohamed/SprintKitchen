@@ -1,6 +1,8 @@
 const Product = require('../models/Product');
 const StockLog = require('../models/StockLog');
 
+const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // @desc  Get all products (with optional filters + search + pagination)
 // @route GET /api/products
 exports.getProducts = async (req, res) => {
@@ -10,10 +12,10 @@ exports.getProducts = async (req, res) => {
     if (req.query.storeId)     filter.storeId     = req.query.storeId;
     if (req.query.availability) filter.availability = req.query.availability;
     if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
-    if (req.query.search) filter.name = { $regex: req.query.search, $options: 'i' };
+    if (req.query.search) filter.name = { $regex: escapeRegex(req.query.search), $options: 'i' };
 
     const page  = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const limit = Math.min(200, parseInt(req.query.limit) || 20);
     const skip  = (page - 1) * limit;
 
     const [products, total] = await Promise.all([
@@ -145,9 +147,21 @@ exports.bulkAvailability = async (req, res) => {
   try {
     const { categoryId, availability } = req.body;
     const VALID = ['available', 'epuise', 'bloque_caisse_borne'];
-    if (!VALID.includes(availability))
+    if (!categoryId) {
+      return res.status(400).json({ success: false, message: 'categoryId is required' });
+    }
+    if (!VALID.includes(availability)) {
       return res.status(400).json({ success: false, message: 'Invalid availability value' });
-    await Product.updateMany({ categoryId }, { availability, isOnList86: availability !== 'available' });
+    }
+    await Product.updateMany(
+      { categoryId, isActive: { $ne: false } },
+      {
+        availability,
+        isOnList86: availability !== 'available',
+        blockedOnCaisse: availability === 'bloque_caisse_borne',
+        blockedOnBorne: availability === 'bloque_caisse_borne',
+      }
+    );
     res.json({ success: true, message: `All products in category set to ${availability}` });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });

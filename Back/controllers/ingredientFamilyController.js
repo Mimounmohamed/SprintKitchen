@@ -70,6 +70,10 @@ exports.createFamily = async (req, res, next) => {
 /* PUT /api/ingredient-families/:id */
 exports.updateFamily = async (req, res, next) => {
   try {
+    const existingDoc = await IngredientFamily.findById(req.params.id);
+    if (!existingDoc) return res.status(404).json({ success: false, message: 'Family not found' });
+    const oldSlug = existingDoc.slug;
+
     if (req.body.name) {
       const name = req.body.name.trim();
       if (!name) {
@@ -95,7 +99,9 @@ exports.updateFamily = async (req, res, next) => {
       req.body,
       { new: true, runValidators: true }
     );
-    if (!family) return res.status(404).json({ success: false, message: 'Family not found' });
+    if (family.slug && oldSlug && family.slug !== oldSlug) {
+      await Ingredient.updateMany({ family: oldSlug }, { family: family.slug });
+    }
     res.json({ success: true, data: family });
   } catch (err) { next(err); }
 };

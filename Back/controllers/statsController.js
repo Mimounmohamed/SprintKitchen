@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Order   = require('../models/Order');
 const Payment = require('../models/Payment');
 
@@ -6,9 +7,25 @@ function parseDateRange(query) {
   const now  = new Date();
   const from = query.from ? new Date(query.from) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const to   = query.to   ? new Date(query.to)   : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  if (query.to && /^\d{4}-\d{2}-\d{2}$/.test(String(query.to).trim())) {
+    to.setUTCHours(23, 59, 59, 999);
+  }
   return { from, to };
 }
-function regF(q) { return q.registerId ? { registerId: q.registerId } : {}; }
+function regF(q) {
+  const filter = {};
+  if (q.registerId) {
+    filter.registerId = mongoose.Types.ObjectId.isValid(q.registerId)
+      ? new mongoose.Types.ObjectId(q.registerId)
+      : q.registerId;
+  }
+  if (q.storeId) {
+    filter.storeId = mongoose.Types.ObjectId.isValid(q.storeId)
+      ? new mongoose.Types.ObjectId(q.storeId)
+      : q.storeId;
+  }
+  return filter;
+}
 
 const PAID_ORDER_STATUSES = ['terminee', 'en_attente'];
 

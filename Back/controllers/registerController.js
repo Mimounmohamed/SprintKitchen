@@ -61,8 +61,12 @@ exports.closeSession = async (req, res) => {
     const { closingFloat } = req.body;
     const register = await Register.findById(req.params.id);
     if (!register) return res.status(404).json({ success: false, message: 'Register not found' });
+    if (!register.currentSession) {
+      register.currentSession = {};
+    }
     register.currentSession.closedAt = new Date();
     register.currentSession.closingFloat = closingFloat;
+    register.lastActivity = new Date();
     await register.save();
     res.json({ success: true, data: register });
   } catch (err) {

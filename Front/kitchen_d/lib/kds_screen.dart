@@ -256,7 +256,7 @@ class KitchenOrder {
   final OrderMode mode;
   final DateTime createdAt;
   final DateTime? kdsSentAt;
-  final DateTime? finishedAt;
+  DateTime? finishedAt;
   final List<KdsItem> items;
   OrderStatus status;
   String? note;
@@ -401,7 +401,7 @@ class KitchenOrder {
       ticketNumber: ticketNumber,
       mode:         mode,
       createdAt:    ts != null
-          ? DateTime.tryParse(ts as String) ?? DateTime.now()
+          ? DateTime.tryParse(ts.toString()) ?? DateTime.now()
           : DateTime.now(),
       kdsSentAt:    kdsSentAt,
       finishedAt:   finishedAt,
@@ -426,8 +426,10 @@ class KitchenOrder {
 
 /* ─── API ────────────────────────────────────────────────── */
 class KdsApi {
+  static final http.Client _client = http.Client();
+
   static Future<List<KitchenOrder>> fetchOrders() async {
-    final res = await http
+    final res = await _client
         .get(Uri.parse('$_kBaseUrl/orders?limit=100'))
         .timeout(const Duration(seconds: 8));
     if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
@@ -446,7 +448,7 @@ class KdsApi {
 
       final ts = j['kdsSentAt'] ?? j['createdAt'];
       final dt = ts != null
-          ? (DateTime.tryParse(ts as String) ?? DateTime.now())
+          ? (DateTime.tryParse(ts.toString()) ?? DateTime.now())
           : DateTime.now();
 
       // If completed / served, only include if from today
@@ -466,7 +468,7 @@ class KdsApi {
   static Future<void> advanceOrder(String id, String kdsStatus) async {
     // 1. Try dedicated KDS endpoint first
     try {
-      final res = await http
+      final res = await _client
           .patch(
             Uri.parse('$_kBaseUrl/kds/orders/$id/kds-status'),
             headers: {'Content-Type': 'application/json'},
@@ -490,7 +492,7 @@ class KdsApi {
       body['completedAt'] = nowIso;
     }
 
-    final res = await http
+    final res = await _client
         .put(
           Uri.parse('$_kBaseUrl/orders/$id'),
           headers: {'Content-Type': 'application/json'},
@@ -511,17 +513,26 @@ class KdsApi {
     final item = order.items[itemIndex];
     item.kdsStatus = newStatus;
 
+    final allReady = order.items.isNotEmpty && order.items.every((it) => it.isReady);
+
     // 1. Try dedicated endpoint PATCH /kds/orders/:orderId/items/:itemId/kds-status
     if (item.id != null && item.id!.isNotEmpty) {
       try {
-        final res = await http
+        final res = await _client
             .patch(
               Uri.parse('$_kBaseUrl/kds/orders/${order.id}/items/${item.id}/kds-status'),
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode({'kdsStatus': newStatus}),
             )
             .timeout(const Duration(seconds: 4));
-        if (res.statusCode == 200) return;
+        if (res.statusCode == 200) {
+          if (allReady && (order.status == OrderStatus.attente || order.status == OrderStatus.preparation)) {
+            order.status = OrderStatus.terminee;
+            order.finishedAt ??= DateTime.now();
+            order.note = 'PR\u00caT';
+          }
+          return;
+        }
       } catch (_) {
         // Fallback below
       }
@@ -534,16 +545,16 @@ class KdsApi {
     };
 
     // If all items are ready, also set order kdsStatus to ready
-    final allReady = order.items.every((it) => it.isReady);
-    if (allReady && order.status == OrderStatus.attente) {
+    if (allReady && (order.status == OrderStatus.attente || order.status == OrderStatus.preparation)) {
       body['kdsStatus'] = 'ready';
       body['status'] = 'a_encaisser';
       body['kdsReadyAt'] = DateTime.now().toUtc().toIso8601String();
       order.status = OrderStatus.terminee;
+      order.finishedAt ??= DateTime.now();
       order.note = 'PR\u00caT';
     }
 
-    final res = await http
+    final res = await _client
         .put(
           Uri.parse('$_kBaseUrl/orders/${order.id}'),
           headers: {'Content-Type': 'application/json'},
@@ -653,7 +664,8 @@ class _KdsState extends State<KdsScreen> {
         order.status = OrderStatus.preparation;
       } else {
         order.status = OrderStatus.terminee;
-        order.note = 'TERMIN\u00c9';
+        order.finishedAt ??= DateTime.now();
+        order.note = nextKds == 'ready' ? 'PR\u00caT' : 'TERMIN\u00c9';
       }
     });
 

@@ -18,7 +18,7 @@ class IngredientFamily {
 
   factory IngredientFamily.fromJson(Map<String, dynamic> json) =>
       IngredientFamily(
-        id: json['_id'] as String,
+        id: json['_id']?.toString() ?? '',
         name: json['name'] as String? ?? '',
         slug: json['slug'] as String? ?? '',
         emoji: json['emoji'] as String? ?? '📦',
@@ -83,7 +83,7 @@ class Ingredient {
       );
 
   factory Ingredient.fromJson(Map<String, dynamic> json) => Ingredient(
-        id: json['_id'] as String,
+        id: json['_id']?.toString() ?? '',
         name: json['name'] as String? ?? '',
         family: json['family'] as String? ?? '',
         unit: json['unit'] as String? ?? 'unité',

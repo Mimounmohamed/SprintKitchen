@@ -17,6 +17,7 @@ import {
   Phone,
   MapPin,
   X,
+  XCircle,
   Undo2,
   UtensilsCrossed,
   WifiOff,
@@ -737,11 +738,11 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
   const ord = detail || order;
   const mode = getModeStyle(ord.orderType);
   const statusStyle = getStatusStyle(ord.status);
-  const clientName = ord.clientName || ord.delivery?.fullName || 'Client Passant';
+  const clientName = ord.clientName || ord.delivery?.fullName || ord.delivery?.name || ord.customerId?.fullName || 'Client Passant';
   const rawTable = ord.tableNumber || ord.buzzerNumber || null;
   const cleanTable = rawTable ? String(rawTable).replace(/^(buzzer\s*#?|table\s*)/i, '').trim() : null;
   const tableDisplay = cleanTable ? `Table ${cleanTable}` : '—';
-  const phoneDisplay = ord.delivery?.phone || '—';
+  const phoneDisplay = ord.delivery?.phone || ord.clientPhone || ord.customerId?.phone || '—';
   const addressParts = [
     ord.delivery?.address,
     [ord.delivery?.postalCode, ord.delivery?.city].filter(Boolean).join(' ')
@@ -859,7 +860,13 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
             </button>
           </div>
           <div style={{ fontSize: 12, color: COLORS.stone500, marginTop: 4 }}>
-            Historique de vente • Transaction confirmée
+            {ord.status === 'annulee'
+              ? 'Historique de vente • Commande annulée / remboursée'
+              : ord.status === 'a_encaisser'
+              ? "Historique de vente • En attente d'encaissement"
+              : ord.status === 'en_attente'
+              ? 'Historique de vente • En préparation en cuisine'
+              : 'Historique de vente • Transaction confirmée'}
           </div>
         </div>
 
@@ -1184,7 +1191,11 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
                   }}
                 >
                   <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.brandDark }}>
-                    {ord.status === 'a_encaisser' ? 'TOTAL À ENCAISSER' : 'TOTAL PAYÉ'}
+                    {ord.status === 'annulee'
+                      ? 'TOTAL ANNULÉ'
+                      : ord.status === 'a_encaisser'
+                      ? 'TOTAL À ENCAISSER'
+                      : 'TOTAL PAYÉ'}
                   </span>
                   <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.brandDark }}>
                     {fmtPrice(ord.totalTTC)}
@@ -1193,7 +1204,31 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
               </div>
 
               {/* Payment Card */}
-              {payment ? (
+              {ord.status === 'annulee' ? (
+                <div
+                  style={{
+                    background: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <XCircle size={20} color="#DC2626" style={{ flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#991B1B' }}>
+                      Commande annulée / remboursée
+                    </div>
+                    {ord.cancelReason && (
+                      <div style={{ fontSize: 12, color: '#B91C1C', marginTop: 1 }}>
+                        Motif : {ord.cancelReason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : payment ? (
                 <div
                   style={{
                     background: '#F0FAF4',
@@ -2984,7 +3019,7 @@ export default function HistoriquePage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setSelectedOrder(o);
+                                      setDrawerOrder(o);
                                     }}
                                     title="Modifier la commande"
                                     style={{
@@ -3051,30 +3086,33 @@ export default function HistoriquePage() {
                   Précédent
                 </button>
 
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  const pNum = i + 1;
-                  const isCurrent = pNum === page;
-                  return (
-                    <button
-                      key={pNum}
-                      onClick={() => setPage(pNum)}
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 6,
-                        border: isCurrent ? `1px solid ${COLORS.brandDark}` : `1px solid ${COLORS.border}`,
-                        background: isCurrent ? COLORS.brandDark : '#FFFFFF',
-                        color: isCurrent ? '#FFFFFF' : COLORS.ink,
-                        fontSize: 12,
-                        fontWeight: isCurrent ? 700 : 600,
-                        cursor: 'pointer',
-                        fontFamily: FONT_BODY,
-                      }}
-                    >
-                      {pNum}
-                    </button>
-                  );
-                })}
+                {(() => {
+                  const startPage = Math.max(1, Math.min(page - 2, totalPages - 4));
+                  return Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    const pNum = startPage + i;
+                    const isCurrent = pNum === page;
+                    return (
+                      <button
+                        key={pNum}
+                        onClick={() => setPage(pNum)}
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 6,
+                          border: isCurrent ? `1px solid ${COLORS.brandDark}` : `1px solid ${COLORS.border}`,
+                          background: isCurrent ? COLORS.brandDark : '#FFFFFF',
+                          color: isCurrent ? '#FFFFFF' : COLORS.ink,
+                          fontSize: 12,
+                          fontWeight: isCurrent ? 700 : 600,
+                          cursor: 'pointer',
+                          fontFamily: FONT_BODY,
+                        }}
+                      >
+                        {pNum}
+                      </button>
+                    );
+                  });
+                })()}
 
                 <button
                   disabled={page >= totalPages}

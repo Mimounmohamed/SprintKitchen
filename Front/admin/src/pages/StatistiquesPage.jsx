@@ -1738,6 +1738,7 @@ export default function StatistiquesPage() {
     </body></html>`;
 
     const w = window.open("", "_blank", "width=920,height=720");
+    if (!w) return;
     w.document.write(html);
     w.document.close();
     w.focus();

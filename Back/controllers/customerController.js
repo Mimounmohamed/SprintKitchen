@@ -1,13 +1,15 @@
 const Customer = require('../models/Customer');
 
+const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // @desc  Search customer by phone (auto-search on livraison form)
 // @route GET /api/customers/search?phone=...
 exports.searchCustomer = async (req, res) => {
   try {
     const { phone, name } = req.query;
     const filter = {};
-    if (phone) filter.phone = { $regex: phone.replace(/\s/g, ''), $options: 'i' };
-    if (name) filter.fullName = { $regex: name, $options: 'i' };
+    if (phone) filter.phone = { $regex: escapeRegex(phone.replace(/\s/g, '')), $options: 'i' };
+    if (name) filter.fullName = { $regex: escapeRegex(name), $options: 'i' };
 
     const customers = await Customer.find(filter).limit(10);
     res.json({ success: true, count: customers.length, data: customers });

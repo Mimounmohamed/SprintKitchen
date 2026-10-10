@@ -9,12 +9,18 @@ exports.createPayment = async (req, res) => {
 
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    if (order.status === 'annulee') {
+      return res.status(400).json({ success: false, message: 'Impossible d\'encaisser une commande annulée' });
+    }
     const existingPayment = await Payment.findOne({ orderId, isRefunded: { $ne: true } });
     if (existingPayment || order.status === 'terminee') {
       return res.status(400).json({ success: false, message: 'Order already paid' });
     }
 
-    const change = method === 'especes' ? Math.max(0, amountReceived - order.totalTTC) : 0;
+    const received = amountReceived !== undefined && amountReceived !== null
+      ? Number(amountReceived)
+      : order.totalTTC;
+    const change = method === 'especes' ? Math.max(0, received - order.totalTTC) : 0;
 
     const payment = await Payment.create({
       orderId,
@@ -23,7 +29,7 @@ exports.createPayment = async (req, res) => {
       operatorId: req.user?.id,
       method,
       amountDue: order.totalTTC,
-      amountReceived,
+      amountReceived: received,
       change,
       splitDetails,
       cardReference,
@@ -53,7 +59,8 @@ exports.createPayment = async (req, res) => {
 // @route GET /api/payments/order/:orderId
 exports.getPaymentByOrder = async (req, res) => {
   try {
-    const payment = await Payment.findOne({ orderId: req.params.orderId });
+    const payment = await Payment.findOne({ orderId: req.params.orderId })
+      .sort({ isRefunded: 1, createdAt: -1 });
     if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
     res.json({ success: true, data: payment });
   } catch (err) {

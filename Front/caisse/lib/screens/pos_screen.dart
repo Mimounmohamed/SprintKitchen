@@ -309,17 +309,24 @@ class _PosScreenState extends State<PosScreen> with WidgetsBindingObserver {
 
   void _addItemToTicket(MenuItem item) {
     setState(() {
-      final existingIndex = _ticketLines.indexWhere((l) => l.name == item.name);
+      final existingIndex = _ticketLines.indexWhere(
+        (l) =>
+            l.name == item.name &&
+            l.customizations.isEmpty &&
+            l.removedIngredients.isEmpty &&
+            (l.notes == null || l.notes!.isEmpty),
+      );
       if (existingIndex != -1) {
         _ticketLines[existingIndex].quantity += 1;
+        _selectedLineIndex = existingIndex;
       } else {
         _ticketLines.add(TicketLine(
           name: item.name,
           unitPrice: item.price,
           productId: item.id,
         ));
+        _selectedLineIndex = _ticketLines.length - 1;
       }
-      _selectedLineIndex = _ticketLines.length - 1;
     });
   }
 
@@ -482,8 +489,9 @@ class _PosScreenState extends State<PosScreen> with WidgetsBindingObserver {
         );
       },
     );
+    controller.dispose();
 
-    if (result != null) {
+    if (result != null && mounted) {
       setState(() {
         _orderNotes = result.isEmpty ? null : result;
       });

@@ -705,7 +705,7 @@ class OrderDetailsPanel extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 4),
           child: Text(
-            '• Sans $removed',
+            '• Sans ${removed.replaceFirst(RegExp(r'^sans\s+', caseSensitive: false), '').trim()}',
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,

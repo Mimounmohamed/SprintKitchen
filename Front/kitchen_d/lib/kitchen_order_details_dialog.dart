@@ -47,10 +47,26 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
   @override
   void initState() {
     super.initState();
-    // Initialize ready states from items
+    _syncItemsReady();
+  }
+
+  @override
+  void didUpdateWidget(covariant KitchenOrderDetailsDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.order != widget.order && !_savingItem) {
+      _syncItemsReady();
+    }
+  }
+
+  void _syncItemsReady() {
+    _itemsReady.clear();
     for (int i = 0; i < widget.order.items.length; i++) {
       _itemsReady[i] = widget.order.items[i].isReady ||
           widget.order.status == OrderStatus.terminee;
+    }
+    if (_selectedIndex >= widget.order.items.length &&
+        widget.order.items.isNotEmpty) {
+      _selectedIndex = 0;
     }
   }
 
@@ -1328,6 +1344,7 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                   onPressed: _savingItem
                       ? null
                       : () async {
+                          final previousKdsStatus = item.kdsStatus;
                           final targetReady = !isReady;
                           final targetStatus =
                               targetReady ? 'ready' : 'pending';
@@ -1365,7 +1382,7 @@ class _KitchenOrderDetailsDialogState extends State<KitchenOrderDetailsDialog> {
                               setState(() {
                                 _savingItem = false;
                                 _itemsReady[index] = isReady;
-                                item.kdsStatus = isReady ? 'ready' : 'pending';
+                                item.kdsStatus = previousKdsStatus;
                               });
                               if (widget.onItemStatusChanged != null) {
                                 widget.onItemStatusChanged!(item, isReady);

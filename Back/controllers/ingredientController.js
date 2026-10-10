@@ -1,4 +1,7 @@
+const mongoose = require('mongoose');
 const Ingredient = require('../models/Ingredient');
+
+const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /* GET /api/ingredients?family=viandes&search=steak&limit=20 */
 exports.getIngredients = async (req, res, next) => {
@@ -8,7 +11,7 @@ exports.getIngredients = async (req, res, next) => {
     if (req.query.storeId)      filter.storeId      = req.query.storeId;
     if (req.query.availability) filter.availability = req.query.availability;
     if (req.query.search) {
-      filter.name = { $regex: req.query.search, $options: 'i' };
+      filter.name = { $regex: escapeRegex(req.query.search), $options: 'i' };
     }
 
     const limit = parseInt(req.query.limit) || 200;
@@ -21,7 +24,11 @@ exports.getIngredients = async (req, res, next) => {
 exports.getFamilies = async (req, res, next) => {
   try {
     const filter = { isActive: true };
-    if (req.query.storeId) filter.storeId = req.query.storeId;
+    if (req.query.storeId) {
+      filter.storeId = mongoose.Types.ObjectId.isValid(req.query.storeId)
+        ? new mongoose.Types.ObjectId(req.query.storeId)
+        : req.query.storeId;
+    }
 
     const counts = await Ingredient.aggregate([
       { $match: filter },
@@ -44,8 +51,6 @@ exports.getIngredient = async (req, res, next) => {
     res.json({ success: true, data: item });
   } catch (err) { next(err); }
 };
-
-const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /* POST /api/ingredients */
 exports.createIngredient = async (req, res, next) => {
@@ -139,14 +144,14 @@ exports.updateAvailability = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-/* PATCH /api/ingredients/bulk-availability */
+/* PATCH / POST /api/ingredients/bulk-availability */
 exports.bulkAvailability = async (req, res, next) => {
   try {
     const { family, storeId, availability } = req.body;
     if (!['available', 'epuise', 'bloque'].includes(availability)) {
       return res.status(400).json({ success: false, message: 'Invalid availability value' });
     }
-    const filter = {};
+    const filter = { isActive: true };
     if (family)  filter.family  = family;
     if (storeId) filter.storeId = storeId;
     await Ingredient.updateMany(filter, { availability, isOnList86: availability !== 'available' });
@@ -157,7 +162,8 @@ exports.bulkAvailability = async (req, res, next) => {
 /* DELETE /api/ingredients/:id (soft) */
 exports.deleteIngredient = async (req, res, next) => {
   try {
-    await Ingredient.findByIdAndUpdate(req.params.id, { isActive: false });
+    const item = await Ingredient.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
+    if (!item) return res.status(404).json({ success: false, message: 'Ingredient not found' });
     res.json({ success: true, message: 'Ingredient deactivated' });
   } catch (err) { next(err); }
 };

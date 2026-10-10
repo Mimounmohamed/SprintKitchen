@@ -19,7 +19,7 @@ class Category {
   final bool showOnPOS;
 
   factory Category.fromJson(Map<String, dynamic> json) => Category(
-        id: json['_id'] as String,
+        id: json['_id']?.toString() ?? '',
         name: json['name'] as String? ?? '',
         slug: json['slug'] as String? ?? '',
         displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
@@ -128,11 +128,11 @@ class MenuItem {
     // getProducts, but keep this defensive in case a raw id string shows up.
     final rawCategory = json['categoryId'];
     final categoryId = rawCategory is Map
-        ? rawCategory['_id'] as String
-        : (rawCategory as String? ?? '');
+        ? (rawCategory['_id']?.toString() ?? '')
+        : (rawCategory?.toString() ?? '');
 
     return MenuItem(
-      id: json['_id'] as String,
+      id: json['_id']?.toString() ?? '',
       name: json['name'] as String? ?? '',
       price: (json['basePrice'] as num?)?.toDouble() ?? 0,
       categoryId: categoryId,

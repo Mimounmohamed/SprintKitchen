@@ -1,5 +1,8 @@
 const errorHandler = (err, req, res, next) => {
   console.error(err.stack);
+  if (res.headersSent) {
+    return next(err);
+  }
 
   let statusCode = err.statusCode || 500;
   let message = err.message || 'Server Error';
@@ -11,7 +14,7 @@ const errorHandler = (err, req, res, next) => {
   }
   // Mongoose duplicate key
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
+    const field = err.keyValue ? Object.keys(err.keyValue)[0] : 'field';
     message = `Duplicate value for field: ${field}`;
     statusCode = 400;
   }

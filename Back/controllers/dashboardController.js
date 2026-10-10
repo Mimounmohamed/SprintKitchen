@@ -1,4 +1,4 @@
-﻿const Order      = require('../models/Order');
+const Order      = require('../models/Order');
 const Ingredient = require('../models/Ingredient');
 
 /**
@@ -24,12 +24,12 @@ exports.getDashboardKpis = async (req, res, next) => {
     const lyEnd   = new Date(ly); lyEnd.setHours(23,59,59,999);
 
     // ── Parallel queries ───────────────────────────────────────────────────────
-    const [todayAgg, lyAgg, ruptureList] = await Promise.all([
+    const [todayAgg, lyAgg, ruptureList, ruptureCount] = await Promise.all([
 
       // Today revenue + ticket count
       Order.aggregate([
         { $match: {
-            status: 'terminee',
+            status: { $in: ['terminee', 'en_attente'] },
             createdAt: { $gte: todayStart, $lte: todayEnd },
         }},
         { $group: {
@@ -42,7 +42,7 @@ exports.getDashboardKpis = async (req, res, next) => {
       // Last year same day revenue
       Order.aggregate([
         { $match: {
-            status: 'terminee',
+            status: { $in: ['terminee', 'en_attente'] },
             createdAt: { $gte: lyStart, $lte: lyEnd },
         }},
         { $group: {
@@ -57,6 +57,7 @@ exports.getDashboardKpis = async (req, res, next) => {
         'name family availability'
       ).sort('family name').limit(20),
 
+      Ingredient.countDocuments({ availability: { $ne: 'available' }, isActive: true }),
     ]);
 
     const revenueToday  = todayAgg[0]?.totalTTC  || 0;
@@ -80,7 +81,7 @@ exports.getDashboardKpis = async (req, res, next) => {
           today: ticketsToday,
         },
         rupture: {
-          count: ruptureList.length,
+          count: ruptureCount,
           items: ruptureList.map(i => ({
             _id:          i._id,
             name:         i.name,

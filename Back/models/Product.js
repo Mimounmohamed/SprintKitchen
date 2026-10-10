@@ -42,7 +42,7 @@ const ProductSchema = new mongoose.Schema(
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Category',
-      required: true,
+      default: null,
     },
     storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store' },
     basePrice: { type: Number, required: true }, // price in DA (Algerian Dinar)

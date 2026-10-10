@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Plus, Pencil, Trash2, Settings, Circle, X, ChevronDown, UtensilsCrossed } from "lucide-react";
+import { ArrowLeft, Search, Plus, Pencil, Trash2, Settings, Circle, X, ChevronDown } from "lucide-react";
 import { productService, categoryService, ingredientService } from "../services";
 
 const C = {
   bg: "#F5F4F0", cardBg: "#FFFFFF", ink: "#1C1917", brown: "#583926",
   yellow: "#FACC15", muted: "#6B7280", border: "#E5E7EB", borderDark: "#D1D5DB", green: "#059669",
-  red: "#EF4444", redBg: "#FDEAE8", yellowBg: "#FEF08A",
+  red: "#EF4444", redBg: "#FDEAE8", yellowBg: "#FEF08A", blue: "#2563EB",
 };
 
 const FONT_TITLE = "'Bebas Neue', sans-serif";
@@ -27,18 +27,6 @@ function Toggle({ checked, onChange }) {
         background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)",
         transition: "left .2s",
       }} />
-    </div>
-  );
-}
-
-/* ── Section header ─────────────────────────────────────────────────────────── */
-function Section({ num, title, right }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-      <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em", color: C.ink }}>
-        {num}. {title}
-      </span>
-      {right && <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>{right}</span>}
     </div>
   );
 }
@@ -249,14 +237,13 @@ function IngredientPicker({ tags, onChange }) {
 
 
 /* ── Side Drawer ─────────────────────────────────────────────────────────────── */
-function ArticleDrawer({ product, categories, onClose, onSave }) {
+function ArticleDrawer({ product, categories, mobile, onManageCategories, onClose, onSave }) {
   const isEdit = !!product;
-  const mobile = window.innerWidth < 900;
   const [form, setForm] = useState({
     name:         product?.name         || "",
     description:  product?.description  || "",
     categoryId:   product?.categoryId?._id || product?.categoryId || "",
-    basePrice:    product?.basePrice    || "",
+    basePrice:    product?.basePrice    ?? "",
     availability: product?.availability || "available",
     ingredients:  product?.ingredients  || [],
   });
@@ -281,7 +268,7 @@ function ArticleDrawer({ product, categories, onClose, onSave }) {
           uniqueIngredients.push(trimmed);
         }
       }
-      const payload = { ...form, ingredients: uniqueIngredients };
+      const payload = { ...form, basePrice: Number(form.basePrice), ingredients: uniqueIngredients };
       if (isEdit) await productService.update(product._id, payload);
       else        await productService.create(payload);
       onSave();
@@ -405,7 +392,7 @@ function ArticleDrawer({ product, categories, onClose, onSave }) {
                 <span style={{ width:20, height:20, borderRadius:6, background:C.brown, color:"#F5F0E6", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:800, flexShrink:0 }}>2</span>
                 CATÉGORIE &amp; AFFICHAGE
               </span>
-              <span style={{ fontSize:11, fontWeight:700, color:C.blue, cursor:"pointer" }}>+ Gérer les catégories</span>
+              <span onClick={onManageCategories} style={{ fontSize:11, fontWeight:700, color:C.blue, cursor:"pointer" }}>+ Gérer les catégories</span>
             </div>
 
             <Field label="Catégorie de rattachement" required>
@@ -473,9 +460,8 @@ function ArticleDrawer({ product, categories, onClose, onSave }) {
 /* ── Category Modal ──────────────────────────────────────────────────────────── */
 const POS_COLORS = ["#F2B705","#2FAE5C","#2E5BD9","#E040FB","#2E2117","#E0533D","#00BCD4","#FF9800"];
 
-function CategoryModal({ category, categories = [], onClose, onSave }) {
+function CategoryModal({ category, categories = [], mobile, onClose, onSave }) {
   const isEdit = !!category;
-  const mobile = window.innerWidth < 900;
   const [form, setForm] = useState({
     name:        category?.name        || "",
     description: category?.description || "",
@@ -493,7 +479,7 @@ function CategoryModal({ category, categories = [], onClose, onSave }) {
     if (!isEdit) return;
     productService.getAll({ categoryId: category._id, limit: 50 })
       .then(r => setCatProducts(r.data.data || [])).catch(() => {});
-  }, [category]);
+  }, [isEdit, category]);
 
   useEffect(() => {
     if (!searchProd.trim()) { setSearchRes([]); return; }
@@ -501,7 +487,7 @@ function CategoryModal({ category, categories = [], onClose, onSave }) {
       .then(r => setSearchRes((r.data.data || []).filter(p =>
         (p.categoryId?._id || p.categoryId) !== category?._id)))
       .catch(() => {});
-  }, [searchProd]);
+  }, [searchProd, category?._id]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -530,14 +516,22 @@ function CategoryModal({ category, categories = [], onClose, onSave }) {
   };
 
   const addProduct = async (p) => {
-    await productService.update(p._id, { categoryId: category._id });
-    setCatProducts(prev => [...prev, { ...p, categoryId: category._id }]);
-    setSearchProd(""); setSearchRes([]);
+    try {
+      await productService.update(p._id, { categoryId: category._id });
+      setCatProducts(prev => [...prev, { ...p, categoryId: category._id }]);
+      setSearchProd(""); setSearchRes([]);
+    } catch (e) {
+      setError(e.response?.data?.message || "Erreur lors de l'ajout de l'article.");
+    }
   };
 
   const removeProduct = async (p) => {
-    await productService.update(p._id, { categoryId: null });
-    setCatProducts(prev => prev.filter(x => x._id !== p._id));
+    try {
+      await productService.update(p._id, { categoryId: null });
+      setCatProducts(prev => prev.filter(x => x._id !== p._id));
+    } catch (e) {
+      setError(e.response?.data?.message || "Erreur lors du retrait de l'article.");
+    }
   };
 
   const panelStyle = mobile ? {
@@ -683,20 +677,22 @@ function CategoryModal({ category, categories = [], onClose, onSave }) {
             )}
 
             {/* Associated articles list */}
-            {catProducts.map(p => (
-              <div key={p._id} style={{ padding:"12px 14px", borderBottom:`1px solid ${C.border}` }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <Circle size={7} fill={form.color || C.green} color={form.color || C.green}/>
-                    <div>
-                      <div style={{ fontSize:13.5, fontWeight:600, color:C.ink }}>{p.name}</div>
-                      <div style={{ fontSize:12, color:C.muted }}>{p.basePrice?.toLocaleString("fr-DZ")} DA</div>
+            <div style={{ maxHeight: 220, overflowY: "auto" }}>
+              {catProducts.map(p => (
+                <div key={p._id} style={{ padding:"12px 14px", borderBottom:`1px solid ${C.border}` }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <Circle size={7} fill={form.color || C.green} color={form.color || C.green}/>
+                      <div>
+                        <div style={{ fontSize:13.5, fontWeight:600, color:C.ink }}>{p.name}</div>
+                        <div style={{ fontSize:12, color:C.muted }}>{p.basePrice?.toLocaleString("fr-DZ")} DA</div>
+                      </div>
                     </div>
+                    <button onClick={() => removeProduct(p)} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, padding:4 }}><X size={15}/></button>
                   </div>
-                  <button onClick={() => removeProduct(p)} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, padding:4 }}><X size={15}/></button>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
 
             {catProducts.length === 0 && !searchProd && (
               <div style={{ textAlign:"center", padding:"20px 0", color:C.muted, fontSize:13 }}>Aucun article dans cette catégorie</div>
@@ -804,6 +800,7 @@ export default function MenuPage() {
   const [search,     setSearch]     = useState("");
   const [page,       setPage]       = useState(1);
   const [total,      setTotal]      = useState(0);
+  const [allTotal,   setAllTotal]   = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading,    setLoading]    = useState(true);
   const [drawer,     setDrawer]     = useState(null);
@@ -817,21 +814,26 @@ export default function MenuPage() {
     return () => window.removeEventListener("resize", h);
   }, []);
 
-  // Set of épuisé ingredient names — for rupture badge on product cards
+  // Set of épuisé ingredient names (lowercase trimmed) — for rupture badge on product cards
   const [epuisedSet, setEpuisedSet] = useState(new Set());
   useEffect(() => {
-    ingredientService.getAll({ availability: 'epuise', limit: 200 })
+    ingredientService.getAll({ limit: 500 })
       .then(r => {
-        const names = (r.data?.data || []).map(i => i.name);
+        const names = (r.data?.data || [])
+          .filter(i => i.availability && i.availability !== "available")
+          .map(i => (i.name || "").trim().toLowerCase())
+          .filter(Boolean);
         setEpuisedSet(new Set(names));
       })
       .catch(() => {});
   }, []);
 
+  const isIngredientEpuise = (name) => epuisedSet.has(String(name || "").trim().toLowerCase());
+
   // Returns comma-joined list of all épuisé ingredients in a product, or null
   const ruptureIngredient = (product) => {
     if (!product.ingredients?.length) return null;
-    const epuises = product.ingredients.filter(name => epuisedSet.has(name));
+    const epuises = product.ingredients.filter(name => isIngredientEpuise(name));
     return epuises.length ? epuises.join(", ") : null;
   };
 
@@ -852,7 +854,9 @@ export default function MenuPage() {
         page, limit: LIMIT,
       });
       setProducts(res.data.data || []);
-      setTotal(res.data.total || 0);
+      const fetchedTotal = res.data.total || 0;
+      setTotal(fetchedTotal);
+      if (!activeCat && !search) setAllTotal(fetchedTotal);
       setTotalPages(res.data.totalPages || 1);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -862,14 +866,22 @@ export default function MenuPage() {
 
   const toggleAvail = async (product) => {
     const next = product.availability === "available" ? "epuise" : "available";
-    await productService.setAvailability(product._id, next);
-    setProducts(prev => prev.map(p => p._id === product._id ? { ...p, availability: next } : p));
+    try {
+      await productService.setAvailability(product._id, next);
+      setProducts(prev => prev.map(p => p._id === product._id ? { ...p, availability: next } : p));
+    } catch (e) {
+      alert(e.response?.data?.message || "Erreur lors de la mise à jour de la disponibilité.");
+    }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Désactiver cet article ?")) return;
-    await productService.delete(id);
-    fetchProducts();
+    try {
+      await productService.delete(id);
+      fetchProducts();
+    } catch (e) {
+      alert(e.response?.data?.message || "Erreur lors de la suppression de l'article.");
+    }
   };
 
   return (
@@ -1120,7 +1132,7 @@ export default function MenuPage() {
             color:      activeCat==="" ? "#F5F0E6" : C.ink,
             border:     activeCat==="" ? "none" : `1px solid ${C.border}`,
           }}>
-            Tous <span style={{ fontWeight:400 }}>{total}</span>
+            Tous <span style={{ fontWeight:400 }}>{allTotal || total}</span>
           </button>
           {categories.map(cat => (
             <button key={cat._id} onClick={() => { setActiveCat(cat._id); setPage(1); }} style={{
@@ -1175,7 +1187,7 @@ export default function MenuPage() {
                   {p.ingredients?.length > 0 && (
                     <div style={{ fontSize:12, color:C.muted, marginBottom:6, paddingLeft:14, lineHeight:1.5 }}>
                       {p.ingredients.map((name, ni) => (
-                        <span key={name} style={{ color: epuisedSet.has(name) ? C.red : C.muted, fontWeight: epuisedSet.has(name) ? 600 : 400 }}>
+                        <span key={name} style={{ color: isIngredientEpuise(name) ? C.red : C.muted, fontWeight: isIngredientEpuise(name) ? 600 : 400 }}>
                           {name}{ni < p.ingredients.length - 1 ? ", " : ""}
                         </span>
                       ))}
@@ -1225,9 +1237,13 @@ export default function MenuPage() {
               <div style={{ padding:"14px 16px", borderTop:`1px solid ${C.border}`, display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <PageBtn label="‹" disabled={page<=1} onClick={() => setPage(p=>p-1)}/>
-                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i+1).map(n => (
-                    <PageBtn key={n} label={n} active={page===n} onClick={() => setPage(n)}/>
-                  ))}
+                  {(() => {
+                    const count = Math.min(totalPages, 5);
+                    const start = Math.max(1, Math.min(page - 2, totalPages - count + 1));
+                    return Array.from({ length: count }, (_, i) => start + i).map(n => (
+                      <PageBtn key={n} label={n} active={page===n} onClick={() => setPage(n)}/>
+                    ));
+                  })()}
                   <PageBtn label="›" disabled={page>=totalPages} onClick={() => setPage(p=>p+1)}/>
                 </div>
                 <span style={{ fontSize:11.5, color:C.muted }}>
@@ -1266,6 +1282,7 @@ export default function MenuPage() {
                       borderBottom: idx < products.length-1 ? `1px solid ${C.border}` : "none",
                       transition:"background .1s",
                       borderLeft: hasRupture ? `3px solid ${C.red}` : "3px solid transparent",
+                      background: hasRupture ? "#FEF9F8" : "transparent",
                     }}
                       onMouseEnter={e => e.currentTarget.style.background = hasRupture ? "#FDF7F6" : "#FAFAF8"}
                       onMouseLeave={e => e.currentTarget.style.background = hasRupture ? "#FEF9F8" : "transparent"}
@@ -1282,7 +1299,7 @@ export default function MenuPage() {
                         {p.ingredients?.length > 0 && (
                           <div style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
                             {p.ingredients.map((name, ni) => (
-                              <span key={name} style={{ color: epuisedSet.has(name) ? C.red : C.muted, fontWeight: epuisedSet.has(name) ? 600 : 400 }}>
+                              <span key={name} style={{ color: isIngredientEpuise(name) ? C.red : C.muted, fontWeight: isIngredientEpuise(name) ? 600 : 400 }}>
                                 {name}{ni < p.ingredients.length - 1 ? ", " : ""}
                               </span>
                             ))}
@@ -1335,9 +1352,13 @@ export default function MenuPage() {
                 </span>
                 <div style={{ display:"flex", gap:6 }}>
                   <PageBtn label="Précédent" disabled={page<=1} onClick={() => setPage(p=>p-1)}/>
-                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i+1).map(n => (
-                    <PageBtn key={n} label={n} active={page===n} onClick={() => setPage(n)}/>
-                  ))}
+                  {(() => {
+                    const count = Math.min(totalPages, 5);
+                    const start = Math.max(1, Math.min(page - 2, totalPages - count + 1));
+                    return Array.from({ length: count }, (_, i) => start + i).map(n => (
+                      <PageBtn key={n} label={n} active={page===n} onClick={() => setPage(n)}/>
+                    ));
+                  })()}
                   <PageBtn label="Suivant" disabled={page>=totalPages} onClick={() => setPage(p=>p+1)}/>
                 </div>
               </div>
@@ -1349,16 +1370,18 @@ export default function MenuPage() {
       {/* ── Footer ── */}
       <footer style={{ display:"flex", alignItems:"center", justifyContent: mobile ? "center" : "space-between", padding: mobile ? "12px 16px" : "16px 40px", borderTop:`1px solid ${C.border}`, flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, fontWeight:600 }}>
-          <Circle size={7} fill={C.green} color={C.green}/> Connecté {!mobile && <><span style={{ color:C.muted }}>·</span></>}
+          <Circle size={7} fill={C.green} color={C.green}/> Connecté
         </div>
         {!mobile && <span style={{ fontSize:12, color:C.muted }}>Bobo's OS Admin v1.00</span>}
       </footer>
 
-      {/* Drawers & Modals (unchanged) */}
+      {/* Drawers & Modals */}
       {drawer && (
         <ArticleDrawer
           product={drawer === "new" ? null : drawer}
           categories={categories}
+          mobile={mobile}
+          onManageCategories={() => setGererOpen(true)}
           onClose={() => setDrawer(null)}
           onSave={() => { setDrawer(null); fetchProducts(); }}
         />
@@ -1367,6 +1390,7 @@ export default function MenuPage() {
         <CategoryModal
           category={catModal === "new" ? null : catModal}
           categories={categories}
+          mobile={mobile}
           onClose={() => setCatModal(null)}
           onSave={() => { setCatModal(null); fetchCategories(); fetchProducts(); }}
         />

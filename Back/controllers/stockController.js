@@ -24,7 +24,7 @@ exports.getStockLogs = async (req, res) => {
 // @route GET /api/stock/overview
 exports.getStockOverview = async (req, res) => {
   try {
-    const filter = {};
+    const filter = { isActive: { $ne: false } };
     if (req.query.storeId) filter.storeId = req.query.storeId;
     if (req.query.categoryId) filter.categoryId = req.query.categoryId;
 

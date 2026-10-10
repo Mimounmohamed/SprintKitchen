@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Payment = require('../models/Payment');
 const Store = require('../models/Store');
@@ -88,6 +89,17 @@ exports.getOrders = async (req, res) => {
 exports.getOrdersSummary = async (req, res) => {
   try {
     const match = {};
+    if (req.query.storeId) {
+      match.storeId = mongoose.Types.ObjectId.isValid(req.query.storeId)
+        ? new mongoose.Types.ObjectId(req.query.storeId)
+        : req.query.storeId;
+    }
+    if (req.query.registerId) {
+      match.registerId = mongoose.Types.ObjectId.isValid(req.query.registerId)
+        ? new mongoose.Types.ObjectId(req.query.registerId)
+        : req.query.registerId;
+    }
+    if (req.query.orderType) match.orderType = req.query.orderType;
     const range = buildDateRange(req.query.from, req.query.to);
     if (range) match.createdAt = range;
 
@@ -584,9 +596,23 @@ exports.updateOrder = async (req, res) => {
           }
         }
         req.body.tableNumber = table;
-        if (!req.body.buzzerNumber && targetOrderType === 'sur_place') {
-          req.body.buzzerNumber = `Table ${table}`;
+        if (targetOrderType === 'sur_place') {
+          if (!req.body.buzzerNumber || /^table\s+/i.test(String(req.body.buzzerNumber))) {
+            req.body.buzzerNumber = `Table ${table}`;
+          }
         }
+      } else if (String(rawTable).trim() === '') {
+        req.body.tableNumber = null;
+        if (!req.body.buzzerNumber || /^table\s+/i.test(String(order.buzzerNumber || ''))) {
+          req.body.buzzerNumber = null;
+        }
+      }
+    }
+
+    if (targetOrderType !== 'sur_place' && req.body.orderType && req.body.orderType !== 'sur_place') {
+      if (req.body.tableNumber === undefined) req.body.tableNumber = null;
+      if (req.body.buzzerNumber === undefined && /^table\s+/i.test(String(order.buzzerNumber || ''))) {
+        req.body.buzzerNumber = null;
       }
     }
 
@@ -622,7 +648,7 @@ exports.updateOrder = async (req, res) => {
     }
 
     Object.assign(order, req.body);
-    if (req.body.items) order.recalculateTotals();
+    if (req.body.items || req.body.discount !== undefined) order.recalculateTotals();
 
     if (order.status === 'a_encaisser' && !order.kdsReadyAt) {
       order.kdsReadyAt = new Date();
@@ -665,8 +691,13 @@ exports.updateStatus = async (req, res) => {
       order.kdsStatus = 'served';
     }
     if (status === 'annulee') {
+      const reason = req.body.cancelReason || req.body.reason;
       order.cancelledAt = new Date();
-      order.cancelReason = req.body.cancelReason;
+      order.cancelReason = reason;
+      await Payment.updateMany(
+        { orderId: order._id, isRefunded: { $ne: true } },
+        { isRefunded: true, refundedAt: new Date(), refundReason: reason }
+      );
     }
     // Send to KDS
     if (status === 'en_attente') {
@@ -684,12 +715,17 @@ exports.updateStatus = async (req, res) => {
 // @route PATCH /api/orders/:id/cancel
 exports.cancelOrder = async (req, res) => {
   try {
+    const reason = req.body.reason || req.body.cancelReason;
     const order = await Order.findByIdAndUpdate(
       req.params.id,
-      { status: 'annulee', cancelledAt: new Date(), cancelReason: req.body.reason },
+      { status: 'annulee', cancelledAt: new Date(), cancelReason: reason },
       { new: true }
     );
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    await Payment.updateMany(
+      { orderId: order._id, isRefunded: { $ne: true } },
+      { isRefunded: true, refundedAt: new Date(), refundReason: reason }
+    );
     res.json({ success: true, data: order });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -700,13 +736,17 @@ exports.cancelOrder = async (req, res) => {
 // @route GET /api/orders/stats/daily
 exports.getDailyStats = async (req, res) => {
   try {
-    const date = req.query.date ? new Date(req.query.date) : new Date();
-    const start = new Date(date.setHours(0, 0, 0, 0));
-    const end = new Date(date.setHours(23, 59, 59, 999));
+    const baseDate = req.query.date ? new Date(req.query.date) : new Date();
+    const start = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 0, 0, 0, 0);
+    const end = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 23, 59, 59, 999);
     const storeId = req.query.storeId;
 
     const filter = { createdAt: { $gte: start, $lte: end }, status: { $in: ['terminee', 'en_attente'] } };
-    if (storeId) filter.storeId = storeId;
+    if (storeId) {
+      filter.storeId = mongoose.Types.ObjectId.isValid(storeId)
+        ? new mongoose.Types.ObjectId(storeId)
+        : storeId;
+    }
 
     const stats = await Order.aggregate([
       { $match: filter },

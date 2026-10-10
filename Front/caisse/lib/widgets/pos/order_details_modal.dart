@@ -184,33 +184,22 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    // Preserve all attributes: if user entered text, use it; otherwise retain previous value without erasing!
     final enteredTable = _tableController.text.trim();
     final table = enteredTable.isNotEmpty
         ? _formatTableTwoDigits(enteredTable)
-        : (widget.initialTable != null && widget.initialTable!.trim().isNotEmpty
-            ? _formatTableTwoDigits(widget.initialTable!)
-            : null);
+        : null;
 
     final enteredClient = _clientController.text.trim();
-    final client = enteredClient.isNotEmpty
-        ? enteredClient
-        : widget.initialClient;
+    final client = enteredClient.isNotEmpty ? enteredClient : null;
 
     final enteredPhone = _phoneController.text.trim();
-    final phone = enteredPhone.isNotEmpty
-        ? enteredPhone
-        : widget.initialPhone;
+    final phone = enteredPhone.isNotEmpty ? enteredPhone : null;
 
     final enteredAddress = _addressController.text.trim();
-    final address = enteredAddress.isNotEmpty
-        ? enteredAddress
-        : widget.initialAddress;
+    final address = enteredAddress.isNotEmpty ? enteredAddress : null;
 
     final enteredNotes = _notesController.text.trim();
-    final notes = enteredNotes.isNotEmpty
-        ? enteredNotes
-        : widget.initialNotes;
+    final notes = enteredNotes.isNotEmpty ? enteredNotes : null;
 
     Navigator.of(context).pop(
       OrderDetailsResult(

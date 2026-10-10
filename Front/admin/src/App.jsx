@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import DashboardPage    from './pages/DashboardPage'
 import MenuPage         from './pages/MenuPage'
@@ -75,8 +75,6 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
-  const [ready, setReady] = useState(true);
-
   // Sliding session: on each visit, exchange the stored token for a fresh
   // 365-day one, so the admin stays logged in as long as the panel is used.
   // A truly invalid token gets a 401 and the api interceptor sends to /login.
@@ -88,16 +86,6 @@ export default function App() {
       })
       .catch(() => { /* network error: keep the current token */ });
   }, []);
-
-  if (!ready) return (
-    <div style={{
-      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      fontFamily: "Inter, sans-serif", fontSize: 14, color: "#8B8378",
-      background: "#F5F4F0",
-    }}>
-      Chargement…
-    </div>
-  );
 
   return (
     <ErrorBoundary>

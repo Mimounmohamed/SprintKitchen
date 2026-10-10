@@ -68,9 +68,6 @@ class _CustomizationModalState extends State<CustomizationModal> {
             }
           }
           _selections[group.name] = matched;
-        } else if (initial.customizations.isEmpty) {
-          _selections[group.name] =
-              group.options.where((o) => o.isDefault).toList();
         } else {
           _selections[group.name] = [];
         }
@@ -668,23 +665,11 @@ class _CustomizationModalState extends State<CustomizationModal> {
     final disabled = !option.isAvailable;
 
     String? subtitle;
-    try {
-      final dynamic dyn = option;
-      final desc = dyn.description ?? dyn.subtitle ?? dyn.sublabel;
-      if (desc != null && desc.toString().trim().isNotEmpty) {
-        subtitle = desc.toString().trim();
-      }
-    } catch (_) {}
-
-    if (subtitle == null) {
-      if (option.priceModifier != 0) {
-        subtitle =
-            '${option.priceModifier > 0 ? '+' : ''}${_money(option.priceModifier)}';
-      } else if (option.isDefault) {
-        subtitle = isSelected ? 'Coché' : 'Inclus';
-      } else if (isSelected) {
-        subtitle = 'Coché';
-      }
+    if (option.priceModifier != 0) {
+      subtitle =
+          '${option.priceModifier > 0 ? '+' : ''}${_money(option.priceModifier)}';
+    } else if (option.isDefault) {
+      subtitle = isSelected ? 'Coché' : 'Inclus';
     } else if (isSelected) {
       subtitle = 'Coché';
     }
@@ -969,7 +954,8 @@ class _CustomizationModalState extends State<CustomizationModal> {
         foregroundColor: Colors.white,
         disabledBackgroundColor: AppColors.success.withValues(alpha: 0.5),
         disabledForegroundColor: Colors.white70,
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+        padding: EdgeInsets.symmetric(
+            horizontal: isNarrow ? 16 : 28, vertical: isNarrow ? 12 : 16),
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -977,9 +963,11 @@ class _CustomizationModalState extends State<CustomizationModal> {
       label: Text(
         widget.initialLine != null
             ? 'VALIDER LA MODIFICATION'
-            : 'VALIDER & AJOUTER AU TICKET',
-        style: const TextStyle(
-            fontWeight: FontWeight.w800, fontSize: 13.5, letterSpacing: 0.4),
+            : (isNarrow ? 'VALIDER' : 'VALIDER & AJOUTER AU TICKET'),
+        style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: isNarrow ? 12.5 : 13.5,
+            letterSpacing: 0.4),
       ),
     );
 
@@ -988,17 +976,20 @@ class _CustomizationModalState extends State<CustomizationModal> {
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.textPrimary,
         side: const BorderSide(color: AppColors.border),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: EdgeInsets.symmetric(
+            horizontal: isNarrow ? 14 : 24, vertical: isNarrow ? 12 : 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      child: const Text(
+      child: Text(
         'Annuler',
-        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+        style: TextStyle(
+            fontWeight: FontWeight.w700, fontSize: isNarrow ? 12.5 : 13.5),
       ),
     );
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: EdgeInsets.symmetric(
+          horizontal: isNarrow ? 14 : 24, vertical: isNarrow ? 12 : 16),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: AppColors.border)),
@@ -1009,7 +1000,7 @@ class _CustomizationModalState extends State<CustomizationModal> {
             if (_quantity > 1) setState(() => _quantity--);
           }),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(horizontal: isNarrow ? 10 : 16),
             child: Text(
               '$_quantity',
               style:
@@ -1017,49 +1008,50 @@ class _CustomizationModalState extends State<CustomizationModal> {
             ),
           ),
           _qtyButton(Icons.add, () => setState(() => _quantity++)),
-          const SizedBox(width: 24),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'PRIX UNITAIRE CALCULÉ',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textMuted,
-                  letterSpacing: 0.6,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Text(
-                    _money(_lineTotal),
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                    ),
+          SizedBox(width: isNarrow ? 12 : 24),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'PRIX UNITAIRE CALCULÉ',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textMuted,
+                    letterSpacing: 0.6,
                   ),
-                  if (_extrasTotal != 0) ...[
-                    const SizedBox(width: 8),
+                ),
+                const SizedBox(height: 2),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  children: [
                     Text(
-                      '(+${_money(_extrasTotal * _quantity)} suppléments)',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.success,
+                      _money(_lineTotal),
+                      style: TextStyle(
+                        fontSize: isNarrow ? 18 : 22,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
                       ),
                     ),
+                    if (_extrasTotal != 0)
+                      Text(
+                        '(+${_money(_extrasTotal * _quantity)} suppléments)',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success,
+                        ),
+                      ),
                   ],
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
           cancelButton,
-          const SizedBox(width: 14),
+          SizedBox(width: isNarrow ? 8 : 14),
           validateButton,
         ],
       ),
