@@ -1,7 +1,7 @@
 # SprintKitchen — Restaurant POS, KDS & Back-Office Ecosystem
 
 > **Custom Client Solution**  
-> **SprintKitchen** is a full-stack, multi-platform restaurant management ecosystem engineered for **Crêpe Time** (and modern fast-casual restaurant operations). Built from the ground up for a commercial client, it unifies Point of Sale (**Caisse POS**), Kitchen Display System (**KDS**), Floor Service, and Back-Office Administration (**Admin Panel**) around a centralized cloud API.
+> **SprintKitchen** is a full-stack, multi-platform restaurant management ecosystem engineered for **modern fast-casual restaurant operations** . Built from the ground up for a commercial client, it unifies Point of Sale (**Caisse POS**), Kitchen Display System (**KDS**), Floor Service, and Back-Office Administration (**Admin Panel**) around a centralized cloud API.
 
 ---
 
