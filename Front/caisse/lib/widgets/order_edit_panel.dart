@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -59,9 +60,12 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
   late String? _notes;
 
   List<MenuCategory> _categories = [];
+  String _menuSignature = '';
   bool _loadingMenu = true;
+  bool _refreshingMenu = false;
   bool _saving = false;
   String? _errorMessage;
+  Timer? _menuRefreshTimer;
 
   @override
   void initState() {
@@ -79,6 +83,16 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
     _notes = widget.order.notes;
 
     _loadMenu();
+    _menuRefreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _refreshMenuSilently(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _menuRefreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadMenu() async {
@@ -87,12 +101,33 @@ class _OrderEditPanelState extends State<OrderEditPanel> {
       if (!mounted) return;
       setState(() {
         _categories = categories;
+        _menuSignature = MenuService.computeSignature(categories);
         _loadingMenu = false;
       });
     } catch (_) {
       if (mounted) {
         setState(() => _loadingMenu = false);
       }
+    }
+  }
+
+  Future<void> _refreshMenuSilently() async {
+    if (_refreshingMenu || !mounted) return;
+    _refreshingMenu = true;
+    try {
+      final categories = await _menuService.fetchMenu();
+      if (!mounted) return;
+      final newSig = MenuService.computeSignature(categories);
+      if (newSig == _menuSignature && !_loadingMenu) return;
+      setState(() {
+        _categories = categories;
+        _menuSignature = newSig;
+        _loadingMenu = false;
+      });
+    } catch (_) {
+      // Ignore transient background fetch errors.
+    } finally {
+      _refreshingMenu = false;
     }
   }
 

@@ -1580,11 +1580,30 @@ export default function StatistiquesPage() {
   const caHT = rz.totalHT || 0;
   const tickets = rz.ticketCount || 0;
   const kitchen = summary?.kitchen || {};
+  const annCount = rz.annulees?.count || 0;
+  const annAmount = rz.annulees?.amount || 0;
+  const cancelledOrders = summary?.cancelledOrders || rz.annulees?.orders || [];
 
   const salesByHour = summary?.salesByHour || [];
   const topProducts = summary?.topProducts || [];
   const byChannel = summary?.byChannel || [];
   const paymentMethods = summary?.paymentMethods || [];
+
+  const fmtOrderDate = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()} ${two(d.getHours())}:${two(d.getMinutes())}`;
+  };
+
+  const getCancelledClientTable = (o) => {
+    const rawTable = o.tableNumber || o.buzzerNumber || "";
+    const cleanTable = String(rawTable).replace(/^(buzzer\s*#?|table\s*)/i, "").trim();
+    const tLabel = cleanTable ? `Table ${cleanTable}` : "";
+    if (o.clientName && tLabel) return `${o.clientName} (${tLabel})`;
+    if (tLabel) return tLabel;
+    if (o.clientName) return o.clientName;
+    return "Client Passant";
+  };
 
   // ── PDF Export ──
   const exportPDF = () => {
@@ -1611,6 +1630,21 @@ export default function StatistiquesPage() {
       .map((d) => `<tr><td>${d.label}</td><td>${d.count} tickets</td><td>${d.percent}%</td></tr>`)
       .join("");
 
+    const cancelledRows = cancelledOrders
+      .map((o) => {
+        const itemsStr = (o.items || []).map((it) => `${it.quantity}× ${it.productName}`).join(", ");
+        return `<tr>
+          <td><b>#${o.ticketNumber}</b></td>
+          <td>${fmtOrderDate(o.createdAt)}${o.cancelledAt ? `<br/><span style="font-size:10px;color:#EF4444;">Annulée : ${fmtOrderDate(o.cancelledAt)}</span>` : ""}</td>
+          <td>${getCancelledClientTable(o)}</td>
+          <td>${CHANNEL_LABELS[o.orderType] || "Sur Place"}</td>
+          <td>${itemsStr || "—"}</td>
+          <td>${o.cancelReason || "Remboursement / Annulation"}</td>
+          <td style="text-align:right;font-weight:700;color:#EF4444;">${fmt(o.totalTTC)} DA</td>
+        </tr>`;
+      })
+      .join("");
+
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/>
     <title>Rapport d'Activité Bobo's — ${periodLabel}</title>
     <style>
@@ -1620,12 +1654,12 @@ export default function StatistiquesPage() {
       .header h1 { font-size: 24px; letter-spacing: 1px; font-weight: 800; }
       .header .sub { font-size: 10px; color: #F2B705; font-weight: 700; letter-spacing: 2px; margin-bottom: 4px; }
       .header .meta { font-size: 11px; color: rgba(245,240,230,0.7); margin-top: 6px; }
-      .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
-      .kpi { background: #F5F4F0; border-radius: 8px; padding: 14px 16px; border: 1px solid #E5E7EB; }
-      .kpi .label { font-size: 9.5px; font-weight: 700; color: #8B8378; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
-      .kpi .value { font-size: 17px; font-weight: 800; color: #1C1917; }
+      .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 24px; }
+      .kpi { background: #F5F4F0; border-radius: 8px; padding: 14px 14px; border: 1px solid #E5E7EB; }
+      .kpi .label { font-size: 9px; font-weight: 700; color: #8B8378; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+      .kpi .value { font-size: 16px; font-weight: 800; color: #1C1917; }
       .kpi .value.green { color: #059669; }
-      .kpi .value.warn { color: #E0533D; }
+      .kpi .value.warn { color: #EF4444; }
       .section { margin-bottom: 22px; }
       .section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #583926; text-transform: uppercase; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #F2B705; }
       table { width: 100%; border-collapse: collapse; margin-top: 6px; }
@@ -1642,13 +1676,14 @@ export default function StatistiquesPage() {
           <div class="meta">Période : ${periodLabel} &nbsp;·&nbsp; Exporté le ${date}</div>
         </div>
         <div style="text-align:right; color:#F2B705; font-weight:800; font-size:16px;">
-          ${fmt(ca)} DA<br/><span style="font-size:11px;color:rgba(245,240,230,0.7);font-weight:400;">${tickets} tickets clôturés</span>
+          ${fmt(ca)} DA<br/><span style="font-size:11px;color:rgba(245,240,230,0.7);font-weight:400;">${tickets} tickets clôturés · ${annCount} annulé${annCount > 1 ? "s" : ""}</span>
         </div>
       </div>
 
       <div class="kpis">
         <div class="kpi"><div class="label">Chiffre d'Affaires</div><div class="value">${fmt(ca)} DA</div></div>
         <div class="kpi"><div class="label">Tickets Clôturés</div><div class="value">${tickets}</div></div>
+        <div class="kpi"><div class="label">Commandes Annulées</div><div class="value warn">${annCount} (${fmt(annAmount)} DA)</div></div>
         <div class="kpi"><div class="label">Temps Moyen Cuisine</div><div class="value green">${fmtDuration(kitchen.avgPrepTimeSeconds)}</div></div>
         <div class="kpi"><div class="label">Commandes Cuisine</div><div class="value">${kitchen.ordersPreparedCount || 0}</div></div>
       </div>
@@ -1683,6 +1718,18 @@ export default function StatistiquesPage() {
         <table><thead><tr><th>Mode de Règlement</th><th>Transactions</th><th>Montant Total</th></tr></thead>
         <tbody>${payRows}</tbody></table>
       </div>` : ""}
+
+      <div class="section">
+        <div class="section-title" style="border-bottom-color:#EF4444;color:#991B1B;">Commandes Annulées / Remboursées (${annCount} commandes — ${fmt(annAmount)} DA)</div>
+        ${
+          cancelledOrders.length
+            ? `<table>
+                <thead><tr><th>Ticket</th><th>Date &amp; Heure</th><th>Client / Table</th><th>Mode</th><th>Articles</th><th>Motif</th><th style="text-align:right;">Montant</th></tr></thead>
+                <tbody>${cancelledRows}</tbody>
+              </table>`
+            : `<p style="font-size:11.5px;color:#78716C;">Aucune commande annulée ou remboursée sur cette période.</p>`
+        }
+      </div>
 
       <div class="footer">
         <span>Bobo's POS · Version 1.00 — Rapport d'exploitation officiel</span>
@@ -1928,11 +1975,11 @@ export default function StatistiquesPage() {
           spinner
         ) : (
           <>
-            {/* Top 4 KPI Cards Row (Fluid Responsive Grid) */}
+            {/* Top 5 KPI Cards Row (Fluid Responsive Grid) */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+                gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(5, 1fr)",
                 gap: 14,
                 marginBottom: 18,
               }}
@@ -1954,6 +2001,15 @@ export default function StatistiquesPage() {
                 bgIcon="#F5F0E6"
               />
               <KpiCard
+                label="Commandes Annulées"
+                value={annCount}
+                sub={`Montant : ${fmtDA(annAmount)}`}
+                icon={<AlertTriangle size={15} color={C.red} />}
+                bgIcon={C.redBg}
+                badge={annCount > 0 ? `${annCount} annulée${annCount > 1 ? "s" : ""}` : "0 annulée"}
+                badgeColor={annCount > 0 ? C.red : C.green}
+              />
+              <KpiCard
                 label="Temps Moyen Cuisine"
                 value={fmtDuration(kitchen.avgPrepTimeSeconds)}
                 sub="Sortie de cuisine"
@@ -1970,27 +2026,6 @@ export default function StatistiquesPage() {
                 bgIcon="#FEF08A"
               />
             </div>
-
-            {/* Annulations row if any */}
-            {rz.annulees && rz.annulees.count > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <Card style={{ borderLeft: `4px solid ${C.red}` }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: C.muted, textTransform: "uppercase", marginBottom: 3 }}>
-                        Commandes Annulées / Remboursées
-                      </div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: C.red }}>
-                        {rz.annulees.count} ticket{rz.annulees.count > 1 ? "s" : ""} annulé{rz.annulees.count > 1 ? "s" : ""} ({fmtDA(rz.annulees.amount)})
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: C.red, background: C.redBg, padding: "4px 10px", borderRadius: 6 }}>
-                      Impact négatif sur le CA
-                    </span>
-                  </div>
-                </Card>
-              </div>
-            )}
 
             {/* Full-width Kitchen Performance Section */}
             <div style={{ marginBottom: 18 }}>
@@ -2022,6 +2057,97 @@ export default function StatistiquesPage() {
                 <Canaux data={byChannel} />
                 <Paiements data={paymentMethods} />
               </div>
+
+              {/* Row 3: Commandes Annulées / Remboursées */}
+              <Card style={{ borderLeft: `4px solid ${annCount > 0 ? C.red : C.border}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+                  <div>
+                    <SecTitle
+                      icon={<AlertTriangle size={18} color={C.red} />}
+                      right={`${annCount} commande${annCount > 1 ? "s" : ""} annulée${annCount > 1 ? "s" : ""}`}
+                    >
+                      Commandes Annulées / Remboursées
+                    </SecTitle>
+                    <div style={{ fontSize: 11.5, color: C.muted, marginTop: -8 }}>
+                      Historique et détail des tickets annulés ou remboursés sur la période sélectionnée
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      background: annCount > 0 ? C.redBg : "#F9FAFB",
+                      color: annCount > 0 ? C.red : C.muted,
+                      fontWeight: 800,
+                      fontSize: 12,
+                      border: `1px solid ${annCount > 0 ? "#FECACA" : C.border}`,
+                    }}
+                  >
+                    Total annulé : {fmtDA(annAmount)}
+                  </div>
+                </div>
+
+                {cancelledOrders.length === 0 ? (
+                  <div style={{ padding: "24px 0", textAlign: "center", color: C.muted, fontSize: 13 }}>
+                    Aucune commande annulée ou remboursée sur cette période.
+                  </div>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+                      <thead>
+                        <tr style={{ background: "#FAFAF9", borderBottom: `1px solid ${C.border}` }}>
+                          <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Ticket</th>
+                          <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Date &amp; Heures</th>
+                          <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Client / Table</th>
+                          <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Mode</th>
+                          <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Articles</th>
+                          <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Motif</th>
+                          <th style={{ padding: "10px 12px", textAlign: "right", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Montant TTC</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cancelledOrders.map((o) => (
+                          <tr key={o._id} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                            <td style={{ padding: "10px 12px", fontWeight: 800, color: C.brown, fontSize: 12.5 }}>
+                              #{o.ticketNumber}
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: C.ink }}>
+                              <div style={{ fontWeight: 600 }}>{fmtOrderDate(o.createdAt)}</div>
+                              {o.cancelledAt && (
+                                <div style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>
+                                  Annulée : {fmtOrderDate(o.cancelledAt)}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: 12.5, fontWeight: 600, color: C.ink }}>
+                              {getCancelledClientTable(o)}
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: C.muted, fontWeight: 600 }}>
+                              {CHANNEL_LABELS[o.orderType] || "Sur Place"}
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: C.ink }}>
+                              {(o.items || []).map((it, idx) => (
+                                <div key={idx} style={{ lineHeight: 1.35 }}>
+                                  <b>{it.quantity}×</b> {it.productName}
+                                </div>
+                              ))}
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>
+                              {o.cancelReason || "Remboursement / Annulation"}
+                            </td>
+                            <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 800, fontSize: 13, color: C.red }}>
+                              {fmtDA(o.totalTTC)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
             </div>
           </>
         )}

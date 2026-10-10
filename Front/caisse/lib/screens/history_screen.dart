@@ -1325,6 +1325,77 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  Future<void> _refundOrCancelOrder(HistoryOrder o) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text(
+          'Confirmer le remboursement / annulation',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+        ),
+        content: Text(
+          'Voulez-vous vraiment rembourser ou annuler la commande #${o.ticketNumber} ?'
+          '${o.tableNumber != null && o.tableNumber!.isNotEmpty ? '\nLa Table ${o.tableNumber} sera libérée.' : ''}',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF4B5563)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text(
+              'Non, retour',
+              style: TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              elevation: 0,
+            ),
+            child: const Text(
+              'Oui, annuler la commande',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _service.cancelOrder(
+        orderId: o.id,
+        reason: 'Remboursement / Annulation (${widget.posteLabel})',
+      );
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).maybePop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text(
+            o.tableNumber != null && o.tableNumber!.isNotEmpty
+                ? 'Commande #${o.ticketNumber} annulée / remboursée. La Table ${o.tableNumber} est maintenant libre.'
+                : 'Commande #${o.ticketNumber} annulée / remboursée.',
+          ),
+        ),
+      );
+      _loadSummary();
+      _loadOrders(keepData: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text('Erreur lors de l\'annulation : $e'),
+        ),
+      );
+    }
+  }
+
   void _showDetails(HistoryOrder o) => showOrderDetailsPanel(
         context,
         o,
@@ -1339,6 +1410,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     _modifyOrder(o);
                   }
                 : null,
+        onRefundOrCancel:
+            o.status != 'annulee' ? () => _refundOrCancelOrder(o) : null,
       );
 
   // ───────────────────────────── status bar ─────────────────────────────

@@ -49,4 +49,14 @@ class HistoryService {
       'status': status,
     });
   }
+
+  /// PATCH /api/orders/:id/cancel — cancel / refund an order
+  Future<void> cancelOrder({
+    required String orderId,
+    String reason = 'Remboursement / Annulation',
+  }) async {
+    await _client.patch('/orders/$orderId/cancel', {
+      'reason': reason,
+    });
+  }
 }

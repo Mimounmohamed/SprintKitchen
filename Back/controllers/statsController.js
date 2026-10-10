@@ -78,7 +78,7 @@ exports.getRapportZ = async (req, res, next) => {
     const rf = regF(req.query);
     const baseMatch = { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } };
 
-    const [[totals], payBreak, [annulees], repasCount, kitchenStats] = await Promise.all([
+    const [[totals], payBreak, [annulees], cancelledOrders, repasCount, kitchenStats] = await Promise.all([
       Order.aggregate([
         { $match: baseMatch },
         { $group: { _id: null, totalTTC: { $sum: '$totalTTC' }, totalHT: { $sum: '$subtotalHT' }, totalTVA: { $sum: '$tvaAmount' }, ticketCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } },
@@ -92,6 +92,10 @@ exports.getRapportZ = async (req, res, next) => {
         { $match: { ...rf, status: 'annulee', createdAt: { $gte: from, $lte: to } } },
         { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$totalTTC' } } },
       ]),
+      Order.find({ ...rf, status: 'annulee', createdAt: { $gte: from, $lte: to } })
+        .select('ticketNumber createdAt cancelledAt cancelReason orderType clientName tableNumber buzzerNumber totalTTC items')
+        .sort({ cancelledAt: -1, createdAt: -1 })
+        .limit(100),
       Order.countDocuments({ ...rf, status: 'repas_employe', createdAt: { $gte: from, $lte: to } }),
       calculateKitchenStats(rf, from, to),
     ]);
@@ -105,7 +109,7 @@ exports.getRapportZ = async (req, res, next) => {
         totalTVA:    Math.round((totals?.totalTVA   ?? 0) * 100) / 100,
         ticketCount: totals?.ticketCount ?? 0,
         avgBasket:   Math.round((totals?.avgBasket  ?? 0) * 100) / 100,
-        annulees:    { count: annulees?.count ?? 0, amount: Math.round((annulees?.amount ?? 0) * 100) / 100 },
+        annulees:    { count: annulees?.count ?? 0, amount: Math.round((annulees?.amount ?? 0) * 100) / 100, orders: cancelledOrders },
         repasEmployeCount: repasCount,
         paymentBreakdown: payBreak.map(p => ({ method: p._id, total: Math.round(p.total * 100) / 100, count: p.count })),
         kitchen: kitchenStats,
@@ -250,13 +254,17 @@ exports.getSummary = async (req, res, next) => {
     const rf = regF(req.query);
     const baseMatch = { ...rf, status: { $in: PAID_ORDER_STATUSES }, createdAt: { $gte: from, $lte: to } };
 
-    const [totalsArr, byHourArr, topPArr, byChanArr, payArr, annArr, kitchenStats] = await Promise.all([
+    const [totalsArr, byHourArr, topPArr, byChanArr, payArr, annArr, cancelledOrders, kitchenStats] = await Promise.all([
       Order.aggregate([{ $match: baseMatch }, { $group: { _id: null, totalTTC: { $sum: '$totalTTC' }, totalHT: { $sum: '$subtotalHT' }, totalTVA: { $sum: '$tvaAmount' }, ticketCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } }]),
       Order.aggregate([{ $match: baseMatch }, { $group: { _id: { $hour: { date: '$createdAt', timezone: 'Africa/Algiers' } }, revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 } } }, { $sort: { _id: 1 } }, { $project: { _id: 0, hour: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1 } }]),
       Order.aggregate([{ $match: baseMatch }, { $unwind: '$items' }, { $group: { _id: '$items.productId', productName: { $first: '$items.productName' }, qty: { $sum: '$items.quantity' }, revenue: { $sum: '$items.lineTotal' } } }, { $sort: { qty: -1 } }, { $limit: 10 }, { $project: { _id: 0, productId: '$_id', productName: 1, qty: 1, revenue: { $round: ['$revenue', 2] } } }]),
       Order.aggregate([{ $match: baseMatch }, { $group: { _id: '$orderType', revenue: { $sum: '$totalTTC' }, orderCount: { $sum: 1 }, avgBasket: { $avg: '$totalTTC' } } }, { $project: { _id: 0, channel: '$_id', revenue: { $round: ['$revenue', 2] }, orderCount: 1, avgBasket: { $round: ['$avgBasket', 2] } } }, { $sort: { revenue: -1 } }]),
       Payment.aggregate([{ $match: { ...rf, isRefunded: { $ne: true }, createdAt: { $gte: from, $lte: to } } }, { $group: { _id: '$method', total: { $sum: '$amountDue' }, count: { $sum: 1 } } }, { $sort: { total: -1 } }]),
       Order.aggregate([{ $match: { ...rf, status: 'annulee', createdAt: { $gte: from, $lte: to } } }, { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$totalTTC' } } }]),
+      Order.find({ ...rf, status: 'annulee', createdAt: { $gte: from, $lte: to } })
+        .select('ticketNumber createdAt cancelledAt cancelReason orderType clientName tableNumber buzzerNumber totalTTC items')
+        .sort({ cancelledAt: -1, createdAt: -1 })
+        .limit(100),
       calculateKitchenStats(rf, from, to),
     ]);
 
@@ -278,8 +286,9 @@ exports.getSummary = async (req, res, next) => {
           totalTVA:    Math.round((t.totalTVA   ?? 0) * 100) / 100,
           ticketCount: t.ticketCount ?? 0,
           avgBasket:   Math.round((t.avgBasket  ?? 0) * 100) / 100,
-          annulees:    { count: ann.count ?? 0, amount: Math.round((ann.amount ?? 0) * 100) / 100 },
+          annulees:    { count: ann.count ?? 0, amount: Math.round((ann.amount ?? 0) * 100) / 100, orders: cancelledOrders },
         },
+        cancelledOrders,
         kitchen: kitchenStats,
         salesByHour,
         topProducts: topPArr.map(p => ({ ...p, percent: tq > 0 ? Math.round((p.qty / tq) * 100) : 0 })),

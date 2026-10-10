@@ -858,7 +858,7 @@ class OrderDetailsPanel extends StatelessWidget {
           if (onModifyOrder != null && order.status != 'terminee' && order.status != 'annulee') ...[
             SizedBox(
               width: double.infinity,
-              height: 48,
+              height: 52,
               child: ElevatedButton.icon(
                 onPressed: onModifyOrder,
                 style: ElevatedButton.styleFrom(
@@ -953,41 +953,47 @@ class OrderDetailsPanel extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    if (onReprintKitchenSlip != null) {
-                      onReprintKitchenSlip!();
-                    } else {
-                      final data = PrintableReceiptData.fromHistoryOrder(order);
-                      final ok = await ReceiptPrinterService.printKitchenReceiptDirect(data);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(ok
-                                ? 'Bon cuisine envoyé directement à l\'imprimante.'
-                                : 'Impression lancée.'),
-                            backgroundColor: const Color(0xFF059669),
-                            action: SnackBarAction(
-                              label: 'VOIR BON',
-                              textColor: Colors.white,
-                              onPressed: () => ReceiptPreviewDialog.show(context, data, initialShowKitchen: true),
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      if (onReprintKitchenSlip != null) {
+                        onReprintKitchenSlip!();
+                      } else {
+                        final data = PrintableReceiptData.fromHistoryOrder(order);
+                        final ok = await ReceiptPrinterService.printKitchenReceiptDirect(data);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(ok
+                                  ? 'Bon cuisine envoyé directement à l\'imprimante.'
+                                  : 'Impression lancée.'),
+                              backgroundColor: const Color(0xFF059669),
+                              action: SnackBarAction(
+                                label: 'VOIR BON',
+                                textColor: Colors.white,
+                                onPressed: () => ReceiptPreviewDialog.show(context, data, initialShowKitchen: true),
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        }
                       }
-                    }
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF374151),
-                    side: const BorderSide(color: Color(0xFFD1D5DB)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.restaurant_menu, size: 16),
-                  label: const Text(
-                    'Imprimer Bon Cuisine',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: AppColors.brandDark,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: AppColors.goldLight),
+                      ),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.restaurant_menu, size: 20),
+                    label: const Text(
+                      'IMPRIMER BON CUISINE',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                    ),
                   ),
                 ),
               ),
@@ -999,40 +1005,50 @@ class OrderDetailsPanel extends StatelessWidget {
                     final data = PrintableReceiptData.fromHistoryOrder(order);
                     ReceiptPreviewDialog.show(context, data, initialShowKitchen: true);
                   },
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   child: Container(
-                    width: 44,
-                    height: 44,
+                    width: 52,
+                    height: 52,
                     decoration: BoxDecoration(
                       color: const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFD1D5DB)),
                     ),
-                    child: const Icon(Icons.visibility_outlined, size: 20, color: Color(0xFF4B5563)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onRefundOrCancel ??
-                      () => _fallback(context, 'Remboursement / Annulation'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.danger,
-                    side: BorderSide(color: AppColors.danger.withValues(alpha: 0.4)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.undo, size: 16),
-                  label: const Text(
-                    'Remboursement / Annulation',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    child: const Icon(Icons.visibility_outlined, color: Color(0xFF374151), size: 22),
                   ),
                 ),
               ),
             ],
           ),
+          if (order.status != 'annulee') ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: onRefundOrCancel ??
+                    () => _fallback(context, 'Remboursement / Annulation'),
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFEF2F2),
+                  foregroundColor: AppColors.danger,
+                  side: BorderSide(color: AppColors.danger.withValues(alpha: 0.45)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.undo, size: 20),
+                label: const Text(
+                  'REMBOURSEMENT / ANNULATION',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1045,6 +1061,7 @@ void showOrderDetailsPanel(
   HistoryOrder order, {
   VoidCallback? onMarkTerminee,
   VoidCallback? onModifyOrder,
+  VoidCallback? onRefundOrCancel,
 }) {
   showGeneralDialog<void>(
     context: context,
@@ -1068,6 +1085,7 @@ void showOrderDetailsPanel(
               onClose: () => Navigator.of(ctx).pop(),
               onMarkTerminee: onMarkTerminee,
               onModifyOrder: onModifyOrder,
+              onRefundOrCancel: onRefundOrCancel,
             ),
           ),
         ),

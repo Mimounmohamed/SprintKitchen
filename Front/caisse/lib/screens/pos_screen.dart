@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/pos_models.dart';
@@ -36,7 +37,7 @@ class PosScreen extends StatefulWidget {
   State<PosScreen> createState() => _PosScreenState();
 }
 
-class _PosScreenState extends State<PosScreen> {
+class _PosScreenState extends State<PosScreen> with WidgetsBindingObserver {
   int _selectedCategory = 0;
   OrderType _orderType = OrderType.dineIn;
   int? _selectedLineIndex = 0;
@@ -44,8 +45,11 @@ class _PosScreenState extends State<PosScreen> {
   final MenuService _menuService = MenuService();
   final OrderService _orderService = OrderService();
   List<MenuCategory> _categories = [];
+  String _menuSignature = '';
   bool _loading = true;
+  bool _refreshingMenu = false;
   String? _error;
+  Timer? _menuRefreshTimer;
 
   final List<TicketLine> _ticketLines = [];
   final ScrollController _gridScrollController = ScrollController();
@@ -78,17 +82,31 @@ class _PosScreenState extends State<PosScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ticketNumber = widget.ticketNumber;
     if (widget.editingOrder != null) {
       _loadOrderForEditing(widget.editingOrder!);
     }
     _loadMenu();
+    _menuRefreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _refreshMenuSilently(),
+    );
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _menuRefreshTimer?.cancel();
     _gridScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshMenuSilently();
+    }
   }
 
   Future<void> _loadMenu() async {
@@ -98,16 +116,64 @@ class _PosScreenState extends State<PosScreen> {
     });
     try {
       final categories = await _menuService.fetchMenu();
+      if (!mounted) return;
       setState(() {
         _categories = categories;
+        _menuSignature = MenuService.computeSignature(categories);
         _selectedCategory = 0;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _refreshMenuSilently() async {
+    if (_refreshingMenu || !mounted) return;
+    _refreshingMenu = true;
+    try {
+      final categories = await _menuService.fetchMenu();
+      if (!mounted) return;
+      final newSig = MenuService.computeSignature(categories);
+      if (newSig == _menuSignature && !_loading && _error == null) {
+        return;
+      }
+
+      // Preserve the cashier's currently selected category by ID or label.
+      int nextSelected = 0;
+      if (_categories.isNotEmpty &&
+          _selectedCategory >= 0 &&
+          _selectedCategory < _categories.length) {
+        final prevCat = _categories[_selectedCategory];
+        int matchIdx = -1;
+        if (prevCat.id != null && prevCat.id!.isNotEmpty) {
+          matchIdx = categories.indexWhere((c) => c.id == prevCat.id);
+        }
+        if (matchIdx == -1) {
+          matchIdx = categories.indexWhere((c) => c.label == prevCat.label);
+        }
+        if (matchIdx != -1) {
+          nextSelected = matchIdx;
+        } else if (categories.isNotEmpty) {
+          nextSelected = _selectedCategory.clamp(0, categories.length - 1);
+        }
+      }
+
+      setState(() {
+        _categories = categories;
+        _menuSignature = newSig;
+        _selectedCategory = nextSelected;
+        _loading = false;
+        _error = null;
+      });
+    } catch (_) {
+      // Ignore transient network errors during background polling.
+    } finally {
+      _refreshingMenu = false;
     }
   }
 
@@ -1574,14 +1640,15 @@ class _PosScreenState extends State<PosScreen> {
                     icon: Icons.inventory_2_outlined,
                     bg: const Color(0xFF27272A),
                     fg: Colors.white,
-                    onTap: () {
-                      Navigator.of(context).push(
+                    onTap: () async {
+                      await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => HistoryScreen(
                             posteLabel: widget.posteLabel,
                           ),
                         ),
                       );
+                      _refreshMenuSilently();
                     },
                   ),
                 ),

@@ -1305,7 +1305,7 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
             onClick={() => printThermalReceipt({ order: ord, detail, payment, kitchenOnly: false })}
             style={{
               width: '100%',
-              height: 54,
+              height: 52,
               borderRadius: 12,
               border: `1px solid ${COLORS.goldLight}`,
               background: COLORS.gold,
@@ -1320,54 +1320,55 @@ function OrderDetailsPanel({ order, onClose, onMarkTerminee, onRefund }) {
               gap: 8,
             }}
           >
-            <Printer size={18} /> IMPRIMER LE TICKET DE CAISSE
+            <Printer size={18} /> IMPRIMER TICKET DE CAISSE
           </button>
 
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              onClick={() => printThermalReceipt({ order: ord, detail, payment, kitchenOnly: true })}
-              style={{
-                flex: 1,
-                padding: '12px 14px',
-                borderRadius: 10,
-                border: `1px solid ${COLORS.borderDark}`,
-                background: COLORS.surface,
-                color: '#374151',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: FONT_BODY,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-              }}
-            >
-              <UtensilsCrossed size={16} /> Réimprimer Bon Cuisine
-            </button>
+          <button
+            onClick={() => printThermalReceipt({ order: ord, detail, payment, kitchenOnly: true })}
+            style={{
+              width: '100%',
+              height: 52,
+              borderRadius: 12,
+              border: `1px solid ${COLORS.goldLight}`,
+              background: COLORS.gold,
+              color: COLORS.brandDark,
+              fontSize: 13,
+              fontWeight: 800,
+              cursor: 'pointer',
+              fontFamily: FONT_BODY,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
+            <UtensilsCrossed size={18} /> IMPRIMER BON CUISINE
+          </button>
 
+          {ord.status !== 'annulee' && (
             <button
               onClick={() => onRefund(ord._id)}
               style={{
-                flex: 1,
-                padding: '12px 14px',
-                borderRadius: 10,
-                border: `1px solid rgba(239, 68, 68, 0.4)`,
+                width: '100%',
+                height: 52,
+                borderRadius: 12,
+                border: `1px solid rgba(239, 68, 68, 0.45)`,
                 background: '#FEF2F2',
                 color: COLORS.danger,
-                fontSize: 12,
-                fontWeight: 700,
+                fontSize: 13,
+                fontWeight: 800,
+                letterSpacing: '0.4px',
                 cursor: 'pointer',
                 fontFamily: FONT_BODY,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 6,
+                gap: 8,
               }}
             >
-              <Undo2 size={16} /> Remboursement / Annulation
+              <Undo2 size={18} /> REMBOURSEMENT / ANNULATION
             </button>
-          </div>
+          )}
         </div>
       </div>
     </>
@@ -2361,7 +2362,7 @@ export default function HistoriquePage() {
       const payData = paymentRes?.data?.data;
       const payment = Array.isArray(payData) ? payData[0] : payData;
       if (payment?._id) {
-        await paymentService.refund(payment._id, 'Remboursement demandé');
+        await paymentService.refund(payment._id, 'Remboursement demandé').catch(() => {});
       }
       loadSummary();
       loadOrders(true);

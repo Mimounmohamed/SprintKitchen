@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/pos_models.dart';
+import '../../services/menu_service.dart';
 import '../../theme/app_colors.dart';
 import 'category_sidebar_item.dart';
 import 'customization_modal.dart';
@@ -27,6 +29,12 @@ class MenuPickerModal extends StatefulWidget {
 }
 
 class _MenuPickerModalState extends State<MenuPickerModal> {
+  final MenuService _menuService = MenuService();
+  late List<MenuCategory> _categories;
+  String _menuSignature = '';
+  bool _refreshingMenu = false;
+  Timer? _menuRefreshTimer;
+
   int _selectedCategoryIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _gridScrollController = ScrollController();
@@ -35,25 +43,73 @@ class _MenuPickerModalState extends State<MenuPickerModal> {
   @override
   void initState() {
     super.initState();
+    _categories = widget.categories;
+    _menuSignature = MenuService.computeSignature(_categories);
     _searchController.addListener(() {
       final q = _searchController.text.trim().toLowerCase();
       if (q != _searchQuery) {
         setState(() => _searchQuery = q);
       }
     });
+    _refreshMenuSilently();
+    _menuRefreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _refreshMenuSilently(),
+    );
   }
 
   @override
   void dispose() {
+    _menuRefreshTimer?.cancel();
     _searchController.dispose();
     _gridScrollController.dispose();
     super.dispose();
   }
 
+  Future<void> _refreshMenuSilently() async {
+    if (_refreshingMenu || !mounted) return;
+    _refreshingMenu = true;
+    try {
+      final categories = await _menuService.fetchMenu();
+      if (!mounted) return;
+      final newSig = MenuService.computeSignature(categories);
+      if (newSig == _menuSignature) return;
+
+      int nextSelected = 0;
+      if (_categories.isNotEmpty &&
+          _selectedCategoryIndex >= 0 &&
+          _selectedCategoryIndex < _categories.length) {
+        final prevCat = _categories[_selectedCategoryIndex];
+        int matchIdx = -1;
+        if (prevCat.id != null && prevCat.id!.isNotEmpty) {
+          matchIdx = categories.indexWhere((c) => c.id == prevCat.id);
+        }
+        if (matchIdx == -1) {
+          matchIdx = categories.indexWhere((c) => c.label == prevCat.label);
+        }
+        if (matchIdx != -1) {
+          nextSelected = matchIdx;
+        } else if (categories.isNotEmpty) {
+          nextSelected = _selectedCategoryIndex.clamp(0, categories.length - 1);
+        }
+      }
+
+      setState(() {
+        _categories = categories;
+        _menuSignature = newSig;
+        _selectedCategoryIndex = nextSelected;
+      });
+    } catch (_) {
+      // Ignore transient background fetch errors.
+    } finally {
+      _refreshingMenu = false;
+    }
+  }
+
   List<MenuItem> get _displayedItems {
     if (_searchQuery.isNotEmpty) {
       final results = <MenuItem>[];
-      for (final cat in widget.categories) {
+      for (final cat in _categories) {
         for (final item in cat.items) {
           if (item.name.toLowerCase().contains(_searchQuery)) {
             if (!results.any((r) => r.id == item.id && r.name == item.name)) {
@@ -65,9 +121,9 @@ class _MenuPickerModalState extends State<MenuPickerModal> {
       return results;
     }
 
-    if (widget.categories.isEmpty) return const [];
-    final idx = math.min(_selectedCategoryIndex, widget.categories.length - 1);
-    return widget.categories[idx].items;
+    if (_categories.isEmpty) return const [];
+    final idx = math.min(_selectedCategoryIndex, _categories.length - 1);
+    return _categories[idx].items;
   }
 
   Future<void> _handleItemTap(MenuItem item) async {
@@ -177,7 +233,7 @@ class _MenuPickerModalState extends State<MenuPickerModal> {
         color: AppColors.surface,
         border: Border(right: BorderSide(color: Color(0xFFE5E7EB))),
       ),
-      child: widget.categories.isEmpty
+      child: _categories.isEmpty
           ? const Center(
               child: Text(
                 'Aucune catégorie',
@@ -186,9 +242,9 @@ class _MenuPickerModalState extends State<MenuPickerModal> {
             )
           : ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 10),
-              itemCount: widget.categories.length,
+              itemCount: _categories.length,
               itemBuilder: (context, index) {
-                final cat = widget.categories[index];
+                final cat = _categories[index];
                 final isSelected =
                     _searchQuery.isEmpty && index == _selectedCategoryIndex;
                 return CategorySidebarItem(
