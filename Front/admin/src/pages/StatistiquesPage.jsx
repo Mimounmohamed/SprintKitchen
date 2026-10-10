@@ -1,22 +1,21 @@
-import React from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  X,
   Circle,
   Download,
   Printer,
-  ChevronRight,
   TrendingUp,
-  TrendingDown,
   UtensilsCrossed,
   Clock,
-  Zap,
   Timer,
-  ShoppingBag,
-  CreditCard,
   AlertTriangle,
-  Receipt,
-  Store,
 } from "lucide-react";
 import { statsService } from "../services";
 
@@ -41,7 +40,32 @@ const C = {
 };
 
 const FONT_TITLE = "'Bebas Neue', sans-serif";
-const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT_BODY = "'Open Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+const MONTHS_SHORT = [
+  "JANV.", "FÉVR.", "MARS", "AVR.", "MAI", "JUIN",
+  "JUIL.", "AOÛT", "SEPT.", "OCT.", "NOV.", "DÉC.",
+];
+
+function two(n) {
+  return String(n).padStart(2, "0");
+}
+
+function fmtLongDate(d) {
+  if (!d) return "";
+  const date = new Date(d);
+  return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function isSameDay(a, b) {
+  return (
+    a &&
+    b &&
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
 
 function fmtDA(n) {
   return `${(n || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DA`;
@@ -58,33 +82,6 @@ function fmtDuration(sec) {
     return `${h}h ${remM.toString().padStart(2, "0")}m`;
   }
   return s > 0 ? `${m}m ${s.toString().padStart(2, "0")}s` : `${m} min`;
-}
-
-/* Period definitions — maps label to { from, to } date ranges */
-const PERIODS = ["Aujourd'hui", "Hier", "7 Derniers Jours", "Ce Mois-ci"];
-
-function getPeriodRange(period) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const eod = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-  if (period === "Aujourd'hui") {
-    return { from: today.toISOString(), to: eod(today).toISOString() };
-  }
-  if (period === "Hier") {
-    const y = new Date(today);
-    y.setDate(y.getDate() - 1);
-    return { from: y.toISOString(), to: eod(y).toISOString() };
-  }
-  if (period === "7 Derniers Jours") {
-    const s = new Date(today);
-    s.setDate(s.getDate() - 6);
-    return { from: s.toISOString(), to: eod(today).toISOString() };
-  }
-  if (period === "Ce Mois-ci") {
-    const s = new Date(today.getFullYear(), today.getMonth(), 1);
-    return { from: s.toISOString(), to: eod(today).toISOString() };
-  }
-  return { from: today.toISOString(), to: eod(today).toISOString() };
 }
 
 /* Channel label map */
@@ -676,27 +673,883 @@ function Paiements({ data }) {
   );
 }
 
+/* ── Date Range Popover (Exact 1:1 replica of HistoriquePage / Caisse) ─────── */
+const POPOVER_COLORS = {
+  ink: "#1C1917",
+  stone600: "#57534E",
+  stone500: "#78716C",
+  stone400: "#A8A29E",
+  border: "#E7E5E4",
+  brandDark: "#452B1E",
+  gold: "#FACC15",
+  rangeFill: "#FDE9A0",
+};
+
+const POPOVER_MONTHS = [
+  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+];
+
+const POPOVER_MONTHS_SHORT = [
+  "janv.", "févr.", "mars", "avr.", "mai", "juin",
+  "juil.", "août", "sept.", "oct.", "nov.", "déc.",
+];
+
+const POPOVER_WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
+
+const fmtShortVal = (d) => `${d.getDate()} ${POPOVER_MONTHS_SHORT[d.getMonth()]}`;
+const fmtSlashVal = (d) => `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()}`;
+
+function PopoverDayCell({
+  day,
+  col,
+  start,
+  end,
+  today,
+  daysInMonth,
+  onDayTap,
+}) {
+  const cellH = 38;
+  const brownSize = 32;
+  const haloSize = 38;
+  const radius = haloSize / 2;
+
+  if (!day) return <div style={{ flex: 1, height: cellH }} />;
+
+  const isAllHistory = start && start.getFullYear() <= 2020;
+  const isStart = start && !isAllHistory && isSameDay(day, start);
+  const isEnd = end && !isAllHistory && isSameDay(day, end);
+  const isSingleDay = isStart && isEnd;
+  const isEndpoint = isStart || isEnd;
+  const inRange = !isAllHistory && start && end && day > start && day < end;
+  const isToday = isSameDay(day, today);
+  const disabled = day > today;
+
+  const isFirstInMonth = day.getDate() === 1;
+  const isLastInMonth = day.getDate() === daysInMonth;
+
+  let strip = null;
+  if (!isSingleDay && start && end && !isAllHistory) {
+    if (inRange) {
+      const roundLeft = col === 0 || isFirstInMonth;
+      const roundRight = col === 6 || isLastInMonth;
+      strip = (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: POPOVER_COLORS.rangeFill,
+            borderTopLeftRadius: roundLeft ? radius : 0,
+            borderBottomLeftRadius: roundLeft ? radius : 0,
+            borderTopRightRadius: roundRight ? radius : 0,
+            borderBottomRightRadius: roundRight ? radius : 0,
+          }}
+        />
+      );
+    } else if (isStart) {
+      strip = (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: "50%",
+            right: 0,
+            background: col === 6 || isLastInMonth ? "transparent" : POPOVER_COLORS.rangeFill,
+          }}
+        />
+      );
+    } else if (isEnd) {
+      strip = (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: "50%",
+            background: col === 0 || isFirstInMonth ? "transparent" : POPOVER_COLORS.rangeFill,
+          }}
+        />
+      );
+    }
+  }
+
+  const halo =
+    !isSingleDay && isEndpoint ? (
+      <div
+        style={{
+          position: "absolute",
+          width: haloSize,
+          height: haloSize,
+          borderRadius: "50%",
+          background: POPOVER_COLORS.rangeFill,
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+        }}
+      />
+    ) : null;
+
+  let dayContentStyle = {
+    width: brownSize,
+    height: brownSize,
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    zIndex: 2,
+    fontSize: 13.5,
+    fontFamily: FONT_BODY,
+  };
+
+  if (isEndpoint) {
+    dayContentStyle = {
+      ...dayContentStyle,
+      background: POPOVER_COLORS.brandDark,
+      color: "#FFFFFF",
+      fontWeight: 700,
+    };
+  } else if (isToday && !inRange) {
+    dayContentStyle = {
+      ...dayContentStyle,
+      border: `1.4px solid ${POPOVER_COLORS.brandDark}`,
+      color: POPOVER_COLORS.ink,
+      fontWeight: 500,
+      background: "transparent",
+    };
+  } else if (inRange) {
+    dayContentStyle = {
+      ...dayContentStyle,
+      color: POPOVER_COLORS.brandDark,
+      fontWeight: 700,
+      background: "transparent",
+    };
+  } else {
+    dayContentStyle = {
+      ...dayContentStyle,
+      color: disabled ? POPOVER_COLORS.stone400 : POPOVER_COLORS.ink,
+      fontWeight: 500,
+      background: "transparent",
+    };
+  }
+
+  return (
+    <div
+      onClick={disabled ? undefined : () => onDayTap(day)}
+      style={{
+        flex: 1,
+        height: cellH,
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: disabled ? "default" : "pointer",
+        userSelect: "none",
+      }}
+    >
+      {strip}
+      {halo}
+      <div style={dayContentStyle}>{day.getDate()}</div>
+    </div>
+  );
+}
+
+function PopoverMonthGrid({ month, start, end, today, onDayTap }) {
+  const year = month.getFullYear();
+  const m = month.getMonth();
+  const firstDay = new Date(year, m, 1);
+  const daysInMonth = new Date(year, m + 1, 0).getDate();
+  const leading = (firstDay.getDay() + 6) % 7;
+
+  const cells = [];
+  for (let i = 0; i < leading; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, m, d));
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const rows = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    rows.push(cells.slice(i, i + 7));
+  }
+
+  return (
+    <div style={{ flex: 1 }}>
+      <div style={{ display: "flex", marginBottom: 8 }}>
+        {POPOVER_WEEKDAYS.map((h, i) => (
+          <div
+            key={i}
+            style={{
+              flex: 1,
+              textAlign: "center",
+              fontSize: 12,
+              fontWeight: 700,
+              color: POPOVER_COLORS.stone500,
+              fontFamily: FONT_BODY,
+            }}
+          >
+            {h}
+          </div>
+        ))}
+      </div>
+
+      {rows.map((row, rIdx) => (
+        <div
+          key={rIdx}
+          style={{
+            display: "flex",
+            margin: "2px 0",
+          }}
+        >
+          {row.map((day, cIdx) => (
+            <PopoverDayCell
+              key={cIdx}
+              day={day}
+              col={cIdx}
+              start={start}
+              end={end}
+              today={today}
+              daysInMonth={daysInMonth}
+              onDayTap={onDayTap}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DateRangePopover({ anchorRef, initialRange, onClose, onApply }) {
+  const today = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }, []);
+
+  const [start, setStart] = useState(() => initialRange?.start || today);
+  const [end, setEnd] = useState(() => initialRange?.end || today);
+
+  const [rightMonth, setRightMonth] = useState(() => {
+    const anchor = initialRange?.end || today;
+    return new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  });
+
+  const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 });
+
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      if (!anchorRef?.current) return;
+      const rect = anchorRef.current.getBoundingClientRect();
+      const popoverWidth = 860;
+      let left = rect.left - 4;
+      if (left + popoverWidth > window.innerWidth - 16) {
+        left = Math.max(16, window.innerWidth - popoverWidth - 16);
+      }
+      if (left < 16) left = 16;
+      let top = rect.bottom + 10;
+      if (top + 480 > window.innerHeight && rect.top > 480) {
+        top = Math.max(16, rect.top - 480 - 10);
+      }
+      setPopoverPos({ top, left });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchorRef]);
+
+  const leftMonth = useMemo(() => {
+    return new Date(rightMonth.getFullYear(), rightMonth.getMonth() - 1, 1);
+  }, [rightMonth]);
+
+  const canGoNext = useMemo(() => {
+    const next = new Date(rightMonth.getFullYear(), rightMonth.getMonth() + 1, 1);
+    return next <= new Date(today.getFullYear(), today.getMonth(), 1);
+  }, [rightMonth, today]);
+
+  const goPrevMonth = () => {
+    setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() - 1, 1));
+  };
+
+  const goNextMonth = () => {
+    if (!canGoNext) return;
+    setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() + 1, 1));
+  };
+
+  const shortcuts = useMemo(
+    () => [
+      {
+        label: "Aujourd'hui",
+        range: (t) => ({ start: t, end: t }),
+        valueLabel: fmtShortVal(today),
+      },
+      {
+        label: "Hier",
+        range: (t) => {
+          const y = new Date(t);
+          y.setDate(y.getDate() - 1);
+          return { start: y, end: y };
+        },
+        valueLabel: (() => {
+          const y = new Date(today);
+          y.setDate(y.getDate() - 1);
+          return fmtShortVal(y);
+        })(),
+      },
+      {
+        label: "7 derniers jours",
+        range: (t) => {
+          const s = new Date(t);
+          s.setDate(s.getDate() - 6);
+          return { start: s, end: t };
+        },
+        valueLabel: null,
+      },
+      {
+        label: "Ce mois-ci",
+        range: (t) => ({
+          start: new Date(t.getFullYear(), t.getMonth(), 1),
+          end: t,
+        }),
+        valueLabel: POPOVER_MONTHS[today.getMonth()],
+      },
+      {
+        label: "Mois dernier",
+        range: (t) => {
+          const lastMonthEnd = new Date(t.getFullYear(), t.getMonth(), 0);
+          const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
+          return { start: lastMonthStart, end: lastMonthEnd };
+        },
+        valueLabel: (() => {
+          const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          return POPOVER_MONTHS[prev.getMonth()];
+        })(),
+      },
+      {
+        label: "Tout l'historique",
+        range: (t) => ({
+          start: new Date(2020, 0, 1),
+          end: t,
+        }),
+        valueLabel: "Toutes dates",
+      },
+    ],
+    [today]
+  );
+
+  const matchesShortcut = (s) => {
+    if (!start || !end) return false;
+    if (s.label === "Tout l'historique") {
+      return start.getFullYear() <= 2020 && isSameDay(end, today);
+    }
+    const r = s.range(today);
+    return isSameDay(start, r.start) && isSameDay(end, r.end);
+  };
+
+  const applyShortcut = (s) => {
+    const r = s.range(today);
+    setStart(r.start);
+    setEnd(r.end);
+    setRightMonth(new Date(r.end.getFullYear(), r.end.getMonth(), 1));
+  };
+
+  const handleDayTap = (day) => {
+    if (!start || (start && end)) {
+      setStart(day);
+      setEnd(null);
+    } else if (day < start) {
+      setEnd(start);
+      setStart(day);
+    } else {
+      setEnd(day);
+    }
+  };
+
+  const isCustomActive = shortcuts.every((s) => !matchesShortcut(s));
+  const hasRange = start != null && end != null;
+  const isAllHistory = start && start.getFullYear() <= 2020;
+  const days = hasRange ? Math.round(Math.abs(end - start) / 86400000) + 1 : 0;
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 499,
+          background: "transparent",
+        }}
+      />
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "fixed",
+          top: `${popoverPos.top}px`,
+          left: `${popoverPos.left}px`,
+          zIndex: 500,
+          width: "min(860px, calc(100vw - 32px))",
+          maxHeight: "calc(100vh - 32px)",
+          overflowY: "auto",
+          background: "#FFFFFF",
+          borderRadius: 16,
+          border: `1px solid ${POPOVER_COLORS.border}`,
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          fontFamily: FONT_BODY,
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: "20px 18px 20px 26px",
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: POPOVER_COLORS.brandDark,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Calendar size={17} color={POPOVER_COLORS.gold} />
+          </div>
+
+          <div style={{ marginLeft: 14, flex: 1 }}>
+            <div
+              style={{
+                fontFamily: FONT_BODY,
+                fontSize: 14,
+                fontWeight: 800,
+                letterSpacing: "0.3px",
+                color: POPOVER_COLORS.ink,
+              }}
+            >
+              SÉLECTIONNER UNE PÉRIODE D'ANALYSE
+            </div>
+            <div
+              style={{
+                fontFamily: FONT_BODY,
+                fontSize: 12.5,
+                color: POPOVER_COLORS.stone500,
+                marginTop: 3,
+              }}
+            >
+              Filtrer les rapports financiers, statistiques et performances cuisine
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: 6,
+              borderRadius: 8,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: POPOVER_COLORS.stone500,
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ height: 1, background: POPOVER_COLORS.border }} />
+
+        {/* Body */}
+        <div
+          style={{
+            padding: "22px 26px",
+            display: "flex",
+            alignItems: "flex-start",
+          }}
+        >
+          {/* Shortcuts column */}
+          <div style={{ width: 220, flexShrink: 0 }}>
+            <div
+              style={{
+                fontFamily: FONT_BODY,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.6px",
+                color: POPOVER_COLORS.stone500,
+                textTransform: "uppercase",
+                marginBottom: 12,
+              }}
+            >
+              RACCOURCIS RAPIDES
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {shortcuts.map((s, idx) => {
+                const active = matchesShortcut(s);
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => applyShortcut(s)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      background: active ? POPOVER_COLORS.brandDark : "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      width: "100%",
+                      textAlign: "left",
+                      fontFamily: FONT_BODY,
+                    }}
+                  >
+                    {active && (
+                      <div
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: POPOVER_COLORS.gold,
+                          marginRight: 8,
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    <span
+                      style={{
+                        flex: 1,
+                        fontSize: 13,
+                        fontWeight: active ? 700 : 600,
+                        color: active ? "#FFFFFF" : POPOVER_COLORS.ink,
+                      }}
+                    >
+                      {s.label}
+                    </span>
+                    {active ? (
+                      <span
+                        style={{
+                          padding: "3px 8px",
+                          background: POPOVER_COLORS.gold,
+                          borderRadius: 6,
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                          color: POPOVER_COLORS.ink,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        Actif
+                      </span>
+                    ) : s.valueLabel ? (
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: POPOVER_COLORS.stone500,
+                          fontWeight: 400,
+                        }}
+                      >
+                        {s.valueLabel}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  background: isCustomActive ? POPOVER_COLORS.brandDark : "transparent",
+                  fontFamily: FONT_BODY,
+                }}
+              >
+                {isCustomActive && (
+                  <div
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: POPOVER_COLORS.gold,
+                      marginRight: 8,
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    fontWeight: isCustomActive ? 700 : 600,
+                    color: isCustomActive ? "#FFFFFF" : POPOVER_COLORS.ink,
+                  }}
+                >
+                  Personnalisé
+                </span>
+                <ChevronRight
+                  size={18}
+                  color={isCustomActive ? "#FFFFFF" : POPOVER_COLORS.stone400}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ width: 32, flexShrink: 0 }} />
+
+          {/* Calendars column */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: 14,
+              }}
+            >
+              <button
+                type="button"
+                onClick={goPrevMonth}
+                style={{
+                  padding: 4,
+                  borderRadius: 6,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: POPOVER_COLORS.stone600,
+                }}
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  fontFamily: FONT_BODY,
+                  fontSize: 13.5,
+                  fontWeight: 800,
+                  letterSpacing: "0.4px",
+                  color: POPOVER_COLORS.ink,
+                  textTransform: "uppercase",
+                }}
+              >
+                {POPOVER_MONTHS[leftMonth.getMonth()]} {leftMonth.getFullYear()}
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  fontFamily: FONT_BODY,
+                  fontSize: 13.5,
+                  fontWeight: 800,
+                  letterSpacing: "0.4px",
+                  color: POPOVER_COLORS.ink,
+                  textTransform: "uppercase",
+                }}
+              >
+                {POPOVER_MONTHS[rightMonth.getMonth()]} {rightMonth.getFullYear()}
+              </div>
+              <button
+                type="button"
+                onClick={canGoNext ? goNextMonth : undefined}
+                disabled={!canGoNext}
+                style={{
+                  padding: 4,
+                  borderRadius: 6,
+                  background: "none",
+                  border: "none",
+                  cursor: canGoNext ? "pointer" : "default",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: canGoNext ? POPOVER_COLORS.stone600 : POPOVER_COLORS.border,
+                }}
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 28, alignItems: "flex-start" }}>
+              <PopoverMonthGrid
+                month={leftMonth}
+                start={start}
+                end={end}
+                today={today}
+                onDayTap={handleDayTap}
+              />
+              <PopoverMonthGrid
+                month={rightMonth}
+                start={start}
+                end={end}
+                today={today}
+                onDayTap={handleDayTap}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: 1, background: POPOVER_COLORS.border }} />
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: "16px 26px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: POPOVER_COLORS.stone600,
+                fontFamily: FONT_BODY,
+              }}
+            >
+              Période sélectionnée :{" "}
+            </span>
+            <div
+              style={{
+                marginLeft: 6,
+                padding: "8px 14px",
+                background: "#F3F4F6",
+                borderRadius: 8,
+                border: `1px solid ${POPOVER_COLORS.border}`,
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: POPOVER_COLORS.ink,
+                  fontFamily: FONT_BODY,
+                }}
+              >
+                {hasRange
+                  ? isAllHistory
+                    ? "Tout l'historique"
+                    : `${fmtSlashVal(start)} — ${fmtSlashVal(end)}`
+                  : "Choisissez une période"}
+              </span>
+              {hasRange && (
+                <span
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: 500,
+                    color: POPOVER_COLORS.stone500,
+                    marginLeft: 8,
+                    fontFamily: FONT_BODY,
+                  }}
+                >
+                  {isAllHistory ? "(Toutes dates)" : `(${days} jour${days > 1 ? "s" : ""})`}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "10px 16px",
+                background: "transparent",
+                border: "none",
+                borderRadius: 8,
+                color: POPOVER_COLORS.stone600,
+                fontSize: 13.5,
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: FONT_BODY,
+              }}
+            >
+              Annuler
+            </button>
+
+            <button
+              type="button"
+              disabled={!hasRange}
+              onClick={() => {
+                if (hasRange) {
+                  onApply(start, end);
+                  onClose();
+                }
+              }}
+              style={{
+                padding: "12px 18px",
+                background: POPOVER_COLORS.gold,
+                color: POPOVER_COLORS.ink,
+                border: "none",
+                borderRadius: 10,
+                fontSize: 13.5,
+                fontWeight: 800,
+                cursor: hasRange ? "pointer" : "not-allowed",
+                opacity: hasRange ? 1 : 0.5,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontFamily: FONT_BODY,
+              }}
+            >
+              <Check size={16} color={POPOVER_COLORS.ink} />
+              <span>Appliquer la période</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ── Page Principale ───────────────────────────────────────────────────────── */
 export default function StatistiquesPage() {
   const navigate = useNavigate();
-  const [period, setPeriod] = React.useState("Aujourd'hui");
-  const [mobile, setMobile] = React.useState(window.innerWidth < 960);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState(null);
-  const [summary, setSummary] = React.useState(null);
+  const [mobile, setMobile] = useState(window.innerWidth < 960);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const calendarTriggerRef = useRef(null);
 
-  React.useEffect(() => {
+  // Date Range (default: Today)
+  const [range, setRange] = useState(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return { start: today, end: today };
+  });
+
+  useEffect(() => {
     const h = () => setMobile(window.innerWidth < 960);
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
   }, []);
 
-  React.useEffect(() => {
-    const range = getPeriodRange(period);
+  useEffect(() => {
+    const fromIso = range.start.getFullYear() <= 2020 ? new Date(2020, 0, 1).toISOString() : range.start.toISOString();
+    const toIso = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate(), 23, 59, 59, 999).toISOString();
     setLoading(true);
     setError(null);
     statsService
-      .getSummary({ from: range.from, to: range.to })
+      .getSummary({ from: fromIso, to: toIso })
       .then((res) => {
         setSummary(res.data.data);
       })
@@ -705,36 +1558,33 @@ export default function StatistiquesPage() {
         setError("Erreur de chargement des statistiques.");
       })
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [range]);
+
+  const headerDateTitle = useMemo(() => {
+    if (range.start.getFullYear() <= 2020) {
+      return "STATISTIQUES DE TOUT L'HISTORIQUE";
+    }
+    return `STATISTIQUES DU ${fmtLongDate(range.start)} AU ${fmtLongDate(range.end)}`;
+  }, [range]);
+
+  const periodLabel = useMemo(() => {
+    if (range.start.getFullYear() <= 2020) {
+      return "Tout l'historique";
+    }
+    return `Du ${fmtLongDate(range.start)} au ${fmtLongDate(range.end)}`;
+  }, [range]);
 
   /* Derived data */
   const rz = summary?.rapportZ || {};
   const ca = rz.totalTTC || 0;
   const caHT = rz.totalHT || 0;
   const tickets = rz.ticketCount || 0;
-  const panier = rz.avgBasket || 0;
   const kitchen = summary?.kitchen || {};
 
   const salesByHour = summary?.salesByHour || [];
   const topProducts = summary?.topProducts || [];
   const byChannel = summary?.byChannel || [];
   const paymentMethods = summary?.paymentMethods || [];
-
-  // ── Rapport Z Modal state ──
-  const [showRZ, setShowRZ] = React.useState(false);
-  const [rzData, setRzData] = React.useState(null);
-  const [rzLoading, setRzLoading] = React.useState(false);
-
-  const openRapportZ = () => {
-    setShowRZ(true);
-    setRzLoading(true);
-    const range = getPeriodRange(period);
-    statsService
-      .getRapportZ({ from: range.from, to: range.to })
-      .then((res) => setRzData(res.data.data))
-      .catch(() => setRzData(null))
-      .finally(() => setRzLoading(false));
-  };
 
   // ── PDF Export ──
   const exportPDF = () => {
@@ -762,7 +1612,7 @@ export default function StatistiquesPage() {
       .join("");
 
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/>
-    <title>Rapport d'Activité Bobo's — ${period}</title>
+    <title>Rapport d'Activité Bobo's — ${periodLabel}</title>
     <style>
       * { margin:0; padding:0; box-sizing:border-box; }
       body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #1C1917; padding: 32px; }
@@ -770,7 +1620,7 @@ export default function StatistiquesPage() {
       .header h1 { font-size: 24px; letter-spacing: 1px; font-weight: 800; }
       .header .sub { font-size: 10px; color: #F2B705; font-weight: 700; letter-spacing: 2px; margin-bottom: 4px; }
       .header .meta { font-size: 11px; color: rgba(245,240,230,0.7); margin-top: 6px; }
-      .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+      .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
       .kpi { background: #F5F4F0; border-radius: 8px; padding: 14px 16px; border: 1px solid #E5E7EB; }
       .kpi .label { font-size: 9.5px; font-weight: 700; color: #8B8378; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
       .kpi .value { font-size: 17px; font-weight: 800; color: #1C1917; }
@@ -789,7 +1639,7 @@ export default function StatistiquesPage() {
         <div>
           <div class="sub">RAPPORT DE GESTION &amp; STATISTIQUES</div>
           <h1>BOBO'S RESTAURATION</h1>
-          <div class="meta">Période : ${period} &nbsp;·&nbsp; Exporté le ${date}</div>
+          <div class="meta">Période : ${periodLabel} &nbsp;·&nbsp; Exporté le ${date}</div>
         </div>
         <div style="text-align:right; color:#F2B705; font-weight:800; font-size:16px;">
           ${fmt(ca)} DA<br/><span style="font-size:11px;color:rgba(245,240,230,0.7);font-weight:400;">${tickets} tickets clôturés</span>
@@ -799,7 +1649,6 @@ export default function StatistiquesPage() {
       <div class="kpis">
         <div class="kpi"><div class="label">Chiffre d'Affaires</div><div class="value">${fmt(ca)} DA</div></div>
         <div class="kpi"><div class="label">Tickets Clôturés</div><div class="value">${tickets}</div></div>
-        <div class="kpi"><div class="label">Panier Moyen</div><div class="value">${fmt(panier)} DA</div></div>
         <div class="kpi"><div class="label">Temps Moyen Cuisine</div><div class="value green">${fmtDuration(kitchen.avgPrepTimeSeconds)}</div></div>
         <div class="kpi"><div class="label">Commandes Cuisine</div><div class="value">${kitchen.ordersPreparedCount || 0}</div></div>
       </div>
@@ -942,11 +1791,11 @@ export default function StatistiquesPage() {
         </div>
       </header>
 
-      {/* ── Title Bar ── */}
+      {/* ── Title Bar (With Order Historic Date Range Filter) ── */}
       <div
         style={{
           width: "100%",
-          padding: mobile ? "16px 16px" : "18px 28px 16px",
+          padding: mobile ? "16px 16px" : "24px 32px 20px",
           background: C.cardBg,
           borderBottom: `1px solid ${C.border}`,
           display: "flex",
@@ -958,100 +1807,67 @@ export default function StatistiquesPage() {
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 700, letterSpacing: "0.6px", color: C.muted, marginBottom: 4 }}>
-            <span>PORTAIL OPÉRATIONNEL &amp; DIRECTION</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 600, letterSpacing: "0.6px", color: "#6B7280" }}>
+            <span>RAPPORTS &amp; STATISTIQUES</span>
             <span>•</span>
-            <span style={{ color: C.green, fontWeight: 800 }}>SYNCHRONISÉ KDS &amp; CAISSE</span>
+            <span style={{ color: C.green, fontWeight: 700 }}>SYNCHRONISÉ KDS &amp; COMPTOIR</span>
           </div>
-          <h1
+
+          <div
+            ref={calendarTriggerRef}
+            onClick={() => setShowDatePicker((prev) => !prev)}
             style={{
-              margin: "0 0 4px",
-              fontFamily: FONT_TITLE,
-              fontSize: mobile ? 28 : 34,
-              fontWeight: 400,
-              color: "#111827",
-              letterSpacing: "0.5px",
-              lineHeight: 1,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 12,
+              marginTop: 6,
+              cursor: "pointer",
             }}
           >
-            RAPPORTS &amp; STATISTIQUES
-          </h1>
-          <p style={{ margin: 0, fontSize: 12.5, color: C.muted }}>
-            Performances financières, vitesse de préparation cuisine et clôtures de caisse en temps réel.
-          </p>
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 8,
+                background: "#F9FAFB",
+                border: `1px solid ${C.border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#374151",
+                flexShrink: 0,
+              }}
+            >
+              <Calendar size={16} />
+            </div>
+
+            <h1
+              style={{
+                margin: 0,
+                fontFamily: FONT_TITLE,
+                fontSize: mobile ? 24 : 30,
+                fontWeight: 400,
+                letterSpacing: "0.5px",
+                color: "#111827",
+                lineHeight: 1.1,
+              }}
+            >
+              {headerDateTitle}
+            </h1>
+
+            <ChevronDown size={22} color="#6B7280" />
+          </div>
         </div>
 
-        {/* Right-aligned controls: Period pills + Action buttons */}
+        {/* Right-aligned Action button */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 10,
             flexWrap: "wrap",
-            width: mobile ? "100%" : "auto",
           }}
         >
-          {/* Period selector pills */}
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              background: "#F9FAFB",
-              border: `1px solid ${C.border}`,
-              padding: "3px 4px",
-              borderRadius: 8,
-              overflowX: "auto",
-              maxWidth: "100%",
-            }}
-          >
-            {PERIODS.map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: "none",
-                  background: period === p ? C.brown : "transparent",
-                  color: period === p ? "#F5F0E6" : "#374151",
-                  fontSize: 12,
-                  fontWeight: period === p ? 700 : 500,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  whiteSpace: "nowrap",
-                  flexShrink: 0,
-                  transition: "background .15s",
-                }}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={openRapportZ}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-              padding: "8px 16px",
-              height: 38,
-              borderRadius: 8,
-              border: "1px solid #EAB308",
-              background: C.yellow,
-              color: "#1F2937",
-              fontSize: 12.5,
-              fontWeight: 700,
-              cursor: "pointer",
-              fontFamily: "inherit",
-              flexShrink: 0,
-              boxSizing: "border-box",
-            }}
-          >
-            <Printer size={15} /> Clôture Z
-          </button>
-
           <button
             onClick={exportPDF}
             disabled={!summary || loading}
@@ -1059,21 +1875,21 @@ export default function StatistiquesPage() {
               display: "inline-flex",
               alignItems: "center",
               gap: 7,
-              padding: "8px 14px",
-              height: 38,
-              borderRadius: 8,
+              padding: "10px 16px",
+              height: 42,
+              borderRadius: 10,
               border: `1px solid ${C.borderDark}`,
               background: "#FFFFFF",
               color: !summary || loading ? C.muted : "#374151",
-              fontSize: 12,
-              fontWeight: 600,
+              fontSize: 13,
+              fontWeight: 700,
               cursor: !summary || loading ? "not-allowed" : "pointer",
-              fontFamily: "inherit",
+              fontFamily: FONT_BODY,
               flexShrink: 0,
               boxSizing: "border-box",
             }}
           >
-            <Download size={14} /> Exporter (.PDF)
+            <Download size={16} /> Exporter (.PDF)
           </button>
         </div>
       </div>
@@ -1112,11 +1928,11 @@ export default function StatistiquesPage() {
           spinner
         ) : (
           <>
-            {/* Top 5 KPI Cards Row (Fluid Responsive Grid) */}
+            {/* Top 4 KPI Cards Row (Fluid Responsive Grid) */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(210px, 1fr))",
+                gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
                 gap: 14,
                 marginBottom: 18,
               }}
@@ -1133,7 +1949,7 @@ export default function StatistiquesPage() {
               <KpiCard
                 label="Tickets Clôturés"
                 value={tickets}
-                sub={`Panier moyen : ${fmtDA(panier)}`}
+                sub="Commandes encaissées"
                 icon={<Printer size={15} color={C.brown} />}
                 bgIcon="#F5F0E6"
               />
@@ -1152,13 +1968,6 @@ export default function StatistiquesPage() {
                 sub="Finalisées en cuisine"
                 icon={<UtensilsCrossed size={15} color={C.brown} />}
                 bgIcon="#FEF08A"
-              />
-              <KpiCard
-                label="Panier Moyen"
-                value={fmtDA(panier)}
-                sub="Par commande payée"
-                icon={<Download size={15} color={C.blue} />}
-                bgIcon={C.blueBg}
               />
             </div>
 
@@ -1238,148 +2047,14 @@ export default function StatistiquesPage() {
         </span>
       </footer>
 
-      {/* ── Rapport Z Modal ── */}
-      {showRZ && (
-        <div
-          onClick={() => setShowRZ(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(28,25,23,0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 999,
-            padding: 16,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "#fff",
-              borderRadius: 16,
-              width: "100%",
-              maxWidth: 520,
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 20px 60px rgba(28,25,23,0.22)",
-            }}
-          >
-            <div
-              style={{
-                background: "#2E2117",
-                padding: "20px 24px",
-                borderRadius: "16px 16px 0 0",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#F2B705", letterSpacing: "0.08em", marginBottom: 4 }}>
-                  CLÔTURE OFFICIELLE DE CAISSE
-                </div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: "#F5F0E6", fontFamily: FONT_TITLE, letterSpacing: "0.03em" }}>
-                  RAPPORT Z — {period}
-                </div>
-              </div>
-              <button
-                onClick={() => setShowRZ(false)}
-                style={{
-                  background: "rgba(255,255,255,0.1)",
-                  border: "none",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  color: "#F5F0E6",
-                  padding: "6px 10px",
-                  fontSize: 16,
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ padding: "20px 24px", fontFamily: "'Inter',sans-serif" }}>
-              {rzLoading ? (
-                <div style={{ textAlign: "center", padding: "40px 0", color: "#8B8378" }}>Chargement du rapport…</div>
-              ) : !rzData ? (
-                <div style={{ textAlign: "center", padding: "40px 0", color: "#E0533D", fontWeight: 600 }}>
-                  Aucune donnée disponible pour cette période.
-                </div>
-              ) : (
-                <>
-                  {[
-                    ["Chiffre d'affaires brut (TTC)", fmtDA(rzData.totalTTC), false],
-                    ["Chiffre d'affaires net (HT)", fmtDA(rzData.totalHT), false],
-                    ["Tickets clôturés", rzData.ticketCount || 0, false],
-                    ["Panier moyen", fmtDA(rzData.avgBasket), false],
-                    ["Temps moyen cuisine (KDS)", fmtDuration(rzData.kitchen?.avgPrepTimeSeconds), false],
-                    ["Commandes préparées cuisine", rzData.kitchen?.ordersPreparedCount || 0, false],
-                    ["Commandes annulées", rzData.annulees?.count || 0, (rzData.annulees?.count || 0) > 0],
-                    ["Montant annulé", fmtDA(rzData.annulees?.amount), (rzData.annulees?.count || 0) > 0],
-                  ].map(([label, value, warn]) => (
-                    <div
-                      key={label}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "10px 0",
-                        borderBottom: "1px solid #F0EDE8",
-                      }}
-                    >
-                      <span style={{ fontSize: 13, color: "#8B8378" }}>{label}</span>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: warn ? "#E0533D" : "#1C1917" }}>{String(value)}</span>
-                    </div>
-                  ))}
-
-                  {rzData.paymentBreakdown?.length > 0 && (
-                    <>
-                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "#8B8378", marginTop: 16, marginBottom: 8 }}>
-                        RÉCAPITULATIF DES ENCAISSEMENTS
-                      </div>
-                      {rzData.paymentBreakdown.map((p) => (
-                        <div key={p.method} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #F0EDE8" }}>
-                          <span style={{ fontSize: 13, color: "#1C1917", fontWeight: 600 }}>
-                            {PAYMENT_LABELS_MAP[p.method] || p.method}
-                          </span>
-                          <span style={{ fontSize: 13, color: "#8B8378" }}>
-                            {p.count} ticket{p.count > 1 ? "s" : ""} · <b style={{ color: "#1C1917" }}>{fmtDA(p.total)}</b>
-                          </span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  <button
-                    onClick={() => window.print()}
-                    style={{
-                      marginTop: 20,
-                      width: "100%",
-                      padding: "13px",
-                      borderRadius: 10,
-                      border: "none",
-                      background: "#F2B705",
-                      color: "#2E2117",
-                      fontSize: 13,
-                      fontWeight: 800,
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <Printer size={15} /> Imprimer le Rapport Z
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* ── Date Range Popover ── */}
+      {showDatePicker && (
+        <DateRangePopover
+          anchorRef={calendarTriggerRef}
+          initialRange={range}
+          onClose={() => setShowDatePicker(false)}
+          onApply={(start, end) => setRange({ start, end })}
+        />
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
