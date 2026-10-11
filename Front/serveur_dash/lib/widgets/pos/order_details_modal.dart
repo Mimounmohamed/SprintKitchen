@@ -7,10 +7,11 @@ import '../../models/pos_models.dart';
 import '../../services/order_service.dart';
 import '../../theme/app_colors.dart';
 
-/// What the cashier entered before going to payment. Only the fields that
-/// apply to the order's type are ever filled in.
+/// Holds the table and optional customer/note attributes for a serveur order.
+/// Serveur orders are always dine-in (Sur Place / Table).
 class OrderDetailsResult {
   const OrderDetailsResult({
+    this.orderType = OrderType.dineIn,
     this.tableNumber,
     this.clientName,
     this.deliveryAddress,
@@ -18,32 +19,27 @@ class OrderDetailsResult {
     this.notes,
   });
 
-  /// Sur place — becomes `Table 5` on the order's `buzzerNumber`.
+  final OrderType? orderType;
+
+  /// Sur place — becomes `Table XX` on the order.
   final String? tableNumber;
 
-  /// À emporter — optional, goes on `clientName`.
+  /// Optional client name.
   final String? clientName;
 
-  /// Livraison — required, go on `delivery.address` / `delivery.phone`.
   final String? deliveryAddress;
   final String? deliveryPhone;
 
-  /// Optional kitchen note / comment
+  /// Optional kitchen note / comment.
   final String? notes;
 }
 
-/// "Informations de la commande" popup shown right before payment, so the
-/// cashier fills in what the order type needs:
-/// - Sur place: table number (required)
-/// - Livraison: address + phone (both required)
-/// - À emporter: client name (optional)
-///
-/// Self-blurring, same as EncaissementModal — call with
-/// `barrierColor: Colors.transparent`.
+/// "Informations de la commande" popup for the Serveur screen.
+/// The serveur only handles dine-in (table) orders and must choose the table number.
 class OrderDetailsModal extends StatefulWidget {
   const OrderDetailsModal({
     super.key,
-    required this.orderType,
+    this.orderType = OrderType.dineIn,
     required this.ticketNumber,
     required this.posteLabel,
     this.initialNotes,
@@ -52,6 +48,7 @@ class OrderDetailsModal extends StatefulWidget {
     this.initialAddress,
     this.initialPhone,
     this.currentTicketNumber,
+    this.submitLabel = 'VALIDER LA TABLE',
   });
 
   final OrderType orderType;
@@ -63,6 +60,7 @@ class OrderDetailsModal extends StatefulWidget {
   final String? initialAddress;
   final String? initialPhone;
   final String? currentTicketNumber;
+  final String submitLabel;
 
   @override
   State<OrderDetailsModal> createState() => _OrderDetailsModalState();
@@ -72,8 +70,6 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
   final _formKey = GlobalKey<FormState>();
   final _tableController = TextEditingController();
   final _clientController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _notesController = TextEditingController();
 
   List<OccupiedTableInfo> _occupiedTables = [];
@@ -86,20 +82,14 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
       _notesController.text = widget.initialNotes!;
     }
     if (widget.initialTable != null) {
-      _tableController.text = widget.initialTable!.replaceFirst(RegExp(r'^table\s*', caseSensitive: false), '').trim();
+      _tableController.text = widget.initialTable!
+          .replaceFirst(RegExp(r'^table\s*', caseSensitive: false), '')
+          .trim();
     }
     if (widget.initialClient != null) {
       _clientController.text = widget.initialClient!;
     }
-    if (widget.initialAddress != null) {
-      _addressController.text = widget.initialAddress!;
-    }
-    if (widget.initialPhone != null) {
-      _phoneController.text = widget.initialPhone!;
-    }
-    if (widget.orderType == OrderType.dineIn) {
-      _loadOccupiedTables();
-    }
+    _loadOccupiedTables();
   }
 
   Future<void> _loadOccupiedTables() async {
@@ -121,37 +111,13 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
   void dispose() {
     _tableController.dispose();
     _clientController.dispose();
-    _addressController.dispose();
-    _phoneController.dispose();
     _notesController.dispose();
     super.dispose();
   }
 
-  ({IconData icon, Color color, String label}) get _typeMeta {
-    switch (widget.orderType) {
-      case OrderType.dineIn:
-        return (
-          icon: Icons.shopping_cart_outlined,
-          color: const Color(0xFFE11D48),
-          label: 'Sur Place',
-        );
-      case OrderType.takeaway:
-        return (
-          icon: Icons.shopping_bag_outlined,
-          color: const Color(0xFF2563EB),
-          label: 'À Emporter',
-        );
-      case OrderType.delivery:
-        return (
-          icon: Icons.local_shipping_outlined,
-          color: const Color(0xFF0D9488),
-          label: 'Livraison',
-        );
-    }
-  }
-
   String _formatTableTwoDigits(String raw) {
-    final clean = raw.toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
+    final clean =
+        raw.toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
     final n = int.tryParse(clean);
     if (n != null) {
       return n.toString().padLeft(2, '0');
@@ -161,25 +127,22 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    final phone = _phoneController.text.trim();
+    final enteredTable = _tableController.text.trim();
+    final table =
+        enteredTable.isNotEmpty ? _formatTableTwoDigits(enteredTable) : null;
+
+    final enteredClient = _clientController.text.trim();
+    final client = enteredClient.isNotEmpty ? enteredClient : null;
+
+    final enteredNotes = _notesController.text.trim();
+    final notes = enteredNotes.isNotEmpty ? enteredNotes : null;
+
     Navigator.of(context).pop(
       OrderDetailsResult(
-        tableNumber: widget.orderType == OrderType.dineIn
-            ? _formatTableTwoDigits(_tableController.text.trim())
-            : null,
-        clientName: widget.orderType == OrderType.takeaway
-            ? _clientController.text.trim()
-            : null,
-        deliveryAddress: widget.orderType == OrderType.delivery
-            ? _addressController.text.trim()
-            : null,
-        deliveryPhone: (widget.orderType == OrderType.delivery ||
-                widget.orderType == OrderType.takeaway)
-            ? (phone.isNotEmpty ? phone : null)
-            : null,
-        notes: _notesController.text.trim().isNotEmpty
-            ? _notesController.text.trim()
-            : null,
+        orderType: OrderType.dineIn,
+        tableNumber: table,
+        clientName: client,
+        notes: notes,
       ),
     );
   }
@@ -187,8 +150,7 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final dialogWidth = (size.width - 32) < 460 ? size.width - 32 : 460.0;
-    final meta = _typeMeta;
+    final dialogWidth = (size.width - 32) < 480 ? size.width - 32 : 480.0;
 
     return Stack(
       fit: StackFit.expand,
@@ -231,10 +193,13 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _buildHeader(meta),
-                          Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: _buildFields(meta),
+                          _buildHeader(),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              padding:
+                                  const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                              child: _buildFields(),
+                            ),
                           ),
                           _buildFooter(),
                         ],
@@ -250,7 +215,7 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
     );
   }
 
-  Widget _buildHeader(({IconData icon, Color color, String label}) meta) {
+  Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
       decoration: const BoxDecoration(
@@ -263,13 +228,17 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
       child: Row(
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               color: AppColors.gold,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(meta.icon, size: 16, color: AppColors.brandDark),
+            child: const Icon(
+              Icons.table_restaurant_outlined,
+              size: 18,
+              color: AppColors.brandDark,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -277,18 +246,17 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'INFORMATIONS — TICKET N° ${widget.ticketNumber}',
+                  'CHOIX DE LA TABLE — TICKET N° ${widget.ticketNumber}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: GoogleFonts.bebasNeue(
                     color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
+                    fontSize: 20,
+                    letterSpacing: 0.6,
                   ),
                 ),
-                const SizedBox(height: 2),
                 Text(
-                  '${widget.posteLabel} — ${meta.label}',
+                  '${widget.posteLabel} • Sur Place',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -315,216 +283,162 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
     );
   }
 
-  Widget _buildFields(({IconData icon, Color color, String label}) meta) {
-    switch (widget.orderType) {
-      case OrderType.dineIn:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionLabel('NUMÉRO DE TABLE'),
-            const SizedBox(height: 8),
-            _field(
-              controller: _tableController,
-              hint: 'ex. 05',
-              icon: Icons.table_restaurant_outlined,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(2),
-              ],
-              maxLength: 2,
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Le numéro de table est requis';
+  Widget _buildFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('NUMÉRO DE TABLE (OBLIGATOIRE)'),
+        const SizedBox(height: 6),
+        _field(
+          controller: _tableController,
+          hint: 'ex. 05',
+          icon: Icons.table_restaurant_outlined,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(2),
+          ],
+          maxLength: 2,
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) {
+              return 'Le numéro de table est requis';
+            }
+            final clean = v.trim();
+            final cleanNum = int.tryParse(clean);
+            final occupied =
+                _occupiedTables.cast<OccupiedTableInfo?>().firstWhere(
+              (t) {
+                if (t == null) return false;
+                if (widget.currentTicketNumber != null &&
+                    (t.ticketNumber == widget.currentTicketNumber ||
+                        t.ticketNumber == widget.ticketNumber ||
+                        '#${t.ticketNumber}' == widget.ticketNumber)) {
+                  return false;
                 }
-                final clean = v.trim();
-                final cleanNum = int.tryParse(clean);
-                final occupied = _occupiedTables.cast<OccupiedTableInfo?>().firstWhere(
-                  (t) {
-                    if (t == null) return false;
-                    if (widget.currentTicketNumber != null &&
-                        (t.ticketNumber == widget.currentTicketNumber ||
-                         t.ticketNumber == widget.ticketNumber ||
-                         '#${t.ticketNumber}' == widget.ticketNumber)) {
-                      return false;
-                    }
-                    final tClean = t.tableNumber.toLowerCase().replaceFirst(RegExp(r'^table\s*'), '').trim();
-                    final tNum = int.tryParse(tClean);
-                    if (cleanNum != null && tNum != null) {
-                      return cleanNum == tNum;
-                    }
-                    return tClean == clean.toLowerCase();
-                  },
-                  orElse: () => null,
-                );
-                if (occupied != null) {
-                  return 'Table $clean déjà occupée';
+                final tClean = t.tableNumber
+                    .toLowerCase()
+                    .replaceFirst(RegExp(r'^table\s*'), '')
+                    .trim();
+                final tNum = int.tryParse(tClean);
+                if (cleanNum != null && tNum != null) {
+                  return cleanNum == tNum;
                 }
-                return null;
+                return tClean == clean.toLowerCase();
               },
-            ),
-            if (_loadingOccupied) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: const [
-                  SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.gold),
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Vérification des tables en cours...',
-                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                  ),
-                ],
+              orElse: () => null,
+            );
+            if (occupied != null) {
+              return 'Table $clean déjà occupée (#${occupied.ticketNumber})';
+            }
+            return null;
+          },
+        ),
+        if (_loadingOccupied) ...[
+          const SizedBox(height: 6),
+          const Row(
+            children: [
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: AppColors.gold),
               ),
-            ] else if (_occupiedTables.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFFECACA)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: const [
-                        Icon(Icons.info_outline, size: 14, color: AppColors.danger),
-                        SizedBox(width: 6),
-                        Text(
-                          'Tables actuellement occupées :',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.danger,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: () {
-                        final sorted = List<OccupiedTableInfo>.from(_occupiedTables)
-                          ..sort((a, b) {
-                            final cleanA = a.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
-                            final cleanB = b.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
-                            final numA = int.tryParse(cleanA) ?? 0;
-                            final numB = int.tryParse(cleanB) ?? 0;
-                            return numA.compareTo(numB);
-                          });
-                        return sorted.map((t) {
-                          final twoDigits = _formatTableTwoDigits(t.tableNumber);
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFFCA5A5)),
-                            ),
-                            child: Text(
-                              twoDigits,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFFB91C1C),
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          );
-                        }).toList();
-                      }(),
-                    ),
-                  ],
+              SizedBox(width: 8),
+              Text(
+                'Vérification des tables en cours...',
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+              ),
+            ],
+          ),
+        ] else if (_occupiedTables.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _buildOccupiedTablesBanner(),
+        ],
+        const SizedBox(height: 14),
+        _sectionLabel('NOM DU CLIENT (OPTIONNEL)'),
+        const SizedBox(height: 6),
+        _field(
+          controller: _clientController,
+          hint: 'ex. Thomas B.',
+          icon: Icons.person_outline,
+        ),
+        const SizedBox(height: 14),
+        _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
+        const SizedBox(height: 6),
+        _field(
+          controller: _notesController,
+          hint: 'ex. Sans sel sur les frites, allergie...',
+          icon: Icons.chat_bubble_outline_rounded,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOccupiedTablesBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.info_outline, size: 14, color: AppColors.danger),
+              SizedBox(width: 6),
+              Text(
+                'Tables actuellement occupées :',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.danger,
                 ),
               ),
             ],
-            const SizedBox(height: 16),
-            _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
-            const SizedBox(height: 8),
-            _field(
-              controller: _notesController,
-              hint: 'ex. Sans sel sur les frites, allergie...',
-              icon: Icons.chat_bubble_outline_rounded,
-            ),
-          ],
-        );
-      case OrderType.takeaway:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionLabel('NOM DU CLIENT (OPTIONNEL)'),
-            const SizedBox(height: 8),
-            _field(
-              controller: _clientController,
-              hint: 'ex. Thomas B.',
-              icon: Icons.person_outline,
-              autofocus: true,
-            ),
-            const SizedBox(height: 16),
-            _sectionLabel('NUMÉRO DE TÉLÉPHONE (OPTIONNEL)'),
-            const SizedBox(height: 8),
-            _field(
-              controller: _phoneController,
-              hint: 'ex. 06 12 34 56 78',
-              icon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 16),
-            _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
-            const SizedBox(height: 8),
-            _field(
-              controller: _notesController,
-              hint: 'ex. Sans sel sur les frites, prêt à 12h30...',
-              icon: Icons.chat_bubble_outline_rounded,
-            ),
-          ],
-        );
-      case OrderType.delivery:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionLabel('ADRESSE DE LIVRAISON'),
-            const SizedBox(height: 8),
-            _field(
-              controller: _addressController,
-              hint: 'Rue, bâtiment, étage...',
-              icon: Icons.location_on_outlined,
-              autofocus: true,
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? "L'adresse est requise"
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            _sectionLabel('TÉLÉPHONE'),
-            const SizedBox(height: 8),
-            _field(
-              controller: _phoneController,
-              hint: 'ex. 06 12 34 56 78',
-              icon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Le téléphone est requis'
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            _sectionLabel('NOTE CUISINE / COMMENTAIRE (OPTIONNEL)'),
-            const SizedBox(height: 8),
-            _field(
-              controller: _notesController,
-              hint: 'ex. Sans sel sur les frites, allergie...',
-              icon: Icons.chat_bubble_outline_rounded,
-            ),
-          ],
-        );
-    }
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: () {
+              final sorted = List<OccupiedTableInfo>.from(_occupiedTables)
+                ..sort((a, b) {
+                  final cleanA = a.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
+                  final cleanB = b.tableNumber.replaceAll(RegExp(r'[^0-9]'), '');
+                  final numA = int.tryParse(cleanA) ?? 0;
+                  final numB = int.tryParse(cleanB) ?? 0;
+                  return numA.compareTo(numB);
+                });
+              return sorted.map((t) {
+                final twoDigits = _formatTableTwoDigits(t.tableNumber);
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Text(
+                    twoDigits,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFB91C1C),
+                    ),
+                  ),
+                );
+              }).toList();
+            }(),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _sectionLabel(String text) => Text(
@@ -554,19 +468,22 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
       inputFormatters: inputFormatters,
       maxLength: maxLength,
       buildCounter: maxLength != null
-          ? (context, {required currentLength, required isFocused, maxLength}) => null
+          ? (context,
+                  {required currentLength, required isFocused, maxLength}) =>
+              null
           : null,
       validator: validator,
       style: GoogleFonts.openSans(fontSize: 14, color: AppColors.textPrimary),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: GoogleFonts.openSans(fontSize: 14, color: AppColors.textMuted),
+        hintStyle:
+            GoogleFonts.openSans(fontSize: 13, color: AppColors.textMuted),
         prefixIcon: Icon(icon, size: 18, color: AppColors.textSecondary),
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: Colors.white,
         isDense: true,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.border),
@@ -609,7 +526,8 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                 side: const BorderSide(color: AppColors.border),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               child: const Text(
                 'Annuler',
@@ -622,10 +540,11 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
             flex: 2,
             child: ElevatedButton.icon(
               onPressed: _submit,
-              icon: const Icon(Icons.arrow_forward, size: 18),
-              label: const Text(
-                'CONTINUER VERS LE PAIEMENT',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: Text(
+                widget.submitLabel,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w800, fontSize: 12.5),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.gold,
@@ -633,7 +552,8 @@ class _OrderDetailsModalState extends State<OrderDetailsModal> {
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),

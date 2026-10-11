@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/pos_models.dart';
@@ -6,6 +7,8 @@ import '../widgets/pos/category_sidebar_item.dart';
 import '../widgets/pos/menu_item_tile.dart';
 import '../widgets/pos/ticket_line_tile.dart';
 import '../widgets/pos/customization_modal.dart';
+import '../widgets/pos/order_details_modal.dart';
+import '../services/api_client.dart' show ApiException;
 import '../services/menu_service.dart';
 import '../services/order_service.dart';
 import 'history_screen.dart';
@@ -24,48 +27,54 @@ class ServeurPosScreen extends StatefulWidget {
   State<ServeurPosScreen> createState() => _ServeurPosScreenState();
 }
 
-class _ServeurPosScreenState extends State<ServeurPosScreen> {
+class _ServeurPosScreenState extends State<ServeurPosScreen>
+    with WidgetsBindingObserver {
   int _selectedCategory = 0;
-  OrderType _orderType = OrderType.dineIn;
+  final OrderType _orderType = OrderType.dineIn;
   int? _selectedLineIndex = 0;
 
   final MenuService _menuService = MenuService();
   final OrderService _orderService = OrderService();
   List<MenuCategory> _categories = [];
+  String _menuSignature = '';
   bool _loading = true;
+  bool _refreshingMenu = false;
   String? _error;
+  Timer? _menuRefreshTimer;
 
   final List<TicketLine> _ticketLines = [];
   final ScrollController _gridScrollController = ScrollController();
 
   late String _ticketNumber;
   bool _submitting = false;
+  OrderDetailsResult? _orderDetails;
   String? _orderNotes;
-  String? _tableNumber;
-  Set<String> _occupiedTables = {};
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ticketNumber = widget.ticketNumber;
     _loadMenu();
-    _loadOccupiedTables();
-  }
-
-  Future<void> _loadOccupiedTables() async {
-    try {
-      final list = await _orderService.getOccupiedTables();
-      if (!mounted) return;
-      setState(() {
-        _occupiedTables = list.map((t) => t.tableNumber.trim()).toSet();
-      });
-    } catch (_) {}
+    _menuRefreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _refreshMenuSilently(),
+    );
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _menuRefreshTimer?.cancel();
     _gridScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshMenuSilently();
+    }
   }
 
   Future<void> _loadMenu() async {
@@ -75,16 +84,63 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
     });
     try {
       final categories = await _menuService.fetchMenu();
+      if (!mounted) return;
       setState(() {
         _categories = categories;
+        _menuSignature = MenuService.computeSignature(categories);
         _selectedCategory = 0;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _refreshMenuSilently() async {
+    if (_refreshingMenu || !mounted) return;
+    _refreshingMenu = true;
+    try {
+      final categories = await _menuService.fetchMenu();
+      if (!mounted) return;
+      final newSig = MenuService.computeSignature(categories);
+      if (newSig == _menuSignature && !_loading && _error == null) {
+        return;
+      }
+
+      int nextSelected = 0;
+      if (_categories.isNotEmpty &&
+          _selectedCategory >= 0 &&
+          _selectedCategory < _categories.length) {
+        final prevCat = _categories[_selectedCategory];
+        int matchIdx = -1;
+        if (prevCat.id != null && prevCat.id!.isNotEmpty) {
+          matchIdx = categories.indexWhere((c) => c.id == prevCat.id);
+        }
+        if (matchIdx == -1) {
+          matchIdx = categories.indexWhere((c) => c.label == prevCat.label);
+        }
+        if (matchIdx != -1) {
+          nextSelected = matchIdx;
+        } else if (categories.isNotEmpty) {
+          nextSelected = _selectedCategory.clamp(0, categories.length - 1);
+        }
+      }
+
+      setState(() {
+        _categories = categories;
+        _menuSignature = newSig;
+        _selectedCategory = nextSelected;
+        _loading = false;
+        _error = null;
+      });
+    } catch (_) {
+      // Ignore transient network errors during background polling.
+    } finally {
+      _refreshingMenu = false;
     }
   }
 
@@ -220,17 +276,24 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
 
   void _addItemToTicket(MenuItem item) {
     setState(() {
-      final existingIndex = _ticketLines.indexWhere((l) => l.name == item.name);
+      final existingIndex = _ticketLines.indexWhere(
+        (l) =>
+            l.name == item.name &&
+            l.customizations.isEmpty &&
+            l.removedIngredients.isEmpty &&
+            (l.notes == null || l.notes!.isEmpty),
+      );
       if (existingIndex != -1) {
         _ticketLines[existingIndex].quantity += 1;
+        _selectedLineIndex = existingIndex;
       } else {
         _ticketLines.add(TicketLine(
           name: item.name,
           unitPrice: item.price,
           productId: item.id,
         ));
+        _selectedLineIndex = _ticketLines.length - 1;
       }
-      _selectedLineIndex = _ticketLines.length - 1;
     });
   }
 
@@ -259,18 +322,25 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
   }
 
   void _repriseOrder() {
-    if (_ticketLines.isEmpty && (_orderNotes == null || _orderNotes!.isEmpty)) return;
+    if (_ticketLines.isEmpty && (_orderNotes == null || _orderNotes!.isEmpty)) {
+      return;
+    }
     final backupLines = List<TicketLine>.from(_ticketLines);
     final backupNotes = _orderNotes;
+    final backupDetails = _orderDetails;
     setState(() {
       _ticketLines.clear();
       _selectedLineIndex = null;
+      _orderDetails = null;
       _orderNotes = null;
     });
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Commande réinitialisée — tous les articles ont été supprimés'),
+        showCloseIcon: true,
+        closeIconColor: Colors.white,
+        content: const Text(
+            'Commande réinitialisée — tous les articles ont été supprimés'),
         action: SnackBarAction(
           label: 'ANNULER',
           textColor: AppColors.gold,
@@ -278,6 +348,7 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
             setState(() {
               _ticketLines.addAll(backupLines);
               _orderNotes = backupNotes;
+              _orderDetails = backupDetails;
               _selectedLineIndex =
                   _ticketLines.isNotEmpty ? _ticketLines.length - 1 : null;
             });
@@ -389,26 +460,129 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
         );
       },
     );
+    controller.dispose();
 
-    if (result != null) {
+    if (result != null && mounted) {
       setState(() {
         _orderNotes = result.isEmpty ? null : result;
       });
     }
   }
 
+  Future<void> _openEditOrderDetails() async {
+    final details = await showDialog<OrderDetailsResult>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (_) => OrderDetailsModal(
+        orderType: OrderType.dineIn,
+        ticketNumber: _ticketNumber,
+        posteLabel: widget.posteLabel,
+        initialNotes: _orderNotes,
+        initialTable: _orderDetails?.tableNumber,
+        initialClient: _orderDetails?.clientName,
+        submitLabel: 'VALIDER LA TABLE',
+      ),
+    );
+    if (details == null || !mounted) return;
+    setState(() {
+      _orderDetails = details;
+      if (details.notes != null) {
+        _orderNotes = details.notes!.isEmpty ? null : details.notes;
+      }
+    });
+  }
+
+  String _formatCurrentOrderSummary() {
+    final tbl = _orderDetails?.tableNumber;
+    final name = _orderDetails?.clientName;
+    if (tbl != null && tbl.isNotEmpty) {
+      return name != null && name.isNotEmpty ? 'Table $tbl ($name)' : 'Table $tbl';
+    }
+    return name != null && name.isNotEmpty
+        ? 'Sur place ($name) — choisir la table'
+        : 'Table non assignée (cliquer pour définir)';
+  }
+
+  String _nextTicketNumber(String served) {
+    final n = int.tryParse(served);
+    return n == null ? _ticketNumber : (n + 1).toString().padLeft(6, '0');
+  }
+
+  Future<void> _showTableOccupiedError(ApiException e) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.table_restaurant_outlined, color: AppColors.danger),
+            SizedBox(width: 8),
+            Text('Table indisponible'),
+          ],
+        ),
+        content: Text(
+          '${e.message}\n\nVeuillez choisir une autre table avant d\'envoyer la commande.',
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandDark,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Changer de table'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _sendToKitchen() async {
     if (_submitting || _ticketLines.isEmpty) return;
+
+    // Require the serveur to choose a table number before sending to kitchen
+    final hasTable = _orderDetails?.tableNumber != null &&
+        _orderDetails!.tableNumber!.trim().isNotEmpty;
+    if (!hasTable) {
+      final details = await showDialog<OrderDetailsResult>(
+        context: context,
+        barrierColor: Colors.transparent,
+        builder: (_) => OrderDetailsModal(
+          orderType: OrderType.dineIn,
+          ticketNumber: _ticketNumber,
+          posteLabel: widget.posteLabel,
+          initialNotes: _orderNotes,
+          initialTable: _orderDetails?.tableNumber,
+          initialClient: _orderDetails?.clientName,
+          submitLabel: 'VALIDER & ENVOYER EN CUISINE',
+        ),
+      );
+      if (details == null || !mounted) return;
+      setState(() {
+        _orderDetails = details;
+        if (details.notes != null) {
+          _orderNotes = details.notes!.isEmpty ? null : details.notes;
+        }
+      });
+    }
+
     setState(() => _submitting = true);
-    // show loader
-    showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const PopScope(canPop: false, child: Center(child: CircularProgressIndicator())));
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    );
+
     try {
       final created = await _orderService.createOrder(
         lines: _ticketLines,
         orderType: _orderType,
         expectedTotal: _total,
-        tableNumber: _tableNumber,
-        clientName: null,
+        tableNumber: _orderDetails?.tableNumber,
+        clientName: _orderDetails?.clientName,
         deliveryAddress: null,
         deliveryPhone: null,
         notes: _orderNotes,
@@ -418,111 +592,52 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
       await _orderService.updateStatus(created.id, 'en_attente');
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop(); // close loader
-      final savedTable = _tableNumber;
+      final savedTable = _orderDetails?.tableNumber;
       setState(() {
         _ticketLines.clear();
         _selectedLineIndex = null;
         _orderNotes = null;
-        _tableNumber = null;
+        _orderDetails = null;
+        _ticketNumber = _nextTicketNumber(created.ticketNumber);
       });
-      _loadOccupiedTables();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        showCloseIcon: true,
-        closeIconColor: Colors.white,
-        backgroundColor: const Color(0xFF059669),
-        content: Text('Commande${savedTable != null ? ' table $savedTable' : ''} envoyée en cuisine !'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          showCloseIcon: true,
+          closeIconColor: Colors.white,
+          backgroundColor: const Color(0xFF059669),
+          content: Text(
+            'Commande${savedTable != null ? ' table $savedTable' : ''} envoyée en cuisine !',
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        if (e.message.contains('occupée') || e.message.contains('déjà liée')) {
+          setState(() => _orderDetails = null);
+          await _showTableOccupiedError(e);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.red.shade700,
+              content: Text('Erreur : ${e.message}'),
+            ),
+          );
+        }
+      }
     } catch (e) {
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: Colors.red.shade700,
-          content: Text('Erreur : $e'),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text('Erreur : $e'),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
-  }
-
-  Widget _buildTableSelector() {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          const Text('TABLE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF6B7280), letterSpacing: 0.5)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: 10,
-              separatorBuilder: (context, index) => const SizedBox(width: 6),
-              itemBuilder: (context, i) {
-                final t = '${i + 1}';
-                final selected = _tableNumber == t;
-                final isOccupied = _occupiedTables.contains(t);
-                return GestureDetector(
-                  onTap: () {
-                    if (isOccupied) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: const Color(0xFFDC2626),
-                          content: Text('Table $t est déjà occupée par une commande active.'),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                      return;
-                    }
-                    setState(() => _tableNumber = selected ? null : t);
-                  },
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        width: 36, height: 32,
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? const Color(0xFF2E1F0F)
-                              : (isOccupied ? const Color(0xFFFEE2E2) : const Color(0xFFF3F4F6)),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: selected
-                                ? const Color(0xFF2E1F0F)
-                                : (isOccupied ? const Color(0xFFFCA5A5) : const Color(0xFFE5E7EB)),
-                          ),
-                        ),
-                        child: Center(
-                          child: Text('T$t', style: TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w700,
-                            color: selected
-                                ? const Color(0xFFFBBF24)
-                                : (isOccupied ? const Color(0xFFDC2626) : const Color(0xFF374151)),
-                          )),
-                        ),
-                      ),
-                      if (isOccupied)
-                        Positioned(
-                          top: -2,
-                          right: -2,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFDC2626),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildErrorState() {
@@ -557,34 +672,6 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
       ),
       child: Row(
         children: [
-          InkWell(
-            onTap: () => Navigator.of(context).maybePop(),
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFD1D5DB)),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.arrow_back, size: 14, color: Color(0xFF374151)),
-                  SizedBox(width: 8),
-                  Text(
-                    "Retour à l'accueil",
-                    style: TextStyle(
-                      color: Color(0xFF374151),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
           Container(
             width: 40,
             height: 40,
@@ -644,7 +731,7 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
 
   Widget _buildSidebar() {
     return Container(
-      width: 180,
+      width: 210,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(right: BorderSide(color: Color(0xFFE5E7EB))),
@@ -700,6 +787,10 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final bool hasManyItems = items.length > 15;
+        final double maxExtent = hasManyItems ? 175 : 205;
+        final double itemHeight = hasManyItems ? 140 : 155;
+
         return RawScrollbar(
           controller: _gridScrollController,
           thumbColor: const Color(0xFFFACC15),
@@ -710,9 +801,9 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
             controller: _gridScrollController,
             padding: const EdgeInsets.all(16),
             itemCount: items.length,
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 160,
-              mainAxisExtent: 160,
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: maxExtent,
+              mainAxisExtent: itemHeight,
               mainAxisSpacing: 14,
               crossAxisSpacing: 14,
             ),
@@ -731,17 +822,15 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
 
   Widget _buildTicketPanel() {
     return Container(
-      width: 340,
+      width: 383,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(left: BorderSide(color: AppColors.border)),
       ),
       child: Column(
         children: [
-          const SizedBox(height: 12),
-          _buildTableSelector(),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
               children: [
                 Text(
@@ -752,7 +841,78 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
                     color: Color(0xFF111827),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'En cours',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF4B5563),
+                    ),
+                  ),
+                ),
               ],
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: InkWell(
+              onTap: _openEditOrderDetails,
+              borderRadius: BorderRadius.circular(6),
+              child: Row(
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE11D48).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'SUR PLACE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFE11D48),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _formatCurrentOrderSummary(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                  const Tooltip(
+                    message: 'Choisir le numéro de table',
+                    child: Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.edit_outlined,
+                          size: 15, color: Color(0xFF2563EB)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           if (_orderNotes != null && _orderNotes!.isNotEmpty)
@@ -760,7 +920,8 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
               onTap: _openCommentDialog,
               child: Container(
                 margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEF3C7),
                   borderRadius: BorderRadius.circular(8),
@@ -768,7 +929,8 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.chat_bubble, size: 14, color: Color(0xFFB45309)),
+                    const Icon(Icons.chat_bubble,
+                        size: 14, color: Color(0xFFB45309)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -944,23 +1106,7 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: Row(
               children: [
-                _orderTypeButton(
-                  OrderType.dineIn,
-                  const Color(0xFFE11D48),
-                  Icons.shopping_cart_outlined,
-                ),
-                const SizedBox(width: 8),
-                _orderTypeButton(
-                  OrderType.takeaway,
-                  const Color(0xFF2563EB),
-                  Icons.shopping_bag_outlined,
-                ),
-                const SizedBox(width: 8),
-                _orderTypeButton(
-                  OrderType.delivery,
-                  const Color(0xFF0D9488),
-                  Icons.local_shipping_outlined,
-                ),
+                _buildTableOrderButton(),
               ],
             ),
           ),
@@ -1008,38 +1154,36 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-            child: SizedBox(
-              width: double.infinity,
-              height: 42,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _smallActionButton(
-                      label: 'Historique',
-                      icon: Icons.inventory_2_outlined,
-                      bg: const Color(0xFF27272A),
-                      fg: Colors.white,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => HistoryScreen(posteLabel: widget.posteLabel),
-                          ),
-                        );
-                      },
-                    ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _smallActionButton(
+                    label: 'History',
+                    icon: Icons.inventory_2_outlined,
+                    bg: const Color(0xFF27272A),
+                    fg: Colors.white,
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              HistoryScreen(posteLabel: widget.posteLabel),
+                        ),
+                      );
+                      _refreshMenuSilently();
+                    },
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _smallActionButton(
-                      label: 'Reprise',
-                      icon: Icons.sync,
-                      bg: const Color(0xFF452B1E),
-                      fg: const Color(0xFFFBBF24),
-                      onTap: _repriseOrder,
-                    ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _smallActionButton(
+                    label: 'Reprise',
+                    icon: Icons.sync,
+                    bg: const Color(0xFF452B1E),
+                    fg: const Color(0xFFFBBF24),
+                    onTap: _repriseOrder,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1100,31 +1244,33 @@ class _ServeurPosScreenState extends State<ServeurPosScreen> {
     return Expanded(child: content);
   }
 
-  Widget _orderTypeButton(OrderType type, Color color, IconData icon) {
-    final bool selected = _orderType == type;
+  Widget _buildTableOrderButton() {
+    final tbl = _orderDetails?.tableNumber;
+    final hasTable = tbl != null && tbl.isNotEmpty;
+    final label = hasTable ? 'Table $tbl (Modifier)' : 'Choisir le N° de Table';
+
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _orderType = type),
+        onTap: _openEditOrderDetails,
         borderRadius: BorderRadius.circular(20),
         child: Container(
           height: 38,
           decoration: BoxDecoration(
-            color: color,
+            color: const Color(0xFFE11D48),
             borderRadius: BorderRadius.circular(20),
-            border: selected
-                ? Border.all(color: Colors.white, width: 2)
-                : Border.all(color: Colors.transparent, width: 2),
+            border: Border.all(color: Colors.white, width: 2),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 14, color: Colors.white),
-              const SizedBox(width: 5),
+              const Icon(Icons.table_restaurant_outlined,
+                  size: 15, color: Colors.white),
+              const SizedBox(width: 6),
               Text(
-                type.label,
+                label,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),

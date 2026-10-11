@@ -293,7 +293,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   Icon(Icons.arrow_back, size: 14, color: Color(0xFF374151)),
                   SizedBox(width: 8),
                   Text(
-                    "Retour à l'accueil",
+                    "Retour au menu",
                     style: TextStyle(
                       color: Color(0xFF374151),
                       fontWeight: FontWeight.w700,

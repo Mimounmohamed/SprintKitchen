@@ -372,4 +372,63 @@ class MenuService {
     }
     return buf.toString();
   }
+
+  /// Computes a deterministic signature of [categories] (including all items,
+  /// prices, availability, ingredients, and customization options) so screens
+  /// can poll in the background and only rebuild when the menu actually changes.
+  static String computeSignature(List<MenuCategory> categories) {
+    final buf = StringBuffer();
+    for (final cat in categories) {
+      buf
+        ..write(cat.id ?? '')
+        ..write(':')
+        ..write(cat.label)
+        ..write('{');
+      for (final item in cat.items) {
+        buf
+          ..write(item.id)
+          ..write('|')
+          ..write(item.name)
+          ..write('|')
+          ..write(item.price)
+          ..write('|')
+          ..write(item.categoryId)
+          ..write('|')
+          ..write(item.available ? '1' : '0')
+          ..write('|')
+          ..write(item.description ?? '')
+          ..write('|')
+          ..write(item.ingredients.join(','))
+          ..write('[');
+        for (final g in item.customizationGroups) {
+          buf
+            ..write(g.name)
+            ..write(':')
+            ..write(g.type)
+            ..write(':')
+            ..write(g.isRequired ? '1' : '0')
+            ..write(':')
+            ..write(g.minChoices)
+            ..write(':')
+            ..write(g.maxChoices)
+            ..write('(');
+          for (final o in g.options) {
+            buf
+              ..write(o.label)
+              ..write('=')
+              ..write(o.priceModifier)
+              ..write(':')
+              ..write(o.isDefault ? '1' : '0')
+              ..write(':')
+              ..write(o.isAvailable ? '1' : '0')
+              ..write(';');
+          }
+          buf.write(')');
+        }
+        buf.write(']');
+      }
+      buf.write('}');
+    }
+    return buf.toString();
+  }
 }
