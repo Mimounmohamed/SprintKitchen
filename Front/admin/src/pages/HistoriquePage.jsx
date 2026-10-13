@@ -210,87 +210,216 @@ function getOrderDuration(ord) {
 }
 
 /* ── Print Utilities ───────────────────────────────────────────────────────────── */
+const BOBO_LOGO_B64 =
+  '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';
+
 function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
   const ord = detail || order;
-  const dateStr = fmtDate(ord.createdAt) + ' ' + fmtTime(ord.createdAt);
-  const mode = getModeStyle(ord.orderType);
-  const paymentLabel = payment ? (PAYMENT_LABELS[payment.method] || payment.method) : 'Comptant';
+  const d = ord.createdAt ? new Date(ord.createdAt) : new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const dateStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} à ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
-  const itemsHtml = (ord.items || []).map((it) => {
-    const custs = (it.customizations || []).flatMap((c) => (c.selectedOptions || []).map((o) => o.label)).join(', ');
-    const sans = (it.removedIngredients || []).map((r) => `Sans ${r}`).join(', ');
-    const subParts = [custs, sans, it.notes].filter(Boolean).join(' • ');
+  const ORDER_TYPE_LABELS = {
+    sur_place: 'SUR PLACE',
+    a_emporter: 'À EMPORTER',
+    livraison: 'LIVRAISON',
+  };
+  const modeLabel = ORDER_TYPE_LABELS[ord.orderType] || (ord.orderType ? String(ord.orderType).replace('_', ' ').toUpperCase() : 'SUR PLACE');
 
-    if (kitchenOnly) {
+  const rawTable = ord.tableNumber || ord.buzzerNumber || '';
+  const cleanTable = rawTable ? String(rawTable).replace(/^(table\s*|buzzer\s*#?|t)/i, '').trim() : '';
+
+  const dur = getOrderDuration(ord);
+  const durLabel = dur?.label && !dur.inProgress ? dur.label : '';
+  const fin = getOrderFinishedAt(ord);
+  const finStr = fin ? fmtTime(fin) : '';
+
+  if (kitchenOnly) {
+    const itemsKitchenHtml = (ord.items || []).map((it) => {
+      const custOptions = (it.customizations || []).flatMap((c) => {
+        if (Array.isArray(c.selectedOptions)) {
+          return c.selectedOptions.map((o) => typeof o === 'string' ? o : (o.label || o.name || ''));
+        }
+        return [];
+      }).filter(Boolean);
+
+      const cleanOptions = custOptions.map((opt) =>
+        opt.replace(/\s*\(\+?[0-9]+(?:[\.,][0-9]+)?\s*(?:€|DA)\)/gi, '').trim()
+      );
+
+      const removed = (it.removedIngredients || []).map((r) =>
+        r.replace(/^sans\s+/i, '').trim().toUpperCase()
+      ).filter(Boolean);
+
       return `
-        <div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #ccc">
-          <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:14px">
-            <span>${it.quantity}× ${it.productName}</span>
+        <div style="margin-bottom: 7px; padding-bottom: 6px; border-bottom: 1px solid #D1D5DB;">
+          <div style="display: flex; align-items: flex-start;">
+            <span style="background: #000; color: #fff; font-weight: bold; font-size: 12px; padding: 2px 6px; border-radius: 3px; margin-right: 8px; flex-shrink: 0;">
+              ${it.quantity}x
+            </span>
+            <span style="font-size: 13px; font-weight: bold; text-transform: uppercase;">
+              ${it.productName || it.name}
+            </span>
           </div>
-          ${subParts ? `<div style="font-size:11px;color:#333;margin-top:2px;padding-left:8px;border-left:2px solid #000">${subParts}</div>` : ''}
+          ${cleanOptions.map((opt) => `
+            <div style="padding-left: 32px; font-size: 11px; font-weight: bold; margin-top: 2px;">
+              + ${opt}
+            </div>
+          `).join('')}
+          ${removed.map((rem) => `
+            <div style="padding-left: 32px; font-size: 11px; font-weight: bold; margin-top: 2px;">
+              [ SANS : ${rem} ]
+            </div>
+          `).join('')}
+          ${it.notes ? `
+            <div style="padding-left: 32px; font-size: 10px; font-style: italic; margin-top: 2px;">
+              Note : "${it.notes.trim()}"
+            </div>
+          ` : ''}
         </div>
       `;
-    }
+    }).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8"/>
+          <title>Bon Cuisine - #${ord.ticketNumber}</title>
+          <style>
+            @page { size: 80mm auto; margin: 0; }
+            @media print {
+              html, body { width: 72mm; margin: 0 auto; padding: 0; }
+            }
+            *, *::before, *::after { box-sizing: border-box; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              width: 72mm;
+              margin: 0 auto;
+              padding: 6px 2px 20px;
+              font-size: 11px;
+              line-height: 1.35;
+              color: #000;
+              background: #fff;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .divider-solid {
+              border-top: 1.2px solid #000;
+              margin: 6px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div style="background: #000; color: #fff; text-align: center; font-weight: bold; font-size: 14px; letter-spacing: 1.2px; padding: 5px 0; border-radius: 4px;">
+            BON DE CUISINE
+          </div>
+
+          <div class="center" style="font-size: 19px; font-weight: bold; margin: 6px 0 4px;">
+            #${ord.ticketNumber}
+          </div>
+
+          <div class="center" style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="border: 1px solid #000; border-radius: 4px; padding: 3px 8px; font-weight: bold; font-size: 12px;">
+              ${modeLabel}
+            </span>
+            ${cleanTable ? `
+              <span style="background: #000; color: #fff; border-radius: 4px; padding: 3px 10px; font-weight: bold; font-size: 12px;">
+                TABLE ${cleanTable}
+              </span>
+            ` : ''}
+          </div>
+
+          <div class="center" style="font-size: 10.5px;">Heure : ${dateStr}</div>
+          ${(finStr || durLabel) ? `
+            <div class="center" style="font-size: 10.5px; font-weight: bold; margin-top: 1px;">
+              ${finStr ? `Fin : ${finStr}` : ''}${durLabel ? ` • Durée : ${durLabel}` : ''}
+            </div>
+          ` : ''}
+          ${ord.clientName ? `<div class="center" style="font-size: 11.5px; font-weight: bold; margin-top: 1px;">Client : ${ord.clientName}</div>` : ''}
+
+          ${ord.notes ? `
+            <div style="background: #E5E7EB; border: 1px solid #000; border-radius: 4px; padding: 6px 8px; margin: 6px 0;">
+              <div style="font-size: 10px; font-weight: bold;">NOTE CUISINE :</div>
+              <div style="font-size: 11.5px; font-weight: bold; margin-top: 2px;">${ord.notes}</div>
+            </div>
+          ` : ''}
+
+          <div class="divider-solid"></div>
+
+          <div style="font-size: 10.5px; font-weight: bold; letter-spacing: 0.4px; margin-bottom: 6px;">
+            ARTICLES À PRÉPARER :
+          </div>
+
+          <div style="margin: 4px 0;">
+            ${itemsKitchenHtml}
+          </div>
+
+          <div class="divider-solid"></div>
+        </body>
+      </html>
+    `;
+
+    const w = window.open('', '_blank', 'width=380,height=600');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => {
+      w.print();
+      w.close();
+    }, 350);
+    return;
+  }
+
+  // ── Client Receipt ──────────────────────────────────────────
+  const itemsClientHtml = (ord.items || []).map((it) => {
+    const unitPrice = it.unitPrice ?? (it.quantity ? (it.lineTotal / it.quantity) : 0);
+    const custOptions = (it.customizations || []).flatMap((c) => {
+      if (Array.isArray(c.selectedOptions)) {
+        return c.selectedOptions.map((o) => typeof o === 'string' ? o : (o.label || o.name || ''));
+      }
+      return [];
+    }).filter(Boolean);
+
+    const removed = (it.removedIngredients || []).map((r) =>
+      r.replace(/^sans\s+/i, '').trim()
+    ).filter(Boolean);
 
     return `
-      <div style="margin-bottom:6px;padding-bottom:4px;border-bottom:1px dotted #ccc">
-        <div style="display:flex;justify-content:space-between;font-size:12px">
-          <span>${it.quantity}× ${it.productName}</span>
-          <span style="font-weight:bold">${fmtPrice(it.lineTotal)}</span>
+      <div style="margin-bottom: 5px;">
+        <div style="display: flex; align-items: flex-start; font-size: 11px;">
+          <div style="width: 26px; font-weight: bold;">${it.quantity}×</div>
+          <div style="flex: 1; font-weight: bold;">${it.productName || it.name}</div>
+          <div style="width: 55px; text-align: right; font-size: 10.5px;">${fmtPrice(unitPrice)}</div>
+          <div style="width: 65px; text-align: right; font-weight: bold;">${fmtPrice(it.lineTotal)}</div>
         </div>
-        ${subParts ? `<div style="font-size:10px;color:#555;padding-left:8px;border-left:2px solid #999">${subParts}</div>` : ''}
+        ${custOptions.map((opt) => `
+          <div style="padding-left: 26px; font-size: 9.5px; color: #333; margin-top: 1px;">
+            + ${opt}
+          </div>
+        `).join('')}
+        ${removed.map((rem) => `
+          <div style="padding-left: 26px; font-size: 9.5px; color: #555; margin-top: 1px;">
+            x Sans ${rem}
+          </div>
+        `).join('')}
+        ${it.notes ? `
+          <div style="padding-left: 26px; font-size: 9.5px; color: #444; margin-top: 1px;">
+            Note: "${it.notes.trim()}"
+          </div>
+        ` : ''}
       </div>
     `;
   }).join('');
 
-  const notesHtml = ord.notes ? `
-    <div style="background:#FEF3C7;border:1px solid #F59E0B;padding:8px 10px;border-radius:6px;margin:10px 0;">
-      <div style="font-size:10px;font-weight:bold;color:#B45309;letter-spacing:0.5px;text-transform:uppercase">Note Cuisine / Commentaire</div>
-      <div style="font-size:12px;font-weight:bold;color:#78350F;margin-top:2px">${ord.notes}</div>
-    </div>
-  ` : '';
+  const paymentMethodLabel = payment ? (PAYMENT_LABELS[payment.method] || payment.method) : (ord.paymentMethod ? (PAYMENT_LABELS[ord.paymentMethod] || ord.paymentMethod) : 'Espèces');
+  const amountReceived = payment?.amountReceived ?? payment?.received ?? ord.amountReceived;
+  const change = payment?.change ?? ord.change;
 
-  const html = kitchenOnly ? `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8"/>
-        <title>Bon Cuisine - #${ord.ticketNumber}</title>
-        <style>
-          @page { size: 80mm auto; margin: 0; }
-          body { font-family: monospace; width: 72mm; margin: 0 auto; padding: 12px 0; font-size: 12px; line-height: 1.3; }
-          .center { text-align: center; }
-          .bold { font-weight: bold; }
-          hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-          h2 { font-size: 20px; margin: 0; }
-        </style>
-      </head>
-      <body>
-        <div class="center">
-          <h2>BON DE CUISINE</h2>
-          <div style="font-size:16px;font-weight:bold;margin:4px 0">COMMANDE #${ord.ticketNumber}</div>
-          <div>${dateStr}</div>
-          ${(() => {
-            const dur = getOrderDuration(ord);
-            const fin = getOrderFinishedAt(ord);
-            if (fin || dur) {
-              const finStr = fin ? fmtTime(fin) : '';
-              return `<div style="font-size:11px;font-weight:bold;margin-top:4px">${finStr ? `Fin : ${finStr}` : ''}${dur?.label ? ` • Durée : ${dur.label}` : ''}</div>`;
-            }
-            return '';
-          })()}
-          <div style="display:inline-block;padding:3px 10px;border:1px solid #000;border-radius:12px;font-weight:bold;margin-top:4px">${mode.label.toUpperCase()}</div>
-        </div>
-        ${notesHtml}
-        <hr/>
-        <div style="margin-top:8px">${itemsHtml}</div>
-        <hr/>
-        <div class="center" style="font-size:11px;margin-top:6px">
-          SprintKitchen KDS • ${ord.registerId?.name || 'Caisse 01'}
-        </div>
-      </body>
-    </html>
-  ` : `
+  const html = `
     <!DOCTYPE html>
     <html>
       <head>
@@ -298,47 +427,115 @@ function printThermalReceipt({ order, detail, payment, kitchenOnly = false }) {
         <title>Ticket de Caisse - #${ord.ticketNumber}</title>
         <style>
           @page { size: 80mm auto; margin: 0; }
-          body { font-family: monospace; width: 72mm; margin: 0 auto; padding: 12px 0; font-size: 12px; line-height: 1.3; }
+          @media print {
+            html, body { width: 72mm; margin: 0 auto; padding: 0; }
+          }
+          *, *::before, *::after { box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            width: 72mm;
+            margin: 0 auto;
+            padding: 6px 2px 20px;
+            font-size: 11px;
+            line-height: 1.35;
+            color: #000;
+            background: #fff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
           .center { text-align: center; }
           .bold { font-weight: bold; }
-          hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-          h1 { font-size: 22px; margin: 0; }
-          .row { display: flex; justify-content: space-between; margin: 2px 0; }
+          .divider-dashed {
+            border-top: 1px dashed #777;
+            margin: 6px 0;
+          }
+          .divider-dotted {
+            border-top: 1px dotted #888;
+            margin: 5px 0;
+          }
+          .divider-solid {
+            border-top: 1.5px solid #000;
+            margin: 6px 0;
+          }
+          .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+          }
         </style>
       </head>
       <body>
+        <div class="center" style="margin-bottom: 3px;">
+          <img src="data:image/png;base64,${BOBO_LOGO_B64}" style="width: 85px; display: block; margin: 0 auto 2px; filter: contrast(1.2);" alt="Bobo's" />
+          <div style="font-size: 11px; font-weight: bold; letter-spacing: 0.5px;">RESTAURANT & FAST-FOOD</div>
+          <div style="font-size: 10px; margin-top: 1px;">14 Rue de la République, 75001 Paris</div>
+          <div style="font-size: 10px;">Tél : 01 23 45 67 89</div>
+          <div style="font-size: 9px; color: #555;">SIRET 894 123 456 00012</div>
+        </div>
+
+        <div class="divider-dashed"></div>
+
         <div class="center">
-          <h1>SPRINTKITCHEN</h1>
-          <div style="font-size:11px;color:#444">FAST FOOD GOURMET</div>
-          <div style="font-size:16px;font-weight:bold;margin:6px 0">TICKET #${ord.ticketNumber}</div>
-          <div>${dateStr}</div>
-          ${(() => {
-            const dur = getOrderDuration(ord);
-            return dur?.label && !dur.inProgress ? `<div style="font-size:10px;color:#555;margin-top:2px">Préparé en ${dur.label}</div>` : '';
-          })()}
-          <div style="font-size:11px;margin-top:2px">Mode : ${mode.label} • ${ord.registerId?.name || 'Caisse 01'}</div>
-          ${ord.clientName ? `<div style="font-size:11px">Client : ${ord.clientName}</div>` : ''}
-          ${(() => {
-            const rawTable = ord.tableNumber || ord.buzzerNumber || null;
-            const cleanTable = rawTable ? String(rawTable).replace(/^(buzzer\s*#?|table\s*)/i, '').trim() : null;
-            return cleanTable ? `<div style="font-size:12px;font-weight:bold">Table ${cleanTable}</div>` : '';
-          })()}
+          <div style="font-size: 16px; font-weight: bold; letter-spacing: 0.3px;">TICKET #${ord.ticketNumber}</div>
+          <div style="font-size: 10.5px; margin-top: 2px;">${dateStr}</div>
+          ${durLabel ? `<div style="font-size: 10px; color: #555; margin-top: 1px;">Préparé en ${durLabel}</div>` : ''}
         </div>
-        ${notesHtml}
-        <hr/>
-        ${itemsHtml}
-        <hr/>
-        <div class="row" style="font-size:16px;font-weight:bold;margin:6px 0">
-          <span>TOTAL PAYÉ</span>
-          <span>${fmtPrice(ord.totalTTC)}</span>
+
+        <div style="background: #E5E7EB; border-radius: 4px; padding: 5px 8px; margin: 6px 0; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; font-weight: bold;">${modeLabel}</span>
+          ${cleanTable ? `<span style="font-size: 13px; font-weight: bold;">TABLE ${cleanTable}</span>` : (ord.clientName ? `<span style="font-size: 12px; font-weight: bold;">${ord.clientName}</span>` : '')}
         </div>
-        <hr/>
-        <div class="row"><span>Mode de règlement</span><span class="bold">${paymentLabel}</span></div>
-        ${payment?.change ? `<div class="row"><span>Rendu monnaie</span><span>${fmtPrice(payment.change)}</span></div>` : ''}
-        <hr/>
-        <div class="center" style="margin-top:10px;font-size:11px">
-          Merci de votre visite et à très bientôt !<br/>
-          Bobo's OS v1.00
+
+        ${ord.deliveryAddress ? `
+          <div style="font-size: 10px; margin-bottom: 2px;">Livraison : ${ord.deliveryAddress}</div>
+          ${ord.deliveryPhone ? `<div style="font-size: 10px; margin-bottom: 4px;">Tél client : ${ord.deliveryPhone}</div>` : ''}
+        ` : ''}
+
+        <div class="divider-dashed"></div>
+
+        <div style="display: flex; font-size: 10px; font-weight: bold; padding: 1px 0;">
+          <div style="width: 26px;">QTÉ</div>
+          <div style="flex: 1;">DÉSIGNATION</div>
+          <div style="width: 55px; text-align: right;">P.U.</div>
+          <div style="width: 65px; text-align: right;">TOTAL</div>
+        </div>
+        <div class="divider-dotted"></div>
+
+        <div style="margin: 4px 0;">
+          ${itemsClientHtml}
+        </div>
+
+        <div class="divider-dashed"></div>
+
+        <div class="row" style="margin: 4px 0; font-size: 15px; font-weight: bold;">
+          <span>TOTAL :</span>
+          <span style="font-size: 16px;">${fmtPrice(ord.totalTTC)}</span>
+        </div>
+
+        <div class="divider-solid"></div>
+
+        <div class="row" style="font-size: 10.5px; margin-bottom: 2px;">
+          <span>Règlement :</span>
+          <span class="bold">${paymentMethodLabel}</span>
+        </div>
+        ${amountReceived > 0 ? `
+          <div class="row" style="font-size: 10.5px; margin-bottom: 2px;">
+            <span>Montant Reçu :</span>
+            <span>${fmtPrice(amountReceived)}</span>
+          </div>
+        ` : ''}
+        ${change > 0 ? `
+          <div class="row" style="font-size: 10.5px; margin-bottom: 2px;">
+            <span>Rendu Monnaie :</span>
+            <span class="bold">${fmtPrice(change)}</span>
+          </div>
+        ` : ''}
+
+        <div class="divider-dotted"></div>
+
+        <div class="center" style="margin-top: 8px;">
+          <div style="font-size: 10.5px; font-weight: bold;">Merci de votre visite et à très bientôt !</div>
+          <div style="font-size: 9px; color: #555; margin-top: 2px;">Conservez ce ticket comme justificatif d'achat</div>
         </div>
       </body>
     </html>
