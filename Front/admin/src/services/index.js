@@ -2,8 +2,17 @@ import api from '../lib/api';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authService = {
-  login: (username, password) => {
-    const val = (username || '').trim();
+  login: (usernameOrData, maybePassword) => {
+    let username = '';
+    let password = '';
+    if (typeof usernameOrData === 'object' && usernameOrData !== null) {
+      username = usernameOrData.username || usernameOrData.identifier || usernameOrData.email || '';
+      password = usernameOrData.password || '';
+    } else {
+      username = usernameOrData || '';
+      password = maybePassword || '';
+    }
+    const val = String(username).trim();
     return api.post('/auth/login', { username: val, email: val, identifier: val, password });
   },
   getMe: () => api.get('/auth/me'),

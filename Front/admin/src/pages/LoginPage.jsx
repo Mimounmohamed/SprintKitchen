@@ -21,14 +21,17 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const val = username.trim();
-      const res = await authService.login({ username: val, email: val, identifier: val, password });
+      const res = await authService.login(val, password);
       const token = res.data?.token || res.data?.data?.token;
       if (!token) throw new Error("Token non reçu");
       localStorage.setItem("sk_token", token);
       navigate("/", { replace: true });
     } catch (err) {
+      console.error("Login error:", err);
       if (err.response?.status === 401 || err.response?.status === 400) {
         setError("Nom d'utilisateur ou mot de passe incorrect.");
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message);
       } else {
         setError("Erreur de connexion — vérifiez votre connexion internet.");
       }

@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const AZURE_API_URL = 'https://sprintkitchen-backend-api-dxedcmdth6avgha4.francecentral-01.azurewebsites.net/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || AZURE_API_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
