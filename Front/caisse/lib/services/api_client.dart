@@ -21,8 +21,8 @@ class ApiClient {
   static final http.Client _sharedClient = http.Client();
   final http.Client _client;
 
-  static const _readTimeout = Duration(seconds: 10);
-  static const _writeTimeout = Duration(seconds: 15);
+  static const _readTimeout = Duration(seconds: 25);
+  static const _writeTimeout = Duration(seconds: 25);
 
   /// Shared JWT token across all ApiClient instances.
   static String? _token;

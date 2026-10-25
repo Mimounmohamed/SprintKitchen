@@ -3,6 +3,7 @@ import 'pos_models.dart';
 /// One line of a past order (Order.items[]).
 class HistoryOrderLine {
   const HistoryOrderLine({
+    this.id,
     required this.name,
     required this.quantity,
     required this.lineTotal,
@@ -14,6 +15,7 @@ class HistoryOrderLine {
     this.notes,
   });
 
+  final String? id;
   final String name;
   final int quantity;
   final double lineTotal;
@@ -37,6 +39,7 @@ class HistoryOrderLine {
     }
     final basePrice = unitPrice ?? ((lineTotal / (quantity > 0 ? quantity : 1)) - extras);
     return TicketLine(
+      id: id,
       name: name,
       unitPrice: basePrice > 0 ? basePrice : 0,
       quantity: quantity,
@@ -74,8 +77,10 @@ class HistoryOrderLine {
 
     final pId = json['productId'];
     final productId = pId is Map ? pId['_id']?.toString() : pId?.toString();
+    final lineId = json['_id']?.toString() ?? json['id']?.toString();
 
     return HistoryOrderLine(
+      id: lineId,
       name: json['productName'] as String? ?? '',
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       lineTotal: (json['lineTotal'] as num?)?.toDouble() ?? 0,
@@ -134,6 +139,9 @@ class HistoryOrder {
     required this.id,
     required this.ticketNumber,
     required this.createdAt,
+    this.kdsSentAt,
+    this.kdsReadyAt,
+    this.completedAt,
     required this.status,
     required this.orderType,
     required this.totalTTC,
@@ -155,6 +163,9 @@ class HistoryOrder {
   final String id;
   final String ticketNumber;
   final DateTime createdAt;
+  final DateTime? kdsSentAt;
+  final DateTime? kdsReadyAt;
+  final DateTime? completedAt;
   final String status;
 
   /// 'sur_place' | 'a_emporter' | 'livraison'
@@ -173,6 +184,48 @@ class HistoryOrder {
   final List<HistoryOrderLine> lines;
   final bool isEdited;
   final List<OrderModification> modificationSummary;
+
+  DateTime? get finishedAt => kdsReadyAt ?? completedAt;
+
+  Duration? get prepDuration {
+    final end = finishedAt;
+    if (end == null) return null;
+    final start = kdsSentAt ?? createdAt;
+    final diff = end.difference(start);
+    return diff.isNegative ? Duration.zero : diff;
+  }
+
+  String? get prepDurationString {
+    final d = prepDuration;
+    if (d == null) {
+      if (status == 'en_attente' || status == 'en_cours') {
+        final elapsed = DateTime.now().difference(kdsSentAt ?? createdAt);
+        final m = elapsed.inMinutes;
+        return m > 0 ? '$m min' : '< 1 min';
+      }
+      return null;
+    }
+    final totalSec = d.inSeconds;
+    if (totalSec == 0) return '< 1 min';
+    if (totalSec < 60) return '${totalSec}s';
+    final m = d.inMinutes;
+    final s = totalSec % 60;
+    if (m >= 60) {
+      final h = m ~/ 60;
+      final remM = m % 60;
+      return '${h}h ${remM.toString().padLeft(2, '0')}m';
+    }
+    return s > 0 ? '${m}m ${s.toString().padLeft(2, '0')}s' : '$m min';
+  }
+
+  String? get finishedTimeString {
+    final f = finishedAt;
+    if (f == null) return null;
+    final dt = f.toLocal();
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
 
   /// Formatted client and/or table display for the "CLIENT / TABLE" column.
   String? get displayClient {
@@ -207,6 +260,7 @@ class HistoryOrder {
   factory HistoryOrder.fromJson(Map<String, dynamic> json) {
     final register = json['registerId'];
     final delivery = json['delivery'];
+    final statusStr = json['status'] as String? ?? '';
 
     String? dAddress;
     if (delivery is Map) {
@@ -217,24 +271,40 @@ class HistoryOrder {
       if (parts.isNotEmpty) dAddress = parts.join(', ');
     }
 
+    final rawSent = json['kdsSentAt'];
+    final DateTime? kdsSentAt = rawSent != null ? DateTime.tryParse(rawSent.toString())?.toLocal() : null;
+
+    final rawReady = json['kdsReadyAt'] ??
+        json['completedAt'] ??
+        ((statusStr == 'a_encaisser' || statusStr == 'terminee')
+            ? (json['updatedAt'] ?? json['editedAt'])
+            : null);
+    final DateTime? kdsReadyAt = rawReady != null ? DateTime.tryParse(rawReady.toString())?.toLocal() : null;
+
+    final rawCompleted = json['completedAt'];
+    final DateTime? completedAt = rawCompleted != null ? DateTime.tryParse(rawCompleted.toString())?.toLocal() : null;
+
     return HistoryOrder(
-      id: json['_id'] as String,
-      ticketNumber: json['ticketNumber'] as String? ?? '',
-      createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
-      status: json['status'] as String? ?? '',
-      orderType: json['orderType'] as String? ?? 'sur_place',
+      id: json['_id']?.toString() ?? '',
+      ticketNumber: json['ticketNumber']?.toString() ?? '',
+      createdAt: (DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now()).toLocal(),
+      kdsSentAt: kdsSentAt,
+      kdsReadyAt: kdsReadyAt,
+      completedAt: completedAt,
+      status: statusStr,
+      orderType: json['orderType']?.toString() ?? 'sur_place',
       totalTTC: (json['totalTTC'] as num?)?.toDouble() ?? 0,
       subtotalHT: (json['subtotalHT'] as num?)?.toDouble() ?? 0,
       tvaAmount: (json['tvaAmount'] as num?)?.toDouble() ?? 0,
       // registerId is populated ({_id, name, type}) by GET /api/orders.
-      registerName: register is Map ? register['name'] as String? : null,
-      clientName: json['clientName'] as String?,
+      registerName: register is Map ? register['name']?.toString() : null,
+      clientName: json['clientName']?.toString(),
       tableNumber: json['tableNumber']?.toString(),
-      buzzerNumber: json['buzzerNumber'] as String?,
-      deliveryName: delivery is Map ? (delivery['fullName'] ?? delivery['name']) as String? : null,
+      buzzerNumber: json['buzzerNumber']?.toString(),
+      deliveryName: delivery is Map ? (delivery['fullName'] ?? delivery['name'])?.toString() : null,
       deliveryPhone: delivery is Map ? delivery['phone']?.toString() : null,
       deliveryAddress: dAddress,
-      notes: json['notes'] as String?,
+      notes: json['notes']?.toString(),
       lines: (json['items'] as List<dynamic>? ?? [])
           .map((e) => HistoryOrderLine.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -277,7 +347,8 @@ class OrdersSummary {
   final Map<String, int> counts;
   final double totalTerminee;
 
-  int countFor(String status) => counts[status] ?? 0;
+  int countFor(String status) =>
+      status.isEmpty ? counts.values.fold(0, (a, b) => a + b) : (counts[status] ?? 0);
 
   factory OrdersSummary.fromJson(Map<String, dynamic> json) {
     final data = json['data'] as Map<String, dynamic>? ?? {};
