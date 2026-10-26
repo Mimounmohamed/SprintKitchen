@@ -17,7 +17,7 @@ import {
   Timer,
   AlertTriangle,
 } from "lucide-react";
-import { statsService } from "../services";
+import { statsService, orderService } from "../services";
 
 const C = {
   bg: "#F5F4F0",
@@ -1527,6 +1527,7 @@ export default function StatistiquesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [cancelledOrdersList, setCancelledOrdersList] = useState([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const calendarTriggerRef = useRef(null);
 
@@ -1548,10 +1549,14 @@ export default function StatistiquesPage() {
     const toIso = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate(), 23, 59, 59, 999).toISOString();
     setLoading(true);
     setError(null);
-    statsService
-      .getSummary({ from: fromIso, to: toIso })
-      .then((res) => {
-        setSummary(res.data.data);
+    Promise.all([
+      statsService.getSummary({ from: fromIso, to: toIso }),
+      orderService.getAll({ status: "annulee", from: fromIso, to: toIso, limit: 200 }),
+    ])
+      .then(([summaryRes, ordersRes]) => {
+        setSummary(summaryRes.data.data);
+        const fetchedCancelled = ordersRes.data?.data || ordersRes.data || [];
+        setCancelledOrdersList(Array.isArray(fetchedCancelled) ? fetchedCancelled : []);
       })
       .catch((e) => {
         console.error("StatistiquesPage: failed to load summary", e);
@@ -1582,7 +1587,7 @@ export default function StatistiquesPage() {
   const kitchen = summary?.kitchen || {};
   const annCount = rz.annulees?.count || 0;
   const annAmount = rz.annulees?.amount || 0;
-  const cancelledOrders = summary?.cancelledOrders || rz.annulees?.orders || [];
+  const cancelledOrders = (cancelledOrdersList && cancelledOrdersList.length > 0) ? cancelledOrdersList : (summary?.cancelledOrders || rz.annulees?.orders || []);
 
   const salesByHour = summary?.salesByHour || [];
   const topProducts = summary?.topProducts || [];

@@ -9,7 +9,7 @@ class HistoryService {
   /// [from] / [to] are LOCAL times; they are sent as UTC ISO timestamps so
   /// "today" means today on the cashier's PC, not on the server.
   Future<OrdersPage> fetchOrders({
-    required String status,
+    String? status,
     required DateTime from,
     required DateTime to,
     String? search,
@@ -18,8 +18,8 @@ class HistoryService {
   }) async {
     final term = (search ?? '').replaceAll('#', '').trim();
     final json = await _client.get('/orders', query: {
-      'status': status,
-      'from': from.toUtc().toIso8601String(),
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (from.year > 2020) 'from': from.toUtc().toIso8601String(),
       'to': to.toUtc().toIso8601String(),
       'page': '$page',
       'limit': '$limit',
@@ -34,7 +34,7 @@ class HistoryService {
     required DateTime to,
   }) async {
     final json = await _client.get('/orders/summary', query: {
-      'from': from.toUtc().toIso8601String(),
+      if (from.year > 2020) 'from': from.toUtc().toIso8601String(),
       'to': to.toUtc().toIso8601String(),
     });
     return OrdersSummary.fromJson(json as Map<String, dynamic>);
@@ -47,6 +47,16 @@ class HistoryService {
   }) async {
     await _client.patch('/orders/$orderId/status', {
       'status': status,
+    });
+  }
+
+  /// PATCH /api/orders/:id/cancel — cancel / refund an order
+  Future<void> cancelOrder({
+    required String orderId,
+    String reason = 'Remboursement / Annulation',
+  }) async {
+    await _client.patch('/orders/$orderId/cancel', {
+      'reason': reason,
     });
   }
 }
